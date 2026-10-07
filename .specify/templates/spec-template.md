@@ -1,9 +1,25 @@
+---
+# Lifecycle: draft -> approved -> implementing -> done
+# (see docs/development/spec-driven-workflow.md)
+status: draft
+feature: "[###-feature-name]"
+document: spec
+---
+
 # Feature Specification: [FEATURE NAME]
 
 **Feature Branch**: `[###-feature-name]`  
 **Created**: [DATE]  
-**Status**: Draft  
 **Input**: User description: "$ARGUMENTS"
+
+## Problem *(mandatory)*
+
+<!--
+  What is wrong or missing today, who is affected, and why it matters now.
+  Describe the problem, not the solution.
+-->
+
+[Problem statement]
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -82,18 +98,30 @@
   Fill them out with the right functional requirements.
 -->
 
-### Functional Requirements
+### Functional Requirements (Acceptance Criteria)
 
-- **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
-- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]  
-- **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
-- **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
-- **FR-005**: System MUST [behavior, e.g., "log all security events"]
+<!--
+  Each requirement is a testable acceptance criterion written in EARS form.
+  Tasks and tests reference these IDs (e.g. "satisfies FR-003").
+
+  - Ubiquitous:   THE SYSTEM SHALL <response>.
+  - Event-driven: WHEN <trigger>, THE SYSTEM SHALL <response>.
+  - State-driven: WHILE <state>, THE SYSTEM SHALL <response>.
+  - Unwanted:     IF <condition>, THEN THE SYSTEM SHALL <response>.
+  - Optional:     WHERE <feature is enabled>, THE SYSTEM SHALL <response>.
+
+  One behavior per criterion. Name observable outputs (exit codes, messages,
+  events, files), never internal functions.
+-->
+
+- **FR-001**: WHEN [trigger], THE SYSTEM SHALL [observable response].
+- **FR-002**: IF [unwanted condition], THEN THE SYSTEM SHALL [observable response].
+- **FR-003**: WHILE [state], THE SYSTEM SHALL [observable response].
+- **FR-004**: THE SYSTEM SHALL [invariant that always holds].
 
 *Example of marking unclear requirements:*
 
-- **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
-- **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
+- **FR-005**: WHEN a step times out, THE SYSTEM SHALL [NEEDS CLARIFICATION: terminate the process tree or only the direct child?]
 
 ### Quality, Safety & Compatibility *(mandatory when applicable)*
 
@@ -133,6 +161,16 @@ Omit a bullet only when it is clearly out of scope, and state that.
 - **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
 - **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
 - **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
+
+## Non-Goals *(mandatory)*
+
+<!--
+  What this feature deliberately does not do, including anything outside the
+  current release scope (see AGENTS.md "Scope"). Reviewers reject scope creep
+  against this list.
+-->
+
+- [Explicitly excluded behavior]
 
 ## Assumptions
 

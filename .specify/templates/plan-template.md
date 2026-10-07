@@ -1,3 +1,11 @@
+---
+# Lifecycle: draft -> approved -> implementing -> done
+# (see docs/development/spec-driven-workflow.md)
+status: draft
+feature: "[###-feature-name]"
+document: plan
+---
+
 # Implementation Plan: [FEATURE]
 
 **Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
@@ -31,7 +39,10 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- [ ] Spec exists; this plan does not invent unspecified behavior
+- [ ] Spec exists and its status is `approved`; this plan does not invent unspecified behavior
+- [ ] Import boundaries hold: `pkg/engine` imports nothing from daemon, API, or store implementations
+- [ ] The engine emits typed events only; formatting stays in renderers and sinks
+- [ ] Changes to a public contract (pipeline schema, CLI surface, HTTP API `/v1`) link an ADR
 - [ ] Core execution remains independent from CLI/presentation
 - [ ] External contracts do not leak Go-specific types or conventions
 - [ ] Process execution, cancellation, exit codes, and secret handling are explicit where touched
@@ -59,50 +70,72 @@ specs/[###-feature]/
 
 ### Source Code (repository root)
 <!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
+  ACTION REQUIRED: List only the packages this feature touches. The layout
+  and import rules are defined in docs/architecture.md; do not add new
+  top-level directories or packages without justifying them here.
 -->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Go module (DEFAULT for TRUSS core)
-cmd/
-├── truss/          # CLI entrypoint
-└── trussd/         # daemon entrypoint (if in scope)
+cmd/truss/                 # CLI and daemon entrypoint (composition root)
+pkg/
+├── pipeline/              # schema, parser, validator (innermost)
+├── engine/                # sequential step lifecycle, typed events
+├── executor/              # host (os/exec) and container (Docker) backends
+├── store/                 # run-history contract; implementations in sub-packages
+└── api/                   # HTTP /v1 types and client
 internal/
-├── engine/         # core execution (independent of CLI presentation)
-├── pipeline/       # pipeline model and scheduling
-└── exec/           # process execution boundaries
-# Public Go API only if intentionally supported:
-# pkg/...
-# Tests live beside code as *_test.go; testdata/ for fixtures.
-
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+├── daemon/                # scheduler, binding registry, HTTP + SSE server
+├── socket/                # Unix socket resolution and permissions
+└── sinks/                 # EventSink implementations (renderers, recorder, SSE)
+# Tests live beside code as *_test.go; fixtures in testdata/.
+# Docker-dependent tests use the `integration` build tag.
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: [Packages touched and why]
+
+## Design
+
+### Approach
+
+[How the feature works, in a few paragraphs. Reference FR IDs from spec.md.]
+
+### Interfaces and Type Signatures
+
+```go
+// Exported types, interfaces (defined at the consumer), and function
+// signatures this feature adds or changes.
+```
+
+### Data Flow
+
+[Inputs → transformations → outputs; events emitted and their order. A
+Mermaid diagram is welcome.]
+
+### Error Handling
+
+[Error types and sentinels, wrapping, what reaches the user and how, exit
+codes, cancellation behavior.]
+
+### Cross-Platform Concerns
+
+[Paths (`filepath`), line endings, process and signal semantics, shells,
+file permissions, and socket behavior on Linux, macOS, and Windows.]
+
+### Test Strategy
+
+[Unit tests (table-driven), golden files, integration tests behind the
+`integration` tag, and which FR IDs each test covers.]
+
+### Public Contract Impact
+
+[None, or the affected contract (pipeline schema, CLI surface, HTTP API
+`/v1`), compatibility impact, and the ADR that records the decision.]
+
+### Alternatives Considered
+
+| Alternative | Why rejected |
+|-------------|--------------|
+| [Option] | [Reason] |
 
 ## Complexity Tracking
 

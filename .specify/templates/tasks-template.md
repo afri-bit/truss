@@ -1,5 +1,9 @@
 ---
-
+# Lifecycle: draft -> approved -> implementing -> done
+# (see docs/development/spec-driven-workflow.md)
+status: draft
+feature: "[###-feature-name]"
+document: tasks
 description: "Task list template for feature implementation"
 ---
 
@@ -16,17 +20,22 @@ implementation exists.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
-## Format: `[ID] [P?] [Story] Description`
+## Format: `[ID] [P?] [Story] Description (FR-###)`
 
 - **[P]**: Can run in parallel (different files, no dependencies)
 - **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
+- **(FR-###)**: The acceptance criteria from spec.md this task satisfies;
+  setup and polish tasks may use `(—)`
 - Include exact file paths in descriptions
+- Keep each task small enough for one reviewable pull request; the PR
+  references the task ID and ticks its checkbox
 
 ## Path Conventions
 
-- **TRUSS core (Go)**: packages under `cmd/`, `internal/` (and `pkg/` only
-  if a public Go API is intentionally supported). Tests are `*_test.go`
-  beside the code; fixtures in `testdata/`.
+- **TRUSS core (Go)**: packages under `cmd/`, `pkg/`, and `internal/` as
+  described in docs/architecture.md. Tests are `*_test.go` beside the
+  code; fixtures in `testdata/`; Docker-dependent tests carry the
+  `integration` build tag.
 - **SDKs / integrations**: language-idiomatic layout; public contracts
   MUST NOT depend on Go-specific types.
 - Paths shown below assume the Go module layout — adjust from plan.md.
@@ -89,17 +98,17 @@ Examples of foundational tasks (adjust based on your project):
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T010 [P] [US1] Unit tests for observable behavior in internal/[pkg]/[name]_test.go
-- [ ] T011 [P] [US1] Integration/contract test for [CLI or execution boundary] in internal/[pkg]/[name]_test.go
+- [ ] T010 [P] [US1] Unit tests for observable behavior in pkg/[pkg]/[name]_test.go (FR-001)
+- [ ] T011 [P] [US1] Integration/contract test for [CLI or execution boundary] in pkg/[pkg]/[name]_test.go (FR-001)
 
 ### Implementation for User Story 1
 
-- [ ] T012 [P] [US1] Define types in internal/[pkg]/[name].go
-- [ ] T013 [P] [US1] Define interfaces at the consumption boundary in internal/[pkg]/
-- [ ] T014 [US1] Implement behavior in internal/[pkg]/ (depends on T012, T013)
-- [ ] T015 [US1] Wire CLI or daemon entry in cmd/[binary]/ only after core logic is independent of presentation
-- [ ] T016 [US1] Propagate context, wrap errors, preserve exit codes
-- [ ] T017 [US1] Ensure logs/diagnostics do not expose secrets
+- [ ] T012 [P] [US1] Define types in pkg/[pkg]/[name].go (FR-001)
+- [ ] T013 [P] [US1] Define interfaces at the consumption boundary in pkg/[pkg]/ (FR-001)
+- [ ] T014 [US1] Implement behavior in pkg/[pkg]/ (depends on T012, T013) (FR-001)
+- [ ] T015 [US1] Wire CLI or daemon entry in cmd/[binary]/ only after core logic is independent of presentation (FR-001)
+- [ ] T016 [US1] Propagate context, wrap errors, preserve exit codes (FR-001)
+- [ ] T017 [US1] Ensure logs/diagnostics do not expose secrets (FR-001)
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
@@ -113,15 +122,15 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Tests for User Story 2 (REQUIRED for behavioral changes)
 
-- [ ] T018 [P] [US2] Unit tests for observable behavior in internal/[pkg]/[name]_test.go
-- [ ] T019 [P] [US2] Integration/contract test for [boundary] in internal/[pkg]/[name]_test.go
+- [ ] T018 [P] [US2] Unit tests for observable behavior in pkg/[pkg]/[name]_test.go (FR-001)
+- [ ] T019 [P] [US2] Integration/contract test for [boundary] in pkg/[pkg]/[name]_test.go (FR-001)
 
 ### Implementation for User Story 2
 
-- [ ] T020 [P] [US2] Define types in internal/[pkg]/[name].go
-- [ ] T021 [US2] Implement behavior in internal/[pkg]/
-- [ ] T022 [US2] Wire entrypoint in cmd/[binary]/ if needed
-- [ ] T023 [US2] Integrate with User Story 1 components (if needed)
+- [ ] T020 [P] [US2] Define types in pkg/[pkg]/[name].go (FR-001)
+- [ ] T021 [US2] Implement behavior in pkg/[pkg]/ (FR-001)
+- [ ] T022 [US2] Wire entrypoint in cmd/[binary]/ if needed (FR-001)
+- [ ] T023 [US2] Integrate with User Story 1 components (if needed) (FR-001)
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
@@ -135,14 +144,14 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Tests for User Story 3 (REQUIRED for behavioral changes)
 
-- [ ] T024 [P] [US3] Unit tests for observable behavior in internal/[pkg]/[name]_test.go
-- [ ] T025 [P] [US3] Integration/contract test for [boundary] in internal/[pkg]/[name]_test.go
+- [ ] T024 [P] [US3] Unit tests for observable behavior in pkg/[pkg]/[name]_test.go (FR-001)
+- [ ] T025 [P] [US3] Integration/contract test for [boundary] in pkg/[pkg]/[name]_test.go (FR-001)
 
 ### Implementation for User Story 3
 
-- [ ] T026 [P] [US3] Define types in internal/[pkg]/[name].go
-- [ ] T027 [US3] Implement behavior in internal/[pkg]/
-- [ ] T028 [US3] Wire entrypoint in cmd/[binary]/ if needed
+- [ ] T026 [P] [US3] Define types in pkg/[pkg]/[name].go (FR-001)
+- [ ] T027 [US3] Implement behavior in pkg/[pkg]/ (FR-001)
+- [ ] T028 [US3] Wire entrypoint in cmd/[binary]/ if needed (FR-001)
 
 **Checkpoint**: All user stories should now be independently functional
 
@@ -204,12 +213,12 @@ Examples of foundational tasks (adjust based on your project):
 
 ```bash
 # Launch all tests for User Story 1 together:
-Task: "Unit tests for observable behavior in internal/[pkg]/[name]_test.go"
-Task: "Integration/contract test for [boundary] in internal/[pkg]/[name]_test.go"
+Task: "Unit tests for observable behavior in pkg/[pkg]/[name]_test.go"
+Task: "Integration/contract test for [boundary] in pkg/[pkg]/[name]_test.go"
 
 # Launch types for User Story 1 together:
-Task: "Define types in internal/[pkg]/[name].go"
-Task: "Define interfaces at the consumption boundary in internal/[pkg]/"
+Task: "Define types in pkg/[pkg]/[name].go"
+Task: "Define interfaces at the consumption boundary in pkg/[pkg]/"
 ```
 
 ---

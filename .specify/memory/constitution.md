@@ -1,21 +1,23 @@
 <!--
 Sync Impact Report
-- Version change: (unset template) → 1.0.0
-- Modified principles: placeholders → I. Specification-Governed Behavior;
-  II. Idiomatic Go Quality; III. Testable Behavior (NON-NEGOTIABLE);
-  IV. Maintainable Simplicity; V. Execution Safety and Portability
-- Added sections: Go Module Constraints; Quality Gates
-- Removed sections: none (template placeholders replaced)
+- Version change: 1.0.0 → 1.1.0 (MINOR: materially expanded guidance)
+- Modified principles: I. Specification-Governed Behavior (spec status
+  lifecycle, approved-spec gate, EARS acceptance criteria, ADRs)
+- Added sections: Architecture Constraints
+- Modified sections: Go Module Constraints (.claude/ tooling, AGENTS.md
+  summaries); Quality Gates (golangci-lint, ADR for contract changes)
+- Removed sections: none
 - Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ updated
-  - .specify/templates/spec-template.md ✅ updated
-  - .specify/templates/tasks-template.md ✅ updated
-  - .specify/templates/commands/*.md ✅ none present
-  - AGENTS.md ✅ updated (principles deferred to this file)
-  - README.md ✅ no principle references requiring change
-- Follow-up TODOs:
-  - Nested copy at truss/.specify/memory/constitution.md remains a template
-    and was not updated; treat repo-root .specify/ as canonical
+  - .specify/templates/spec-template.md ✅ updated (front matter status,
+    Problem, EARS criteria, Non-Goals)
+  - .specify/templates/plan-template.md ✅ updated (front matter status,
+    architecture checks, Design section, TRUSS layout)
+  - .specify/templates/tasks-template.md ✅ updated (front matter status,
+    FR references, one task per PR, TRUSS layout)
+  - specs/_template/ ✅ mirrors .specify/templates (make spec-check)
+  - AGENTS.md ✅ rewritten; cites this file for principles
+  - docs/development/spec-driven-workflow.md ✅ added
+- Follow-up TODOs: none
 -->
 
 # TRUSS Constitution
@@ -28,6 +30,15 @@ TRUSS is developed with Spec-Driven Development. Required behavior MUST
 be defined in `specs/<feature>/spec.md` before implementation of new
 capabilities or behavioral changes. Technical decisions MUST live in
 `plan.md`. Implementation work MUST live in `tasks.md`.
+
+Each of these files carries a `status` in its front matter that moves
+through `draft → approved → implementing → done`. Implementation pull
+requests MUST NOT be opened against a spec whose status is `draft`, and
+MUST reference the spec directory and the task IDs they complete.
+Functional requirements MUST be written as testable acceptance criteria
+in EARS form ("WHEN … THE SYSTEM SHALL …"), and every task MUST reference
+the criteria it satisfies. Architecturally significant decisions MUST be
+recorded as Architecture Decision Records in `docs/adr/`.
 
 Source code records the current implementation, not automatically the
 intended behavior. When implementation and specification disagree, the
@@ -127,10 +138,33 @@ Assumptions MUST NOT bind TRUSS to a specific CI provider, IDE, agent
 platform, operating system, or SDK language unless a specification
 explicitly requires it.
 
-The product architecture MUST NOT depend on Cursor or Spec Kit being
-present at runtime.
+The product architecture MUST NOT depend on Cursor, Claude Code, or Spec
+Kit being present at runtime.
 
 **Rationale**: Correct, portable, secret-safe execution is the product.
+
+## Architecture Constraints
+
+1. **Dependencies point inward.** `pkg/engine` MUST NOT import the
+   daemon, the HTTP API, store packages, or anything under `internal/`.
+   `pkg/pipeline` is the innermost layer and MUST NOT import other TRUSS
+   packages. Packages under `pkg/` MUST NOT import `internal/` or `cmd/`.
+   These rules are enforced by `depguard` in `.golangci.yml`.
+2. **Typed events.** The engine MUST report progress as typed event
+   values delivered to an event sink, never as formatted strings.
+   Renderers and sinks own formatting. Library packages MUST NOT write
+   to process output streams.
+3. **Versioned public contracts.** The pipeline schema, the CLI surface,
+   and the HTTP API (`/v1`) are public contracts. Any change to them
+   MUST be specified in an approved spec and recorded in an ADR.
+4. **Cross-platform by design.** Linux, macOS, and Windows are supported
+   platforms. Code MUST NOT assume a particular shell, path separator,
+   or line ending; use `path/filepath` for filesystem paths and treat
+   CRLF input explicitly.
+
+The package layout in `docs/architecture.md` is the agreed structure.
+New top-level directories or packages MUST be justified in a plan and,
+when they change a boundary above, recorded in an ADR.
 
 ## Go Module Constraints
 
@@ -139,13 +173,15 @@ present at runtime.
 - SDKs and external integrations MAY use other languages and MUST NOT
   depend on Go-specific types, build tags, or module paths for their
   public contracts.
-- Generated Spec Kit (`.specify/`) and Cursor (`.cursor/`) files are
-  tooling. Project requirements MUST NOT be moved into `.cursor/`.
+- Generated Spec Kit (`.specify/`), Cursor (`.cursor/`), and Claude Code
+  (`.claude/`) files are tooling. Project requirements MUST NOT be moved into `.cursor/`.
   Those files MUST NOT be modified unless the task specifically
   concerns that tooling.
 - `.specify/memory/constitution.md` is the source of truth for
   project-wide engineering principles. `AGENTS.md` provides agent
   workflow; it MUST NOT duplicate or silently override this constitution.
+  It MAY restate a rule in one line for quick reference when it cites the
+  section here; on any conflict this file prevails.
 
 ## Quality Gates
 
@@ -156,10 +192,12 @@ A change is not complete until all of the following hold:
 2. The implementation follows the technical plan, or intentional
    deviations are documented.
 3. Specified tests exist and `go test` for the affected packages passes.
-4. `gofmt` and `go vet` succeed for changed Go code.
+4. `gofmt` and `go vet` succeed for changed Go code, and `make lint`
+   (golangci-lint, including the architecture rules) reports no issues.
 5. Process-execution, cancellation, exit-code, and secret-handling
    requirements remain intact when those layers are touched.
-6. Compatibility impact is identified for any public contract change.
+6. Compatibility impact is identified for any public contract change,
+   and an ADR records the decision.
 7. Unresolved limitations are reported explicitly.
 
 Complexity that violates a principle MUST be recorded in the plan's
@@ -186,4 +224,4 @@ implementation (Quality Gates), and any change to public contracts.
 Use `AGENTS.md` for agent workflow only; do not treat it as a second
 constitution.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-16 | **Last Amended**: 2026-09-16
+**Version**: 1.1.0 | **Ratified**: 2026-09-16 | **Last Amended**: 2026-10-07
