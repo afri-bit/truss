@@ -1,0 +1,45 @@
+# Illustrative TRUSS pipeline (schema v1).
+#
+# This file shows the intended shape of the format. The schema is still a
+# draft (specs/001-pipeline-schema-v1/spec.md) and may change before v0.1.0.
+#
+# Steps run sequentially in the order listed; the first failing step stops
+# the run. Each step declares where it runs:
+#   executor: host       runs on the machine running truss
+#   executor: container  runs inside the given image (Docker)
+
+version: 1
+
+pipeline:
+  name: go-service-ci
+  description: Lint, test, and build a Go service.
+
+env:
+  GOFLAGS: -mod=readonly
+  CGO_ENABLED: "0"
+
+steps:
+  - id: tool-versions
+    name: Show host tool versions
+    executor: host
+    run: go version
+
+  - id: lint
+    name: Lint
+    executor: container
+    image: golangci/golangci-lint:v2.14.0
+    run: golangci-lint run ./...
+
+  - id: test
+    name: Unit tests
+    executor: container
+    image: golang:1.27
+    env:
+      CGO_ENABLED: "1"   # the race detector needs cgo
+    run: go test -race ./...
+
+  - id: build
+    name: Build binary
+    executor: host
+    workdir: ./cmd/service
+    run: go build -trimpath -o ../../bin/ .
