@@ -1,0 +1,201 @@
+# golangci-lint v2 configuration.
+# Architecture rules (AGENTS.md, constitution "Architecture Constraints")
+# are enforced mechanically by depguard and forbidigo below.
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  build-tags:
+    - integration
+
+linters:
+  default: none
+  enable:
+    # correctness
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - contextcheck
+    - errorlint
+    - nilerr
+    - noctx
+    - rowserrcheck
+    - sqlclosecheck
+    - makezero
+    - copyloopvar
+    - durationcheck
+    # error handling and API hygiene
+    - wrapcheck
+    - errname
+    - nolintlint
+    # style and maintainability
+    - revive
+    - misspell
+    - unconvert
+    - unparam
+    - whitespace
+    - gocritic
+    - nakedret
+    - usestdlibvars
+    - sloglint
+    - predeclared
+    - gosec
+    # architecture boundaries
+    - depguard
+    - forbidigo
+    - gochecknoglobals
+
+  settings:
+    depguard:
+      rules:
+        engine:
+          list-mode: lax
+          files:
+            - "**/pkg/engine/**"
+          deny:
+            - pkg: github.com/afri-bit/truss/pkg/api
+              desc: "rule 1: pkg/engine must not depend on the HTTP API"
+            - pkg: github.com/afri-bit/truss/pkg/store
+              desc: "rule 1: pkg/engine must not depend on persistence; record runs via an EventSink"
+            - pkg: github.com/docker
+              desc: "rule 1: container details belong in pkg/executor"
+            - pkg: modernc.org/sqlite
+              desc: "rule 1: storage details belong in pkg/store implementations"
+            - pkg: net/http
+              desc: "rule 1: transport belongs in pkg/api and internal/daemon"
+        pipeline:
+          list-mode: lax
+          files:
+            - "**/pkg/pipeline/**"
+          deny:
+            - pkg: github.com/afri-bit/truss/pkg/engine
+              desc: "pkg/pipeline is the innermost layer"
+            - pkg: github.com/afri-bit/truss/pkg/executor
+              desc: "pkg/pipeline is the innermost layer"
+            - pkg: github.com/afri-bit/truss/pkg/store
+              desc: "pkg/pipeline is the innermost layer"
+            - pkg: github.com/afri-bit/truss/pkg/api
+              desc: "pkg/pipeline is the innermost layer"
+            - pkg: os/exec
+              desc: "parsing must never execute anything"
+        executor:
+          list-mode: lax
+          files:
+            - "**/pkg/executor/**"
+          deny:
+            - pkg: github.com/afri-bit/truss/pkg/engine
+              desc: "the engine consumes executors, not the reverse"
+            - pkg: github.com/afri-bit/truss/pkg/store
+              desc: "executors do not persist"
+            - pkg: github.com/afri-bit/truss/pkg/api
+              desc: "executors do not speak the HTTP API"
+        # Applies to every public package, including the ones above. depguard
+        # silently drops a deny entry repeated across overlapping lists, so
+        # each package appears in exactly one list.
+        public-packages:
+          list-mode: lax
+          files:
+            - "**/pkg/**"
+          deny:
+            - pkg: github.com/afri-bit/truss/internal
+              desc: "rule 1: public packages (engine included) must not depend on daemon, socket, or sinks"
+            - pkg: github.com/afri-bit/truss/cmd
+              desc: "rule 1: public packages must not depend on the CLI"
+            - pkg: log$
+              desc: "use log/slog"
+
+    forbidigo:
+      analyze-types: true
+      forbid:
+        # Rule 2: core packages emit typed events, never formatted output.
+        - pattern: ^fmt\.Print(f|ln)?$
+          msg: "do not print from library code; emit typed events or return values"
+        - pattern: ^os\.(Stdout|Stderr)$
+          msg: "do not write to process streams from library code; accept an io.Writer"
+        - pattern: ^os\.Exit$
+          msg: "only cmd/ may terminate the process"
+
+    errcheck:
+      check-type-assertions: true
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
+
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: errorf
+        - name: receiver-naming
+        - name: var-naming
+        - name: indent-error-flow
+        - name: unexported-return
+        - name: unused-parameter
+        - name: blank-imports
+        - name: dot-imports
+        - name: time-naming
+
+    sloglint:
+      no-global: all
+      context: scope
+      static-msg: true
+      key-naming-case: snake
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - hugeParam
+        - whyNoLint
+
+    nakedret:
+      max-func-lines: 0
+
+    wrapcheck:
+      ignore-package-globs:
+        - github.com/afri-bit/truss/*
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+  exclusions:
+    generated: strict
+    presets:
+      - std-error-handling
+    rules:
+      # cmd/ is the composition root: it may print, exit, and hold
+      # link-time build metadata.
+      - path: ^cmd/
+        linters:
+          - forbidigo
+          - gochecknoglobals
+      - path: _test\.go$
+        linters:
+          - wrapcheck
+          - gosec
+          - forbidigo
+          - gochecknoglobals
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/afri-bit/truss
