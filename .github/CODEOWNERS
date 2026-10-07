@@ -1,0 +1,11 @@
+# Default owner for everything.
+*                               @afri-bit
+
+# Public contracts and governance need explicit owner review.
+/specs/                         @afri-bit
+/docs/adr/                      @afri-bit
+/.specify/memory/constitution.md @afri-bit
+/pkg/pipeline/                  @afri-bit
+/pkg/api/                       @afri-bit
+/.golangci.yml                  @afri-bit
+/.github/                       @afri-bit

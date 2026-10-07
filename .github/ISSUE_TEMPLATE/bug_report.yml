@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in TRUSS does not behave as its spec or docs say.
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please do **not** report security vulnerabilities here; see SECURITY.md.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Include the exact command and its full output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: Link the spec FR or doc page that describes the expected behavior, if you know it.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: A minimal pipeline YAML and the steps to run it. Remove secrets.
+      render: yaml
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: truss version
+      description: Output of `truss version` (or the binary's first output line).
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      multiple: true
+      options: [Linux, macOS, Windows]
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Run mode
+      options: [Direct (truss run), Daemon (trussd), Not sure]
+  - type: dropdown
+    id: executor
+    attributes:
+      label: Executor
+      multiple: true
+      options: [host, container, n/a]
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment details
+      description: CI provider, Docker version, shell, and anything else relevant.

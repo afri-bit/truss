@@ -1,0 +1,47 @@
+name: Feature request
+description: Propose new behavior. Accepted features are specified before they are built.
+labels: [enhancement, needs-spec]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        TRUSS is spec-driven: an accepted feature request becomes a spec under `specs/`
+        (see docs/development/spec-driven-workflow.md), and no code is merged until that
+        spec is approved. Describe the **problem** first; solutions can change during spec review.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't you do today, who is affected, and why does it matter?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What should TRUSS do? Example pipeline YAML or CLI usage help.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria (optional)
+      description: 'Draft criteria in EARS form, e.g. "WHEN a step exits non-zero, THE SYSTEM SHALL mark the run failed."'
+  - type: dropdown
+    id: contract
+    attributes:
+      label: Does this change a public contract?
+      options: [No, Pipeline schema, CLI surface, HTTP API (/v1), Not sure]
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: I checked the v0.1.0 scope in AGENTS.md and existing specs in specs/README.md.
+          required: true
