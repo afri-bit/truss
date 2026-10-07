@@ -1,393 +1,73 @@
 # TRUSS
 
-TRUSS is a portable pipeline execution platform designed to make software pipelines easy to define, run, debug, and observe across different environments.
+[![CI](https://github.com/afri-bit/truss/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/afri-bit/truss/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/afri-bit/truss.svg)](https://pkg.go.dev/github.com/afri-bit/truss)
+[![Go version](https://img.shields.io/github/go-mod/go-version/afri-bit/truss)](go.mod)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange.svg)
 
-The core idea is simple:
+**Define a pipeline once. Run it anywhere.**
 
-> **Define a pipeline once and execute it consistently anywhere.**
+TRUSS is a provider-independent, portable CI pipeline runner written in Go.
+You describe a pipeline in a small YAML file, and TRUSS runs it the same way
+on your laptop, on Jenkins, or on GitHub Actions, across Linux, macOS, and
+Windows. Each step declares whether it runs on the host or in a container.
+`truss run` executes a pipeline directly in your terminal. The `trussd`
+daemon runs pipelines on cron or manual triggers and keeps a searchable run
+history. You stop debugging CI by pushing commits and waiting.
 
-Instead of treating pipelines as configuration that only works inside a CI/CD platform, TRUSS treats them as executable software artifacts.
+## Status
 
-A developer should be able to define a pipeline in YAML and run the same pipeline locally, in CI, through a daemon, or eventually through remote execution infrastructure.
+**Pre-alpha.** The repository foundation is in place, and the first
+specification ([pipeline schema v1](specs/001-pipeline-schema-v1/spec.md)) is
+in draft. Nothing is usable yet. Interfaces, the schema, and the CLI will
+change until v0.1.0.
 
+v0.1.0 scope: sequential steps, host and container executors, direct mode,
+and a daemon with cron and manual triggers, SQLite run history, and explicit
+workspaces. See the [specs index](specs/README.md) for progress.
 
-## Why TRUSS
+## Quick start
 
-Pipeline development today often looks like this:
+> Placeholder. The commands below sketch the intended v0.1.0 experience and
+> do not work yet. Command names and flags will be fixed by the CLI surface
+> specification.
 
-```text
-edit
-  ↓
-commit
-  ↓
-push
-  ↓
-wait for CI
-  ↓
-discover failure
-  ↓
-repeat
+```sh
+go install github.com/afri-bit/truss/cmd/truss@latest
+
+truss init                      # scaffold pipeline.yml
+truss run pipeline.yml          # run it now, in this terminal
+
+truss daemon &                  # start trussd
+truss bind pipeline.yml --workspace . --cron "0 2 * * *"
+truss status                    # recent runs
+truss logs --follow <run-id>    # stream a run
 ```
 
-TRUSS aims to make pipeline development feel more like normal software development:
-
-```text
-edit
-  ↓
-run locally
-  ↓
-observe
-  ↓
-fix
-  ↓
-run again
-```
-
-The goal is to reduce the dependency on remote CI systems during development while keeping pipelines portable across execution environments.
-
-
-## Vision
-
-TRUSS aims to become a lightweight execution layer for software pipelines.
-
-A pipeline should eventually be executable:
-
-* locally on a developer machine
-* inside containers
-* inside CI/CD platforms
-* through the TRUSS daemon
-* through SDKs or APIs
-* on remote workers
-
-The environment may change, but the pipeline definition and execution semantics should remain consistent.
-
-```text
-             Pipeline YAML
-                  │
-                  ▼
-            TRUSS Engine
-                  │
-        ┌─────────┼─────────┐
-        ▼         ▼         ▼
-      Host     Container   Remote
-```
-
-
-## Core Principles
-
-### Local First
-
-Pipelines should be runnable locally whenever technically possible.
-
-Remote CI should not be required just to determine whether a pipeline works.
-
-### Portable
-
-The core pipeline model must not depend on a specific platform such as GitHub Actions, GitLab CI, Jenkins, Azure Pipelines, or Kubernetes.
-
-These systems may integrate with TRUSS, but they should not define TRUSS execution semantics.
-
-### Engine First
-
-The execution engine is the foundation of the project.
-
-The initial focus is:
-
-```text
-YAML
-  ↓
-Parse
-  ↓
-Validate
-  ↓
-Plan
-  ↓
-Execute
-  ↓
-Result
-```
-
-Higher-level features such as dashboards, remote workers, SDKs, and daemon capabilities build on top of this engine.
-
-### Explicit Over Magic
-
-Pipeline behavior should be predictable.
-
-A developer should be able to understand:
-
-* what will run
-* in what order
-* why something failed
-* what environment a step receives
-* what result each step produced
-
-### Small, but Clean
-
-TRUSS starts with a deliberately small scope.
-
-The first implementation does not need to solve every pipeline use case, but the foundation should still have clear boundaries, strong contracts, good tests, and maintainable architecture.
-
-
-## Product Model
-
-TRUSS is expected to evolve around several layers:
-
-```text
-CLI / SDK / API
-       │
-       ▼
-     Daemon
-       │
-       ▼
-     Engine
-       │
-       ▼
-    Executors
-```
-
-### Engine
-
-Responsible for:
-
-* parsing pipeline definitions
-* validation
-* execution planning
-* executing steps
-* collecting structured results
-
-The engine must remain independent from the CLI and daemon.
-
-### Executors
-
-Executors define where and how steps run.
-
-Possible execution backends include:
-
-```text
-Host
-Container
-Remote
-```
-
-The first implementation will focus on host execution.
-
-### CLI
-
-The CLI is the first user-facing interface.
-
-The desired experience is simple:
-
-```bash
-truss run
-```
-
-or:
-
-```bash
-truss run pipeline.yaml
-```
-
-The CLI should remain thin and delegate execution behavior to the engine.
-
-### Daemon
-
-The daemon will eventually provide long-running capabilities such as:
-
-* managing pipeline runs
-* concurrency
-* execution state
-* APIs
-* log and event streaming
-* worker coordination
-
-The daemon is not required for the first engine milestone.
-
-
-## Pipeline Definition
-
-TRUSS pipelines are defined using YAML.
-
-A minimal pipeline may look like:
-
-```yaml
-version: "1"
-
-pipeline:
-  name: hello-world
-
-steps:
-  - id: hello
-    run: echo "Hello from TRUSS"
-```
-
-This example illustrates the product direction.
-
-The canonical pipeline schema and execution semantics are defined through project specifications.
-
-
-## Initial Scope
-
-The first milestone should support the complete flow:
-
-```text
-YAML → Engine → Execution → Result
-```
-
-The initial implementation should support:
-
-* loading a YAML pipeline
-* parsing it into a domain model
-* validating the pipeline
-* sequential step execution
-* running commands on the host
-* capturing output and exit codes
-* handling execution failures
-* returning structured execution results
-* running pipelines through the CLI
-
-Features such as distributed execution, dashboards, remote workers, advanced caching, matrix builds, and cloud orchestration are outside the initial scope.
-
-
-## Architecture Direction
-
-The core should remain separated by responsibility.
-
-```text
-Pipeline YAML
-      │
-      ▼
-    Parser
-      │
-      ▼
-Pipeline Model
-      │
-      ▼
-  Validator
-      │
-      ▼
-Execution Plan
-      │
-      ▼
-    Engine
-      │
-      ▼
-   Executor
-```
-
-Important architectural rules:
-
-* parsing must not execute pipelines
-* CLI logic must not contain engine logic
-* the engine must not depend on the CLI
-* pipeline models should remain independent from execution backends
-* infrastructure details should not leak into the core domain unnecessarily
-
-
-## Specification-Driven Development
-
-TRUSS follows specification-driven development.
-
-The expected development flow is:
-
-```text
-Vision
-  ↓
-Specification
-  ↓
-Plan
-  ↓
-Tasks
-  ↓
-Implementation
-  ↓
-Verification
-```
-
-Specifications define what the system should do.
-
-Implementation defines how it does it.
-
-Agents should not introduce new public behavior or pipeline semantics without a corresponding specification.
-
-
-## Repository Direction
-
-A possible repository structure is:
-
-```text
-truss/
-├── cmd/
-│   └── truss/
-├── internal/
-│   ├── pipeline/
-│   ├── parser/
-│   ├── validation/
-│   ├── engine/
-│   └── executor/
-├── specs/
-├── examples/
-├── tests/
-├── AGENTS.md
-└── README.md
-```
-
-The exact structure may evolve as the architecture becomes clearer.
-
-
-## Current Focus
-
-The immediate goal is:
-
-> **Build a small, clean pipeline engine that can read a YAML definition and execute it reliably.**
-
-The current development path is:
-
-```text
-Pipeline Schema
-      ↓
-Domain Model
-      ↓
-Parser
-      ↓
-Validation
-      ↓
-Engine
-      ↓
-Host Executor
-      ↓
-CLI
-```
-
-Everything else should build from this foundation.
-
-
-## Long-Term Direction
-
-TRUSS may eventually support:
-
-* dependency graphs
-* concurrent execution
-* container execution
-* cancellation
-* execution events
-* daemon-based execution
-* remote workers
-* SDKs
-* APIs
-* visualization and dashboards
-* CI/CD integrations
-
-These capabilities should extend the core execution model rather than replace it.
-
-
-## Project Principle
-
-Infrastructure changes.
-
-CI platforms change.
-
-Execution environments change.
-
-The pipeline should remain portable.
-
-**Define once. Execute anywhere.**
+An illustrative pipeline mixing host and container steps is in
+[`examples/pipeline.yml`](examples/pipeline.yml).
+
+## Documentation
+
+- [Vision and principles](docs/vision.md)
+- [Architecture](docs/architecture.md): components, package layout, import
+  rules, public contracts
+- [Architecture decision records](docs/adr/README.md)
+- [Specifications](specs/README.md)
+- [User guide](docs/user/README.md) (grows with each release)
+- [Development guide](docs/development/README.md): setup, testing, and the
+  spec-driven workflow
+- [Glossary](docs/GLOSSARY.md)
+
+## Contributing
+
+Contributions are welcome. TRUSS is built spec-first: read
+[CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Coding
+agents should start with [AGENTS.md](AGENTS.md). Please follow the
+[Code of Conduct](CODE_OF_CONDUCT.md), and report vulnerabilities as
+described in [SECURITY.md](SECURITY.md).
+
+## License
+
+[Apache License 2.0](LICENSE)
