@@ -132,13 +132,11 @@ Executor
 
 Executes commands directly on the machine running TRUSS.
 
-This is the first supported execution backend.
-
 ### Container Executor
 
 Executes pipeline work inside a container.
 
-Planned for a later phase.
+Supported from v0.1.0 through the Docker Engine API.
 
 ### Remote Executor
 
@@ -224,7 +222,23 @@ The CLI delegates execution logic to the engine.
 
 ### Daemon
 
-A long-running TRUSS process responsible for capabilities such as run management, APIs, concurrency, and event streaming.
+A long-running TRUSS process (`trussd`, started with `truss daemon`) responsible for capabilities such as run management, APIs, concurrency, and event streaming.
+
+### Binding
+
+A daemon registration that connects a pipeline file to a workspace directory and its triggers (cron schedules or manual runs).
+
+### Workspace
+
+The directory a pipeline run executes in. Workspaces are explicit: the daemon uses only the workspace named by a binding.
+
+### Direct Mode
+
+Running a pipeline in-process with `truss run`, without the daemon. Output goes to the terminal, and history is kept in memory only.
+
+### Event Sink
+
+A consumer of the typed events the engine emits, such as a terminal renderer, a run-history recorder, or a server-sent event stream.
 
 ### Worker
 

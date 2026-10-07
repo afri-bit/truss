@@ -23,7 +23,7 @@ func (e *Engine) Run(ctx context.Context) (Result, error) {
 }
 ```
 
-- `internal/*` must not `fmt` user-facing output. `cmd/` wires flags, I/O, exit codes.
+- Library code (`pkg/*`, `internal/*`) must not print to stdout/stderr; renderers write to an injected `io.Writer`. `cmd/` wires flags, I/O, exit codes.
 - One package, one purpose. No `internal/util` catch-alls.
 
 ## ISP + DIP — small interfaces, accepted where consumed
@@ -56,4 +56,4 @@ func (r *Runner) Run(ctx context.Context, cmd *exec.Cmd) error {
 }
 ```
 
-Do not add layers, frameworks, or public `pkg/` APIs unless a spec requires them.
+Do not add layers, frameworks, or packages beyond the layout in `docs/architecture.md` unless a spec requires them.
