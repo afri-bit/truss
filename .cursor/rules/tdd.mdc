@@ -1,0 +1,33 @@
+---
+description: Test-first development for every behavioral change. Write a failing test, then implement.
+alwaysApply: true
+---
+
+# Test-Driven Development
+
+Constitution Principle III requires test-first work for new behavior and behavioral changes. Mechanical edits that do not change observable behavior do not need a new test.
+
+## Order
+
+1. Write or update a test for the specified observable outcome.
+2. Run it and confirm it fails because the behavior is missing or wrong.
+3. Implement only enough to make that test pass.
+4. Refactor while the tests stay green.
+
+Do not add production behavior before a failing test exists for it. Do not weaken or delete a test to make an implementation pass.
+
+## Go
+
+Tests live in `*_test.go` beside the code. Assert observable behavior, not private structure. Run `go test` for the affected packages before treating the change as done.
+
+```go
+// ❌ BAD — behavior first, test later or never
+func (e *Engine) Run(ctx context.Context, p Pipeline) (Result, error) { /* new failure rule */ }
+
+// ✅ GOOD — failing test first
+func TestRun_StopsAfterFailedStep(t *testing.T) {
+    result := runPipeline(t, twoStepsSecondFails)
+    if result.Status != Failed { t.Fatalf("status = %s", result.Status) }
+    if len(result.Steps) != 1 { t.Fatalf("later step ran: %d", len(result.Steps)) }
+}
+```

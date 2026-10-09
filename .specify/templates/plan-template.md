@@ -35,7 +35,7 @@
 - [ ] Core execution remains independent from CLI/presentation
 - [ ] External contracts do not leak Go-specific types or conventions
 - [ ] Process execution, cancellation, exit codes, and secret handling are explicit where touched
-- [ ] Tests cover specified behavior (`go test`); integration/contract tests included when execution or public contracts change
+- [ ] Behavioral changes are test-first: a failing test exists before implementation. Tests cover specified behavior (`go test`); integration/contract tests are included when execution or public contracts change
 - [ ] Public contract changes identify compatibility impact
 - [ ] No speculative packages, layers, frameworks, or dependencies
 - [ ] Cross-platform behavior is specified for paths, processes, signals, or shells

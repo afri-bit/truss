@@ -101,7 +101,9 @@ Include these requirements when the feature touches the matching concern.
 Omit a bullet only when it is clearly out of scope, and state that.
 
 - **Testing**: Each user story MUST remain independently testable. Specify
-  the observable outcome the independent test will verify.
+  the observable outcome the independent test will verify. Implementation
+  of that behavior MUST be test-first: a failing test for the outcome
+  exists before the behavior is implemented.
 - **Process execution**: If the feature runs commands or subprocesses,
   specify cancellation, exit-code preservation, and failure propagation.
   Implicit command execution is forbidden.

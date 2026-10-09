@@ -1,21 +1,21 @@
 <!--
 Sync Impact Report
-- Version change: (unset template) → 1.0.0
-- Modified principles: placeholders → I. Specification-Governed Behavior;
-  II. Idiomatic Go Quality; III. Testable Behavior (NON-NEGOTIABLE);
-  IV. Maintainable Simplicity; V. Execution Safety and Portability
-- Added sections: Go Module Constraints; Quality Gates
-- Removed sections: none (template placeholders replaced)
+- Version change: 1.0.0 → 1.1.0
+- Modified principles: III. Testable Behavior — expanded to require
+  test-first development (failing test before production behavior)
+- Added sections: none
+- Removed sections: none
 - Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ updated
-  - .specify/templates/spec-template.md ✅ updated
-  - .specify/templates/tasks-template.md ✅ updated
+  - .specify/templates/plan-template.md ✅ updated (Constitution Check)
+  - .specify/templates/spec-template.md ✅ updated (Testing bullet)
+  - .specify/templates/tasks-template.md ✅ already required failing tests
+    before implementation; no further change
   - .specify/templates/commands/*.md ✅ none present
-  - AGENTS.md ✅ updated (principles deferred to this file)
+  - AGENTS.md ✅ unchanged; principles stay in this file
+  - .cursor/rules/tdd.mdc ✅ added (always-on agent workflow)
+  - .cursor/skills/speckit-tasks/SKILL.md ✅ tests are required, test-first
   - README.md ✅ no principle references requiring change
-- Follow-up TODOs:
-  - Nested copy at truss/.specify/memory/constitution.md remains a template
-    and was not updated; treat repo-root .specify/ as canonical
+- Follow-up TODOs: none
 -->
 
 # TRUSS Constitution
@@ -68,12 +68,21 @@ testable, and safe under cancellation and failure.
 
 ### III. Testable Behavior (NON-NEGOTIABLE)
 
-Behavior implemented from a specification MUST be testable. Tests MUST
-be added or updated when behavior changes. Tests MUST assert observable
-behavior rather than internal implementation details.
+Behavior implemented from a specification MUST be testable. New behavior
+and behavioral changes MUST be developed test-first:
 
-Regression fixes MUST include a test that demonstrates the corrected
-behavior when practical. Tests MUST NOT be weakened or removed merely to
+1. Write or update a test that asserts the specified observable behavior.
+2. Run it and confirm it fails because the behavior is missing or wrong.
+3. Implement only enough to make that test pass.
+4. Refactor while those tests stay green.
+
+Tests MUST assert observable behavior rather than internal implementation
+details. Production behavior MUST NOT be added before a failing test
+exists for it. Mechanical changes that do not alter observable behavior
+MAY proceed without a new test.
+
+Regression fixes MUST start from a failing test that demonstrates the
+defect when practical. Tests MUST NOT be weakened or removed merely to
 make an implementation pass. The relevant `go test` suite MUST pass
 before an implementation task is considered complete.
 
@@ -83,7 +92,8 @@ other public interfaces MUST include integration or contract tests for
 those boundaries, not only unit tests of internals.
 
 **Rationale**: TRUSS executes user-defined pipelines; unverified behavior
-is an operational risk, not a style preference.
+is an operational risk, not a style preference. Test-first keeps the
+specified outcome ahead of the implementation.
 
 ### IV. Maintainable Simplicity
 
@@ -155,7 +165,8 @@ A change is not complete until all of the following hold:
    deviation is documented and accepted.
 2. The implementation follows the technical plan, or intentional
    deviations are documented.
-3. Specified tests exist and `go test` for the affected packages passes.
+3. Specified tests were written first and failed before the behavior
+   existed, and `go test` for the affected packages passes.
 4. `gofmt` and `go vet` succeed for changed Go code.
 5. Process-execution, cancellation, exit-code, and secret-handling
    requirements remain intact when those layers are touched.
@@ -186,4 +197,4 @@ implementation (Quality Gates), and any change to public contracts.
 Use `AGENTS.md` for agent workflow only; do not treat it as a second
 constitution.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-16 | **Last Amended**: 2026-09-16
+**Version**: 1.1.0 | **Ratified**: 2026-09-16 | **Last Amended**: 2026-10-09

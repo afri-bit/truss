@@ -128,7 +128,7 @@ The tasks.md should be immediately executable - each task must be specific enoug
 
 **CRITICAL**: Tasks MUST be organized by user story to enable independent implementation and testing.
 
-**Tests are OPTIONAL**: Only generate test tasks if explicitly requested in the feature specification or if user requests TDD approach.
+**Tests are REQUIRED**: Constitution Principle III mandates test-first development. For every user story that changes behavior, generate test tasks that assert observable behavior and order them before the implementation tasks for that story. The test task must be written so it fails before the behavior exists. Integration or contract test tasks are required when the story changes process execution, CLI contracts, or other public interfaces. Skip new tests only for mechanical changes that do not alter observable behavior.
 
 ### Checklist Format (REQUIRED)
 
@@ -170,12 +170,12 @@ Every task MUST strictly follow this format:
      - Models needed for that story
      - Services needed for that story
      - Interfaces/UI needed for that story
-     - If tests requested: Tests specific to that story
+     - Tests specific to that story, ordered before its implementation tasks
    - Mark story dependencies (most stories should be independent)
 
 2. **From Contracts**:
    - Map each interface contract → to the user story it serves
-   - If tests requested: Each interface contract → contract test task [P] before implementation in that story's phase
+   - Each interface contract → contract test task [P] before implementation in that story's phase
 
 3. **From Data Model**:
    - Map each entity to the user story(ies) that need it
