@@ -21,14 +21,14 @@ A developer writes a Pipeline Definition in YAML, runs it locally with the CLI, 
 
 **Why this priority**: This is the first product milestone. Without a complete local run, TRUSS cannot replace a remote CI loop for everyday pipeline work.
 
-**Independent Test**: Provide a valid Pipeline Definition with two successful host commands. Run it through the CLI. Confirm both Step Runs appear in definition order, each with status succeeded, Exit Code 0, and captured output, and that the Pipeline Run succeeded.
+**Independent Test**: Provide a valid Pipeline Definition with two successful host commands. Run it through the CLI. Confirm both Step ids appear in definition order, each followed by that command's output, and that the process exits 0.
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid Pipeline Definition with one Step whose command succeeds, **When** the developer runs it with `truss run <path>`, **Then** TRUSS parses and validates the definition, executes that Step on the host, and reports a succeeded Pipeline Run with that Step's status, Exit Code, and output.
+1. **Given** a valid Pipeline Definition with one Step whose command succeeds, **When** the developer runs it with `truss run <path>`, **Then** TRUSS parses and validates the definition, executes that Step on the host, and shows the Step id followed by its output. The process exits 0.
 2. **Given** a valid Pipeline Definition whose filename is not `truss.yaml`, **When** the developer runs `truss run` with that path, **Then** TRUSS loads that file.
 3. **Given** a valid Pipeline Definition with multiple Steps whose commands succeed, **When** the developer runs it, **Then** Steps execute one after another in definition order and the Result lists every Step Run in that same order.
-4. **Given** a valid Pipeline Definition, **When** the developer inspects the Result after the run, **Then** the Result includes Pipeline Run status plus each executed Step Run's identifier, status, Exit Code, and output.
+4. **Given** a valid Pipeline Definition, **When** the developer watches the run, **Then** each Step's output appears as the Step runs, preceded only by that Step's id.
 5. **Given** a valid Pipeline Definition at `truss.yaml` in the invoker's working directory, **When** the developer runs `truss run` with no path, **Then** TRUSS loads that file and runs it.
 
 ---
@@ -63,7 +63,7 @@ A developer runs a Pipeline whose later Step would also do work. An earlier Step
 1. **Given** a valid Pipeline Definition where a Step command exits non-zero, **When** the developer runs it, **Then** that Step Run is failed, its Exit Code is the command's Exit Code, its output is captured, and the Pipeline Run is failed.
 2. **Given** a valid Pipeline Definition with Steps after the failing Step, **When** the developer runs it, **Then** those later Steps do not execute and do not appear as succeeded.
 3. **Given** a Step command that cannot be started, **When** the developer runs it, **Then** that Step Run is failed, the Result includes enough failure context to diagnose the start failure, later Steps do not execute, and the Pipeline Run is failed.
-4. **Given** a Pipeline Run that failed, **When** the developer inspects the Result, **Then** they can identify which Step failed and why without needing a remote CI system.
+4. **Given** a Pipeline Run that failed, **When** the developer inspects the transcript, **Then** the Step's log is followed by one line naming that Step and its Exit Code or start error.
 
 ---
 
@@ -132,7 +132,7 @@ A developer runs a Pipeline whose later Step would also do work. An earlier Step
 
 ### Measurable Outcomes
 
-- **SC-001**: A developer with a valid local Pipeline Definition can start a run with a single CLI invocation and, when the run finishes, see every executed Step's order, identity, status, Exit Code, and output.
+- **SC-001**: A developer with a valid local Pipeline Definition can start a run with a single CLI invocation and see each executed Step's identity and output in order while the run proceeds. On failure, one line names the failed Step and its Exit Code.
 - **SC-002**: 100% of the invalid-definition cases listed in FR-005, plus unreadable or invalid YAML, are reported to the user with no Step command executed.
 - **SC-003**: When a Step fails, 0 later Steps execute, the failed Step's Exit Code and output are present in the Result, and the Pipeline Run is failed.
 - **SC-004**: A developer can complete the loop "edit definition or command → run locally → observe Result → fix → run again" using only the local CLI, with no remote CI system, daemon, or worker.
@@ -149,7 +149,7 @@ A developer runs a Pipeline whose later Step would also do work. An earlier Step
 - Status values in this milestone are `succeeded` and `failed` for completed runs. `pending`, `running`, `cancelled`, and `skipped` are not part of the reported Result contract yet.
 - Later Steps after a failure do not appear as succeeded Step Runs. They are omitted from executed Step Runs rather than reported as skipped.
 - Validation occurs only as part of `truss run`. There is no validate-only CLI command in this milestone. Validation remains independently testable through the engine.
-- The CLI reports the structured Result in human-readable form (Step order, identity, status, Exit Code, output, and errors). The `truss` process Exit Code is 0 when the Pipeline Run succeeded and non-zero when the definition cannot be loaded or validated or the Pipeline Run failed.
+- The CLI transcript is a log: each Step id, then that Step's stdout and stderr as they are produced. A successful Step does not print status or Exit Code. A failed run adds one error line naming the Step and its Exit Code or start failure. The `truss` process Exit Code is 0 when the Pipeline Run succeeded and non-zero when the definition cannot be loaded or validated or the Pipeline Run failed.
 - A Step command that cannot be started is a failed Step Run, not a parse or validation error, because the definition was already accepted.
 - Empty output on a successful command is valid and MUST be reported as empty, not as an error.
 - Host execution uses the machine where the user invoked the CLI. Container and remote executors are out of scope.

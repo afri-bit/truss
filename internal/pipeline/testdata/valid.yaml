@@ -1,0 +1,10 @@
+version: "1"
+
+pipeline:
+  name: hello-world
+
+steps:
+  - id: hello
+    run: echo "Hello from TRUSS"
+  - id: second
+    run: echo second

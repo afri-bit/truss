@@ -1,7 +1,7 @@
 # Contract: `truss run`
 
 **Status**: New public contract  
-**Compatibility**: First CLI contract. The CLI prints a human-readable Result and does not own execution behavior.
+**Compatibility**: First CLI contract. The CLI streams a log and does not own execution behavior. This transcript shape is not yet released.
 
 ## Usage
 
@@ -20,48 +20,31 @@ truss run [<path>]
 | Pipeline Run `succeeded` | 0 |
 | Missing or unreadable file, invalid YAML, validation error, or Pipeline Run `failed` | 1 |
 
-The process Exit Code is not the Step Exit Code. The Step Exit Code appears in the report.
+The process Exit Code is not the Step Exit Code. On failure, the Step Exit Code appears in the error line.
 
-## Success report
+## Success transcript
 
-Printed to standard output:
+Printed to standard output as each Step runs. No pipeline status block and no per-step exit code.
 
 ```text
-pipeline: <name>
-status: succeeded
-
-step: <id>
-status: succeeded
-exit_code: <n>
-output:
-<stdout, or an empty line when stdout is empty>
-stderr:
-<stderr, or an empty line when stderr is empty>
+[<id>]
+<stdout and stderr as produced>
 ```
 
-Repeat the `step` block in execution order for every started Step.
+Repeat for every started Step, in definition order. Empty output adds no extra lines.
 
-## Failed Step report
+## Failed Step transcript
 
-Same header with `status: failed`. The failed Step includes its `exit_code` when the process started. Later Steps are omitted.
+The same log, then one line on standard error. Later Steps are omitted.
 
 ```text
-pipeline: <name>
-status: failed
-
-step: <id>
-status: failed
-exit_code: <n>
-output:
-<stdout>
-stderr:
-<stderr>
+error: <pipeline name> failed at <id> (exit <n>)
 ```
 
-When the process did not start, omit `exit_code` and include:
+When the process did not start:
 
 ```text
-error: <diagnostic>
+error: <pipeline name> failed at <id>: <diagnostic>
 ```
 
 ## Load and validation errors
