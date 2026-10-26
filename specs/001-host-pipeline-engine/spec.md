@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-host-pipeline-engine`  
 **Created**: 2026-09-16  
-**Status**: Draft  
+**Status**: Implemented  
 **Input**: User description: "Host-executed pipeline engine: load a YAML pipeline definition, parse it into a pipeline model, validate it, plan sequential execution, run each step's command on the host executor, capture output and exit codes, stop on step failure, return a structured result, and invoke the flow through a thin CLI."
 
 ## Clarifications
