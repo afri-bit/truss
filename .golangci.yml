@@ -1,0 +1,27 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - errorlint
+    - gosec
+    - misspell
+    - unconvert
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      # Running user-defined step commands is the executor's purpose.
+      - path: internal/executor/host\.go
+        linters: [gosec]
+        text: "G204"
+      # `truss run <path>` reads the pipeline file the user names.
+      - path: internal/pipeline/parse\.go
+        linters: [gosec]
+        text: "G304"
+      - path: _test\.go
+        linters: [gosec]
+
+formatters:
+  enable:
+    - gofmt
