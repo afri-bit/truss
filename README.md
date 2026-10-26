@@ -304,8 +304,8 @@ truss/
 | Language | Go 1.27.3 for the engine, CLI, and future daemon |
 | Dependencies | Go standard library, plus `gopkg.in/yaml.v3` for YAML decoding only |
 | Process execution | `os/exec` with `/bin/sh -c` (Unix) or `cmd /c` (Windows) |
-| Testing | `go test` unit, contract, and integration tests with the race detector, plus end-to-end tests of the built binary |
-| Quality | `gofmt`, `go vet`, golangci-lint, shellcheck, actionlint, govulncheck |
+| Testing | `go test ./...` on Linux, macOS, and Windows. The packages cover unit tests and the CLI integration tests |
+| Quality | `gofmt`, `go vet`, golangci-lint |
 | CI/CD | GitHub Actions on Linux, macOS, and Windows; tag-driven releases |
 | Process | Specification-driven development with [Spec Kit](https://github.com/github/spec-kit) |
 
@@ -360,7 +360,7 @@ go build -o bin/truss ./cmd/truss
 bash .github/scripts/e2e-test.sh bin/truss   # end-to-end tests of the built binary
 ```
 
-CI runs all of these on Linux, macOS, and Windows for every pull request and every push to `main`.
+CI runs `go test ./...` on Linux, macOS, and Windows for every pull request and every push to `main`. The commands above are for a local check.
 
 ### Releasing
 

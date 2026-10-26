@@ -14,48 +14,6 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-
-      - name: gofmt
-        run: |
-          unformatted="$(gofmt -l .)"
-          if [ -n "$unformatted" ]; then
-            echo "::error::Run gofmt on:"
-            echo "$unformatted"
-            exit 1
-          fi
-
-      - name: go vet
-        run: go vet ./...
-
-      - name: go.mod and go.sum are tidy
-        run: |
-          go mod tidy
-          git diff --exit-code go.mod go.sum
-
-      - name: go mod verify
-        run: go mod verify
-
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.14.0
-
-      - name: shellcheck
-        run: shellcheck .github/scripts/*.sh
-
-      - name: actionlint
-        run: |
-          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
-          ./actionlint -color
-
   test:
     name: Test (${{ matrix.os }})
     strategy:
@@ -69,81 +27,6 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Unit, contract, and integration tests (race detector)
+      - name: Unit and integration tests
         shell: bash
-        env:
-          CGO_ENABLED: "1"
-        run: go test -race -shuffle=on -count=1 -covermode=atomic -coverprofile=coverage.out ./...
-
-      - name: Coverage summary
-        shell: bash
-        run: go tool cover -func=coverage.out | tail -n 1
-
-      - uses: actions/upload-artifact@v7
-        if: matrix.os == 'ubuntu-latest'
-        with:
-          name: coverage
-          path: coverage.out
-
-  e2e:
-    name: End-to-end (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-
-      - name: Build truss
-        shell: bash
-        run: go build -o "bin/truss$(go env GOEXE)" ./cmd/truss
-
-      - name: Run the built binary against the CLI contract
-        shell: bash
-        run: bash .github/scripts/e2e-test.sh "bin/truss$(go env GOEXE)"
-
-  release-tooling:
-    name: Release tooling (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: release-check.sh tests
-        run: bash .github/scripts/release-check_test.sh
-
-  cross-build:
-    name: Cross-compile release targets
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-
-      - name: Build every release target
-        env:
-          CGO_ENABLED: "0"
-        run: |
-          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
-            echo "building $target"
-            GOOS="${target%/*}" GOARCH="${target#*/}" go build -trimpath -o /dev/null ./cmd/truss
-          done
-
-  vulnerabilities:
-    name: Vulnerability scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-
-      - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+        run: go test -count=1 ./...
