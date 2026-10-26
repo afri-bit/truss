@@ -9,9 +9,13 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 ## [Unreleased]
 
+### Changed
+
+- Require Go 1.27.3. Go 1.22.5's standard library is affected by GO-2025-3956 (`os/exec` LookPath) and GO-2025-3750 (`os` and `syscall`), which the vulnerability scan reports through the host executor and CLI.
+
 ### Added
 
-- Go module `github.com/afri-bit/truss` for Go 1.22.5, and the `truss` command (`cmd/truss`).
+- Go module `github.com/afri-bit/truss` for Go 1.27.3, and the `truss` command (`cmd/truss`).
 - Pipeline schema version `"1"`. A definition has `version`, `pipeline.name`, and one or more `steps`. Each step has a unique `id` and a single `run` string. The host shell interprets that string, including quotes, pipes, and environment expansion.
 - `truss run <path>` loads the given file. Any filename is valid. `truss run` with no path loads `truss.yaml` from the working directory.
 - Sequential host execution. Steps run in definition order, in the invoker's working directory, and with the invoker's environment.

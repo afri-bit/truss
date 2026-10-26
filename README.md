@@ -3,7 +3,7 @@
 **A portable pipeline execution platform. Define a pipeline once in YAML and run it the same way on your machine, in CI, and anywhere else.**
 
 [![CI](https://github.com/afri-bit/truss/actions/workflows/ci.yml/badge.svg)](https://github.com/afri-bit/truss/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/badge/go-1.22.5-00ADD8?logo=go)](go.mod)
+[![Go](https://img.shields.io/badge/go-1.27.3-00ADD8?logo=go)](go.mod)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > **Status:** early development. The engine runs pipelines on the host today. No version has been tagged yet, and the pipeline schema and CLI output may still change before the first release.
@@ -92,7 +92,7 @@ Available today:
 
 ### Install
 
-With Go 1.22.5 or newer:
+With Go 1.27.3 or newer:
 
 ```bash
 go install github.com/afri-bit/truss/cmd/truss@latest
@@ -301,7 +301,7 @@ truss/
 
 | Area | Choice |
 |---|---|
-| Language | Go 1.22.5 for the engine, CLI, and future daemon |
+| Language | Go 1.27.3 for the engine, CLI, and future daemon |
 | Dependencies | Go standard library, plus `gopkg.in/yaml.v3` for YAML decoding only |
 | Process execution | `os/exec` with `/bin/sh -c` (Unix) or `cmd /c` (Windows) |
 | Testing | `go test` unit, contract, and integration tests with the race detector, plus end-to-end tests of the built binary |
