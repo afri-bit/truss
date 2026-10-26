@@ -1,213 +1,116 @@
 # TRUSS
 
-TRUSS is a portable pipeline execution platform designed to make software pipelines easy to define, run, debug, and observe across different environments.
+**A portable pipeline execution platform. Define a pipeline once in YAML and run it the same way on your machine, in CI, and anywhere else.**
 
-The core idea is simple:
+[![CI](https://github.com/afri-bit/truss/actions/workflows/ci.yml/badge.svg)](https://github.com/afri-bit/truss/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/badge/go-1.22.5-00ADD8?logo=go)](go.mod)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **Define a pipeline once and execute it consistently anywhere.**
+> **Status:** early development. The engine runs pipelines on the host today. No version has been tagged yet, and the pipeline schema and CLI output may still change before the first release.
 
-Instead of treating pipelines as configuration that only works inside a CI/CD platform, TRUSS treats them as executable software artifacts.
+## Contents
 
-A developer should be able to define a pipeline in YAML and run the same pipeline locally, in CI, through a daemon, or eventually through remote execution infrastructure.
-
+- [Why TRUSS](#why-truss)
+- [Vision](#vision)
+- [Features](#features)
+- [Getting started](#getting-started)
+- [Usage](#usage)
+- [Pipeline definition](#pipeline-definition)
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [Roadmap](#roadmap)
+- [Development](#development)
+- [License](#license)
 
 ## Why TRUSS
 
-Pipeline development today often looks like this:
+Pipelines are software, but they are rarely developed like software.
 
-```text
-edit
-  ↓
-commit
-  ↓
-push
-  ↓
-wait for CI
-  ↓
-discover failure
-  ↓
-repeat
+- **Slow feedback.** You commit and push, then wait in a CI queue just to find out whether a single command works.
+- **Locked to one platform.** A pipeline written for GitHub Actions, GitLab CI, Jenkins, or Azure Pipelines only runs there. Moving platforms means rewriting it.
+- **Hard to debug.** Failures happen on a remote runner you can't step into, with an environment you can't easily reproduce.
+- **Implicit behavior.** It is often unclear what runs, in what order, with which environment, and why it failed.
+
+TRUSS treats a pipeline as an executable artifact rather than platform configuration. The same definition runs locally while you work on it and unchanged wherever it is deployed.
+
+```mermaid
+flowchart LR
+    subgraph today["Today: CI-driven loop"]
+        direction LR
+        a1[Edit] --> a2[Commit] --> a3[Push] --> a4[Wait for CI] --> a5[Discover failure]
+        a5 -.->|repeat| a1
+    end
+    subgraph withtruss["With TRUSS: local loop"]
+        direction LR
+        b1[Edit] --> b2[Run locally] --> b3[Observe] --> b4[Fix]
+        b4 -.->|repeat| b1
+    end
 ```
-
-TRUSS aims to make pipeline development feel more like normal software development:
-
-```text
-edit
-  ↓
-run locally
-  ↓
-observe
-  ↓
-fix
-  ↓
-run again
-```
-
-The goal is to reduce the dependency on remote CI systems during development while keeping pipelines portable across execution environments.
-
 
 ## Vision
 
-TRUSS aims to become a lightweight execution layer for software pipelines.
+TRUSS aims to be a lightweight execution layer for software pipelines. The place a pipeline runs may change; its definition and execution semantics should not.
 
-A pipeline should eventually be executable:
+```mermaid
+flowchart LR
+    yaml[/"Pipeline YAML"/] --> engine["TRUSS engine"]
+    cli["CLI"] --> engine
+    daemon["Daemon"] -.-> engine
+    sdk["SDKs and APIs"] -.-> engine
+    ci["CI/CD platforms"] -.-> engine
+    engine --> host["Host"]
+    engine -.-> container["Container"]
+    engine -.-> remote["Remote workers"]
 
-* locally on a developer machine
-* inside containers
-* inside CI/CD platforms
-* through the TRUSS daemon
-* through SDKs or APIs
-* on remote workers
-
-The environment may change, but the pipeline definition and execution semantics should remain consistent.
-
-```text
-             Pipeline YAML
-                  │
-                  ▼
-            TRUSS Engine
-                  │
-        ┌─────────┼─────────┐
-        ▼         ▼         ▼
-      Host     Container   Remote
+    classDef planned stroke-dasharray: 5 5
+    class daemon,sdk,ci,container,remote planned
 ```
 
+<sub>Solid: available today. Dashed: planned.</sub>
 
-## Core Principles
+### Design principles
 
-### Local First
+- **Local first.** If a pipeline can run on a developer machine, it should. Remote CI is not required to find out whether a pipeline works.
+- **Portable.** The pipeline model does not depend on any CI provider, container runtime, or orchestrator. Those integrate with TRUSS; they do not define its semantics.
+- **Engine first.** Parsing, validation, planning, execution, and results form the core. The CLI, daemon, SDKs, and dashboards build on top of it.
+- **Explicit over magic.** You can tell what will run, in what order, with what environment, what each step produced, and why something failed.
+- **Small, but clean.** The scope starts deliberately small, with clear boundaries, strong contracts, and tests from day one.
 
-Pipelines should be runnable locally whenever technically possible.
+## Features
 
-Remote CI should not be required just to determine whether a pipeline works.
+Available today:
 
-### Portable
+- YAML pipeline definitions (schema version `"1"`).
+- Validation before execution. An invalid definition never starts a command.
+- Sequential host execution through `/bin/sh -c` on Unix and `cmd /c` on Windows.
+- Each step runs in the invoker's working directory with the invoker's environment.
+- Output streamed live, step by step.
+- Fail-fast behavior. The first failed step stops the run and reports its real exit code.
+- Linux, macOS, and Windows support.
 
-The core pipeline model must not depend on a specific platform such as GitHub Actions, GitLab CI, Jenkins, Azure Pipelines, or Kubernetes.
+## Getting started
 
-These systems may integrate with TRUSS, but they should not define TRUSS execution semantics.
+### Install
 
-### Engine First
-
-The execution engine is the foundation of the project.
-
-The initial focus is:
-
-```text
-YAML
-  ↓
-Parse
-  ↓
-Validate
-  ↓
-Plan
-  ↓
-Execute
-  ↓
-Result
-```
-
-Higher-level features such as dashboards, remote workers, SDKs, and daemon capabilities build on top of this engine.
-
-### Explicit Over Magic
-
-Pipeline behavior should be predictable.
-
-A developer should be able to understand:
-
-* what will run
-* in what order
-* why something failed
-* what environment a step receives
-* what result each step produced
-
-### Small, but Clean
-
-TRUSS starts with a deliberately small scope.
-
-The first implementation does not need to solve every pipeline use case, but the foundation should still have clear boundaries, strong contracts, good tests, and maintainable architecture.
-
-
-## Product Model
-
-TRUSS is expected to evolve around several layers:
-
-```text
-CLI / SDK / API
-       │
-       ▼
-     Daemon
-       │
-       ▼
-     Engine
-       │
-       ▼
-    Executors
-```
-
-### Engine
-
-Responsible for:
-
-* parsing pipeline definitions
-* validation
-* execution planning
-* executing steps
-* collecting structured results
-
-The engine must remain independent from the CLI and daemon.
-
-### Executors
-
-Executors define where and how steps run.
-
-Possible execution backends include:
-
-```text
-Host
-Container
-Remote
-```
-
-The first implementation will focus on host execution.
-
-### CLI
-
-The CLI is the first user-facing interface.
-
-The desired experience is simple:
+With Go 1.22.5 or newer:
 
 ```bash
-truss run
+go install github.com/afri-bit/truss/cmd/truss@latest
 ```
 
-or:
+Prebuilt binaries for Linux, macOS, and Windows (amd64 and arm64) will be published on [GitHub Releases](https://github.com/afri-bit/truss/releases) starting with the first tagged version.
+
+### Build from source
 
 ```bash
-truss run pipeline.yaml
+git clone https://github.com/afri-bit/truss.git
+cd truss
+go build -o bin/truss ./cmd/truss
 ```
 
-The CLI should remain thin and delegate execution behavior to the engine.
+### Your first pipeline
 
-### Daemon
-
-The daemon will eventually provide long-running capabilities such as:
-
-* managing pipeline runs
-* concurrency
-* execution state
-* APIs
-* log and event streaming
-* worker coordination
-
-The daemon is not required for the first engine milestone.
-
-
-## Pipeline Definition
-
-TRUSS pipelines are defined using YAML.
-
-A minimal pipeline may look like:
+Create `truss.yaml`:
 
 ```yaml
 version: "1"
@@ -218,176 +121,257 @@ pipeline:
 steps:
   - id: hello
     run: echo "Hello from TRUSS"
+  - id: where
+    run: echo "running in $PWD"
 ```
 
-This example illustrates the product direction.
+Run it:
 
-The canonical pipeline schema and execution semantics are defined through project specifications.
+```console
+$ truss run
+[hello]
+Hello from TRUSS
+[where]
+running in /home/me/project
+```
 
-
-## Initial Scope
-
-The first milestone should support the complete flow:
+## Usage
 
 ```text
-YAML → Engine → Execution → Result
+truss run [<path>]
 ```
 
-The initial implementation should support:
+| Command | Behavior |
+|---|---|
+| `truss run` | Loads `truss.yaml` from the current directory. It does not search for other filenames. |
+| `truss run <path>` | Loads the given file. Any filename is valid. |
+| anything else | Prints `usage: truss run [<path>]` and exits 1 without running anything. |
 
-* loading a YAML pipeline
-* parsing it into a domain model
-* validating the pipeline
-* sequential step execution
-* running commands on the host
-* capturing output and exit codes
-* handling execution failures
-* returning structured execution results
-* running pipelines through the CLI
+### Output
 
-Features such as distributed execution, dashboards, remote workers, advanced caching, matrix builds, and cloud orchestration are outside the initial scope.
+Each step prints its id in brackets, followed by its stdout and stderr as the process writes them. A successful run prints nothing else.
 
+When a step fails, later steps are skipped and one line on standard error names the pipeline, the step, and the step's exit code:
 
-## Architecture Direction
-
-The core should remain separated by responsibility.
-
-```text
-Pipeline YAML
-      │
-      ▼
-    Parser
-      │
-      ▼
-Pipeline Model
-      │
-      ▼
-  Validator
-      │
-      ▼
-Execution Plan
-      │
-      ▼
-    Engine
-      │
-      ▼
-   Executor
+```console
+$ truss run ci.yaml
+[first]
+first
+[second]
+error: fail-fast failed at second (exit 3)
 ```
 
-Important architectural rules:
+An invalid definition is rejected before any step runs:
 
-* parsing must not execute pipelines
-* CLI logic must not contain engine logic
-* the engine must not depend on the CLI
-* pipeline models should remain independent from execution backends
-* infrastructure details should not leak into the core domain unnecessarily
-
-
-## Specification-Driven Development
-
-TRUSS follows specification-driven development.
-
-The expected development flow is:
-
-```text
-Vision
-  ↓
-Specification
-  ↓
-Plan
-  ↓
-Tasks
-  ↓
-Implementation
-  ↓
-Verification
+```console
+$ truss run broken.yaml
+error: missing or unsupported schema version
 ```
 
-Specifications define what the system should do.
+### Exit codes
 
-Implementation defines how it does it.
+| Outcome | `truss` exit code |
+|---|---|
+| Every step succeeded | `0` |
+| A step failed, or the file is missing, unreadable, invalid YAML, or fails validation | `1` |
 
-Agents should not introduce new public behavior or pipeline semantics without a corresponding specification.
+The `truss` exit code is not the step's exit code. The step's exit code appears in the error line.
 
+## Pipeline definition
 
-## Repository Direction
+```yaml
+version: "1"            # required, quoted string; only "1" is supported
 
-A possible repository structure is:
+pipeline:
+  name: build-and-test  # required, non-empty
+
+steps:                  # required, at least one step
+  - id: build           # required, unique within the pipeline
+    run: go build ./... # required, one command string for the host shell
+  - id: test
+    run: go test ./...
+```
+
+| Field | Rules |
+|---|---|
+| `version` | Must be the string `"1"`. A bare number such as `1` is rejected. |
+| `pipeline.name` | Required and non-empty. |
+| `steps` | A list with at least one step. Steps run in the order they are listed. |
+| `steps[].id` | Required, non-empty, and unique. |
+| `steps[].run` | Required and non-empty. The host shell interprets it, including quotes, pipes, and variable expansion. |
+
+Every step starts a new shell, so `cd` or `export` in one step does not carry over to the next. The full contract lives in [`specs/001-host-pipeline-engine/contracts/pipeline-v1.md`](specs/001-host-pipeline-engine/contracts/pipeline-v1.md).
+
+## Architecture
+
+TRUSS is layered so that execution behavior lives in the engine, never in the interface used to start it.
+
+```mermaid
+flowchart TB
+    subgraph interfaces["Interfaces"]
+        cli["CLI<br/>cmd/truss"]
+        sdk["SDKs / APIs"]
+    end
+    daemon["Daemon<br/>runs, state, events, workers"]
+    subgraph core["Core"]
+        pipeline["Pipeline<br/>internal/pipeline<br/>parse, validate, plan"]
+        engine["Engine<br/>internal/engine<br/>orchestrate, results"]
+    end
+    subgraph executors["Executors"]
+        host["Host<br/>internal/executor"]
+        container["Container"]
+        remote["Remote"]
+    end
+
+    cli --> pipeline
+    cli --> engine
+    sdk -.-> daemon
+    daemon -.-> engine
+    engine --> pipeline
+    engine --> host
+    engine -.-> container
+    engine -.-> remote
+
+    classDef planned stroke-dasharray: 5 5
+    class sdk,daemon,container,remote planned
+```
+
+<sub>Solid: implemented. Dashed: planned.</sub>
+
+### How a run works
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant CLI as CLI (cmd/truss)
+    participant Pipeline as Pipeline (internal/pipeline)
+    participant Engine as Engine (internal/engine)
+    participant Host as Host executor (internal/executor)
+
+    User->>CLI: truss run [path]
+    CLI->>Pipeline: parse YAML
+    Pipeline-->>CLI: pipeline model or load error
+    CLI->>Engine: run pipeline
+    Engine->>Pipeline: validate and plan
+    Pipeline-->>Engine: execution plan or validation error
+    loop each step, in order
+        Engine->>Host: execute run string
+        Host-->>Engine: exit code, output, start error
+        Note over Engine: stop at the first failed step
+    end
+    Engine-->>CLI: pipeline run result
+    CLI-->>User: streamed log, error line, exit code
+```
+
+### Boundaries
+
+| Package | Responsibility |
+|---|---|
+| `cmd/truss` | Arguments, file resolution, terminal output, process exit codes. No execution logic. |
+| `internal/pipeline` | Pipeline model, YAML parsing, validation, and the execution plan. Never executes anything. |
+| `internal/engine` | Runs a plan step by step, applies fail-fast, and returns structured results. Independent of the CLI. |
+| `internal/executor` | Runs one command in the host shell and reports its exit code, output, and start errors. |
+
+Rules the code follows:
+
+- Parsing never executes a pipeline.
+- The engine does not depend on the CLI, and the CLI contains no engine logic.
+- Pipeline models stay independent of the execution backend.
+- Exit codes, failures, and cancellation propagate accurately across layers. Subprocess failures are never swallowed.
+- Secrets and the environment are not echoed into reports.
+
+### Repository layout
 
 ```text
 truss/
-├── cmd/
-│   └── truss/
+├── cmd/truss/              CLI entry point
 ├── internal/
-│   ├── pipeline/
-│   ├── parser/
-│   ├── validation/
-│   ├── engine/
-│   └── executor/
-├── specs/
-├── examples/
-├── tests/
-├── AGENTS.md
-└── README.md
+│   ├── pipeline/           model, parse, validate, plan
+│   ├── engine/             orchestration and results
+│   └── executor/           host shell execution
+├── specs/                  feature specifications, plans, contracts, tasks
+├── docs/GLOSSARY.md        product vocabulary
+├── .specify/               Spec Kit configuration and project constitution
+├── .github/                CI and release workflows, test scripts
+├── AGENTS.md               workflow guide for coding agents
+└── CHANGELOG.md
 ```
 
-The exact structure may evolve as the architecture becomes clearer.
+## Tech stack
 
+| Area | Choice |
+|---|---|
+| Language | Go 1.22.5 for the engine, CLI, and future daemon |
+| Dependencies | Go standard library, plus `gopkg.in/yaml.v3` for YAML decoding only |
+| Process execution | `os/exec` with `/bin/sh -c` (Unix) or `cmd /c` (Windows) |
+| Testing | `go test` unit, contract, and integration tests with the race detector, plus end-to-end tests of the built binary |
+| Quality | `gofmt`, `go vet`, golangci-lint, shellcheck, actionlint, govulncheck |
+| CI/CD | GitHub Actions on Linux, macOS, and Windows; tag-driven releases |
+| Process | Specification-driven development with [Spec Kit](https://github.com/github/spec-kit) |
 
-## Current Focus
+SDKs and integrations may be written in other languages. Public contracts such as the pipeline schema and CLI behavior must not depend on Go-specific details.
 
-The immediate goal is:
+## Roadmap
 
-> **Build a small, clean pipeline engine that can read a YAML definition and execute it reliably.**
+TRUSS grows from the engine outward. Each item below gets its own specification before it is built, so the scope and order may change.
 
-The current development path is:
+**Execution**
 
-```text
-Pipeline Schema
-      ↓
-Domain Model
-      ↓
-Parser
-      ↓
-Validation
-      ↓
-Engine
-      ↓
-Host Executor
-      ↓
-CLI
+- Dependency graphs between steps
+- Concurrent step execution
+- Cancellation
+- Container execution
+- Remote workers
+
+**Platform**
+
+- Execution events and log streaming
+- Daemon for managing runs, concurrency, and execution state
+- APIs and SDKs
+
+**Ecosystem**
+
+- CI/CD platform integrations
+- Visualization and dashboards
+
+Advanced caching, matrix builds, and cloud orchestration are out of scope for now.
+
+## Development
+
+TRUSS is built with specification-driven development. Behavior is specified before it is implemented, and every behavior change starts from a failing test.
+
+```mermaid
+flowchart LR
+    spec["Specify<br/>spec.md"] --> clarify["Clarify"] --> plan["Plan<br/>plan.md"] --> tasks["Tasks<br/>tasks.md"] --> impl["Implement<br/>test first"] --> verify["Verify against spec"]
 ```
 
-Everything else should build from this foundation.
+- [`.specify/memory/constitution.md`](.specify/memory/constitution.md) holds the engineering principles.
+- [`specs/`](specs/) holds one folder per feature: spec, plan, contracts, and tasks.
+- [`AGENTS.md`](AGENTS.md) explains the workflow for coding agents.
 
+### Checks
 
-## Long-Term Direction
+```bash
+gofmt -l .                                   # must print nothing
+go vet ./...
+go test -race ./...                          # unit, contract, and integration tests
+golangci-lint run ./...
+go build -o bin/truss ./cmd/truss
+bash .github/scripts/e2e-test.sh bin/truss   # end-to-end tests of the built binary
+```
 
-TRUSS may eventually support:
+CI runs all of these on Linux, macOS, and Windows for every pull request and every push to `main`.
 
-* dependency graphs
-* concurrent execution
-* container execution
-* cancellation
-* execution events
-* daemon-based execution
-* remote workers
-* SDKs
-* APIs
-* visualization and dashboards
-* CI/CD integrations
+### Releasing
 
-These capabilities should extend the core execution model rather than replace it.
+Releases are cut by pushing a semantic version tag such as `v0.1.0` or `v0.2.0-rc.1`. The release workflow refuses to publish unless:
 
+1. The `// version: X.Y.Z` line in `go.mod` equals the tag.
+2. The module path follows Go's major-version rule: no suffix for v0 and v1, `/vN` from v2 onward.
+3. `CHANGELOG.md` has `## [X.Y.Z] - YYYY-MM-DD` as its latest section, with entries and the tag's date.
 
-## Project Principle
+It then runs the full CI suite, builds binaries for every platform, and publishes a GitHub Release. The release notes combine the changelog section with notes generated by GitHub. Pre-release tags are published as pre-releases.
 
-Infrastructure changes.
+## License
 
-CI platforms change.
-
-Execution environments change.
-
-The pipeline should remain portable.
-
-**Define once. Execute anywhere.**
+TRUSS is released under the [MIT License](LICENSE).
