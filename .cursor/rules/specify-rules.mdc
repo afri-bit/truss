@@ -10,7 +10,7 @@ Auto-generated from all feature plans. Last updated: 2026-10-26
 
 ## Active Technologies
 
-- Go 1.27.3 (module `github.com/afri-bit/truss`) + Go standard library; `gopkg.in/yaml.v3` for YAML decoding only (001-host-pipeline-engine)
+- Go 1.27.3 (module `github.com/afri-bit/truss`) + Go standard library; `gopkg.in/yaml.v3` for YAML decoding only (001-host-pipeline-engine, 002-local-run-log)
 
 ## Project Structure
 
@@ -28,6 +28,7 @@ tests/
 Go 1.27.3 (module `github.com/afri-bit/truss`): Follow standard conventions
 
 ## Recent Changes
+- 002-local-run-log: Local run log with timestamps, duration, `.truss/run.log`, help, and version
 - 001-host-pipeline-engine: Added Go 1.27.3 (module `github.com/afri-bit/truss`) + Go standard library; `gopkg.in/yaml.v3` for YAML decoding only
 
 <!-- MANUAL ADDITIONS START -->
