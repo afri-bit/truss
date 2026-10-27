@@ -1,6 +1,6 @@
 ---
 name: git-commit
-description: Create a git commit with a conventional subject and a bullet-point body, and never add a co-author trailer. Use when the user asks to commit, write a commit message, or says "commit the changes" or "git commit".
+description: Create git commits with a conventional subject and a bullet-point body, grouped by topic so each commit contains only the files that belong to it, and never add a co-author trailer. Use when the user asks to commit, write a commit message, or says "commit the changes" or "git commit".
 ---
 
 # Git commit
@@ -15,9 +15,22 @@ Run these in parallel before drafting the message:
 - `git diff` and `git diff --cached`
 - `git log -12 --oneline`
 
-Stage only files that belong in the commit. Leave secrets (`.env`, credentials, keys) unstaged and warn if the user asked to include them. Do not create an empty commit.
+Leave secrets (`.env`, credentials, keys) unstaged and warn if the user asked to include them. Do not create an empty commit.
 
-If the working tree contains unrelated groups of changes, make one commit per group. Otherwise make one commit.
+## Group by topic
+
+Do not put every change from the working tree into one commit. Cluster the diff into several commits, one topic each. A feature session, a task list, or "commit the changes" is not one topic.
+
+A topic is one reason the tree changed: a behavior, a fix, a test suite for that behavior, or the docs that belong with it. Files that serve that reason go in that commit. Files that serve another reason wait for the next commit.
+
+Before staging:
+
+- Name the topics in the diff. Order them so a later topic can build on an earlier one.
+- For each topic, list the files that belong to it and stage only those paths.
+- Leave every other path unstaged until its own commit.
+- When one file mixes two topics, stage the hunks that belong to the current topic and leave the rest.
+
+One topic, and only then, is one commit. Two topics are two commits, even when they landed in the same session.
 
 ## Message
 
