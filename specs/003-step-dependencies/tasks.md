@@ -26,7 +26,7 @@
 
 **Purpose**: State the package boundary from plan.md. No new package and no new dependency.
 
-- [ ] T001 Update `internal/pipeline/doc.go` so the package comment says it parses optional `needs`, validates the dependency graph, plans sequential order, and does not execute steps
+- [X] T001 Update `internal/pipeline/doc.go` so the package comment says it parses optional `needs`, validates the dependency graph, plans sequential order, and does not execute steps
 
 ---
 
@@ -40,11 +40,11 @@
 
 > Write this test first and confirm it fails before T003.
 
-- [ ] T002 Add parse tests in `internal/pipeline/parse_test.go`: omitted `needs` and `needs: []` produce no dependencies; `needs: [build]` and a trimmed entry `" build "` produce `build`; a scalar `needs` and a non-string entry do not fail `Parse` and are marked with the same unexported shape flag pattern as a non-string `run`; `depends_on` and any other unknown field leave `Needs` empty
+- [X] T002 Add parse tests in `internal/pipeline/parse_test.go`: omitted `needs` and `needs: []` produce no dependencies; `needs: [build]` and a trimmed entry `" build "` produce `build`; a scalar `needs` and a non-string entry do not fail `Parse` and are marked with the same unexported shape flag pattern as a non-string `run`; `depends_on` and any other unknown field leave `Needs` empty
 
 ### Implementation
 
-- [ ] T003 Parse step `needs` in `internal/pipeline/parse.go` and store it on `Step` in `internal/pipeline/model.go`. Require `!!str` entries, trim them like `id`, and ignore `depends_on`. Do not change `Validate` or `Plan` in this task
+- [X] T003 Parse step `needs` in `internal/pipeline/parse.go` and store it on `Step` in `internal/pipeline/model.go`. Require `!!str` entries, trim them like `id`, and ignore `depends_on`. Do not change `Validate` or `Plan` in this task
 
 **Checkpoint**: A parsed Step carries its declared `Needs`. User stories can begin.
 
@@ -60,13 +60,13 @@
 
 > Write these tests first and confirm they fail before T007.
 
-- [ ] T004 [P] [US1] Add plan tests in `internal/pipeline/plan_test.go` per `specs/003-step-dependencies/contracts/execution.md` for the orders `build` then `test`; `lint` then `test` then `package`; `build` then `report` then `scan`; and `lint` then `package` then `publish`. Assert each planned Step still carries only its declared `Needs`
-- [ ] T005 [P] [US1] Add an engine test in `internal/engine/engine_test.go` that a Step written first and needing `build` does not run until `build` succeeds, and that `scan` with no `needs` runs after that dependent when `scan` is written last
-- [ ] T006 [P] [US1] Add a CLI contract test in `cmd/truss/run_test.go` for `test` needs `build`, then `build`, then `scan`: exit 0, start order `build`, `test`, `scan`, the local run log setup and `summary succeeded steps 3`, and no line that lists `needs`
+- [X] T004 [P] [US1] Add plan tests in `internal/pipeline/plan_test.go` per `specs/003-step-dependencies/contracts/execution.md` for the orders `build` then `test`; `lint` then `test` then `package`; `build` then `report` then `scan`; and `lint` then `package` then `publish`. Assert each planned Step still carries only its declared `Needs`
+- [X] T005 [P] [US1] Add an engine test in `internal/engine/engine_test.go` that a Step written first and needing `build` does not run until `build` succeeds, and that `scan` with no `needs` runs after that dependent when `scan` is written last
+- [X] T006 [P] [US1] Add a CLI contract test in `cmd/truss/run_test.go` for `test` needs `build`, then `build`, then `scan`: exit 0, start order `build`, `test`, `scan`, the local run log setup and `summary succeeded steps 3`, and no line that lists `needs`
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] Implement the selection rule in `internal/pipeline/plan.go`: repeatedly choose the not-yet-chosen Step with the smallest definition index whose `Needs` are already chosen. Return an error if a Step remains and none is eligible. Leave `internal/engine/engine.go` as a walk of `ExecutionPlan.Steps`
+- [X] T007 [US1] Implement the selection rule in `internal/pipeline/plan.go`: repeatedly choose the not-yet-chosen Step with the smallest definition index whose `Needs` are already chosen. Return an error if a Step remains and none is eligible. Leave `internal/engine/engine.go` as a walk of `ExecutionPlan.Steps`
 
 **Checkpoint**: User Story 1 passes on its own. A valid graph runs in dependency order.
 
@@ -82,12 +82,12 @@
 
 > Write these tests first and confirm they fail before T010.
 
-- [ ] T008 [P] [US2] Add validation tests in `internal/pipeline/validate_test.go` per `specs/003-step-dependencies/contracts/pipeline-v1.md` and `specs/003-step-dependencies/data-model.md`: `step "<id>" needs must be a list of step ids`; `step "<id>" needs unknown step "<entry>"` including an empty entry; `step "<id>" depends on itself`; `step "<id>" repeats step "<entry>"`; `dependency cycle: a, b` when `a` is written first and each needs the other; `dependency cycle: a, b, c` when `a` needs `b`, `b` needs `c`, and `c` needs `a`
-- [ ] T009 [P] [US2] Add CLI contract tests in `cmd/truss/run_test.go` for those five faults: `error: <diagnostic>` on standard error, exit 1, no step line, and an existing `.truss/run.log` byte-for-byte unchanged
+- [X] T008 [P] [US2] Add validation tests in `internal/pipeline/validate_test.go` per `specs/003-step-dependencies/contracts/pipeline-v1.md` and `specs/003-step-dependencies/data-model.md`: `step "<id>" needs must be a list of step ids`; `step "<id>" needs unknown step "<entry>"` including an empty entry; `step "<id>" depends on itself`; `step "<id>" repeats step "<entry>"`; `dependency cycle: a, b` when `a` is written first and each needs the other; `dependency cycle: a, b, c` when `a` needs `b`, `b` needs `c`, and `c` needs `a`
+- [X] T009 [P] [US2] Add CLI contract tests in `cmd/truss/run_test.go` for those five faults: `error: <diagnostic>` on standard error, exit 1, no step line, and an existing `.truss/run.log` byte-for-byte unchanged
 
 ### Implementation for User Story 2
 
-- [ ] T010 [US2] Implement the `needs` checks in `internal/pipeline/validate.go` after the current structural checks, one first fault in definition order, and inside a list in entry order: shape, unknown id, self, duplicate, then one cycle named from the member written earliest and then following `needs`. Keep the existing `error:` path in `cmd/truss/run.go`
+- [X] T010 [US2] Implement the `needs` checks in `internal/pipeline/validate.go` after the current structural checks, one first fault in definition order, and inside a list in entry order: shape, unknown id, self, duplicate, then one cycle named from the member written earliest and then following `needs`. Keep the existing `error:` path in `cmd/truss/run.go`
 
 **Checkpoint**: User Stories 1 and 2 both work. Illegal graphs run nothing.
 
@@ -103,12 +103,12 @@
 
 > Write these tests first and confirm they fail before T013. The case below fails while `Plan` still follows definition order, because `test` would run before `build`.
 
-- [ ] T011 [P] [US3] Add an engine test in `internal/engine/engine_test.go`: `test` needs `build` and is written first, `build` exits non-zero, `lint` has no `needs` and is last. Assert only `build` is in the result, with that Exit Code. Add a second case where the selected Step cannot start: that Step has a diagnostic and no Exit Code, and no later Step is present
-- [ ] T012 [P] [US3] Add a CLI contract test in `cmd/truss/run_test.go` per `specs/003-step-dependencies/quickstart.md` section 4 and `specs/003-step-dependencies/contracts/run-log.md`: `build` exits non-zero, `test` needs `build`, `lint` does not. Expect exit 1, `build` with its exit code, `summary failed steps 1`, an error line naming the pipeline and `build`, no `test` or `lint`, and `.truss/run.log` matching that text
+- [X] T011 [P] [US3] Add an engine test in `internal/engine/engine_test.go`: `test` needs `build` and is written first, `build` exits non-zero, `lint` has no `needs` and is last. Assert only `build` is in the result, with that Exit Code. Add a second case where the selected Step cannot start: that Step has a diagnostic and no Exit Code, and no later Step is present
+- [X] T012 [P] [US3] Add a CLI contract test in `cmd/truss/run_test.go` per `specs/003-step-dependencies/quickstart.md` section 4 and `specs/003-step-dependencies/contracts/run-log.md`: `build` exits non-zero, `test` needs `build`, `lint` does not. Expect exit 1, `build` with its exit code, `summary failed steps 1`, an error line naming the pipeline and `build`, no `test` or `lint`, and `.truss/run.log` matching that text
 
 ### Implementation for User Story 3
 
-- [ ] T013 [US3] In `internal/engine/engine.go`, return on the first failed Step so later plan Steps do not start, including a Step that does not need the failed Step. Keep the failed Step's Exit Code, or its start error and a nil Exit Code, on the result
+- [X] T013 [US3] In `internal/engine/engine.go`, return on the first failed Step so later plan Steps do not start, including a Step that does not need the failed Step. Keep the failed Step's Exit Code, or its start error and a nil Exit Code, on the result. No production change was needed: the engine already returned on the first failed Step, and T007 made the plan order the steps. T011 and T012 passed as soon as they were written, and a temporary change that kept running after a failure made them fail, so they do guard this behavior
 
 **Checkpoint**: A failure stops the whole run. The saved log contains only the Steps that started.
 
@@ -124,13 +124,13 @@
 
 > Write these tests first. They pass against today's definition-order behavior. Confirm they still pass after T017, and fix the implementation if any fail.
 
-- [ ] T014 [P] [US4] Add plan tests in `internal/pipeline/plan_test.go`: Steps with `needs` omitted, and Steps with `needs: []`, stay in definition order
-- [ ] T015 [P] [US4] Add validation tests in `internal/pipeline/validate_test.go`: a missing `run` is still reported when a later Step has a bad `needs`; `depends_on` alone does not produce a `needs` error; the existing missing-name, empty-steps, duplicate-id, empty-run, and bad-version messages stay
-- [ ] T016 [P] [US4] Add CLI contract tests in `cmd/truss/run_test.go`: a definition without `needs` runs in definition order and exits 0 with the log saved; a second Step exiting non-zero omits the third Step and exits 1; `truss run` with no path loads `truss.yaml`; `depends_on` without `needs` does not change definition order
+- [X] T014 [P] [US4] Add plan tests in `internal/pipeline/plan_test.go`: Steps with `needs` omitted, and Steps with `needs: []`, stay in definition order
+- [X] T015 [P] [US4] Add validation tests in `internal/pipeline/validate_test.go`: a missing `run` is still reported when a later Step has a bad `needs`; `depends_on` alone does not produce a `needs` error; the existing missing-name, empty-steps, duplicate-id, empty-run, and bad-version messages stay
+- [X] T016 [P] [US4] Add CLI contract tests in `cmd/truss/run_test.go`: a definition without `needs` runs in definition order and exits 0 with the log saved; a second Step exiting non-zero omits the third Step and exits 1; `truss run` with no path loads `truss.yaml`; `depends_on` without `needs` does not change definition order
 
 ### Implementation for User Story 4
 
-- [ ] T017 [US4] Keep omitted and empty `needs` in definition order in `internal/pipeline/plan.go`, keep structural errors ahead of `needs` errors in `internal/pipeline/validate.go`, and keep `depends_on` ignored in `internal/pipeline/parse.go`
+- [X] T017 [US4] Keep omitted and empty `needs` in definition order in `internal/pipeline/plan.go`, keep structural errors ahead of `needs` errors in `internal/pipeline/validate.go`, and keep `depends_on` ignored in `internal/pipeline/parse.go`. No separate code change was needed: T003, T007, and T010 already did this, and the T014–T016 regression tests passed against them
 
 **Checkpoint**: All four stories pass. Existing definitions behave as they do today.
 
@@ -140,10 +140,10 @@
 
 **Purpose**: Quality gates that apply to the whole feature
 
-- [ ] T018 [P] Walk through `specs/003-step-dependencies/quickstart.md` against the built `truss` CLI
-- [ ] T019 Run `gofmt`, `go vet`, and `go test ./...` from the module root that contains `go.mod`
-- [ ] T020 [P] Review `internal/pipeline/validate.go` and `cmd/truss/run.go` so `needs` diagnostics name Step ids only and do not add environment variable names or values
-- [ ] T021 Confirm `specs/003-step-dependencies/contracts/pipeline-v1.md` and `specs/003-step-dependencies/contracts/run-log.md` still record that schema version `"1"` stayed and that the run log gained no `needs` line
+- [X] T018 [P] Walk through `specs/003-step-dependencies/quickstart.md` against the built `truss` CLI
+- [X] T019 Run `gofmt`, `go vet`, and `go test ./...` from the module root that contains `go.mod`
+- [X] T020 [P] Review `internal/pipeline/validate.go` and `cmd/truss/run.go` so `needs` diagnostics name Step ids only and do not add environment variable names or values
+- [X] T021 Confirm `specs/003-step-dependencies/contracts/pipeline-v1.md` and `specs/003-step-dependencies/contracts/run-log.md` still record that schema version `"1"` stayed and that the run log gained no `needs` line
 
 ---
 
