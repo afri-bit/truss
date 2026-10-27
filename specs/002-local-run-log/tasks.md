@@ -26,7 +26,7 @@
 
 **Purpose**: Package boundary from plan.md
 
-- [ ] T001 Add package docs stating that `internal/runlog` formats the run log and does not parse YAML or execute commands, in `internal/runlog/doc.go`
+- [X] T001 Add package docs stating that `internal/runlog` formats the run log and does not parse YAML or execute commands, in `internal/runlog/doc.go`
 
 ---
 
@@ -36,9 +36,9 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T002 [P] Add a host test that the reported shell is `/bin/sh` on Unix and `%COMSPEC%` or `cmd.exe` on Windows in `internal/executor/host_test.go`
-- [ ] T003 Expose that shell path from `internal/executor/host.go` and use it when starting a step, so the setup line and execution cannot disagree
-- [ ] T004 [P] Define `StepStarted`, `StepOutput`, and `StepFinished` on a step-event interface in `internal/engine/log.go` without changing `Run` yet
+- [X] T002 [P] Add a host test that the reported shell is `/bin/sh` on Unix and `%COMSPEC%` or `cmd.exe` on Windows in `internal/executor/host_test.go`
+- [X] T003 Expose that shell path from `internal/executor/host.go` and use it when starting a step, so the setup line and execution cannot disagree
+- [X] T004 [P] Define `StepStarted`, `StepOutput`, and `StepFinished` on a step-event interface in `internal/engine/log.go` without changing `Run` yet
 
 **Checkpoint**: The shell path and the event interface exist. User stories can begin.
 
@@ -54,15 +54,15 @@
 
 > Write these tests first and confirm they fail before T008–T010.
 
-- [ ] T005 [P] [US1] Add contract tests for the success transcript in `internal/runlog/runlog_test.go` per `specs/002-local-run-log/contracts/run-log.md`: timestamp `YYYY-MM-DD HH:MM:SS`, a clock step backward does not move the timestamp earlier, duration uses three decimal seconds, five setup lines and no environment variable names, a step with one output line, a step with empty output, and `summary succeeded steps 2`
-- [ ] T006 [P] [US1] Add an engine test that two successful steps emit started, output, and finished events in definition order and that the engine writes no transcript text, in `internal/engine/engine_test.go`
-- [ ] T007 [P] [US1] Update the success CLI contract tests in `cmd/truss/run_test.go` to expect the run-log transcript on standard output for `truss run <path>`, including setup before step output and `summary succeeded steps 2`, and confirm they fail against the current `[id]` transcript
+- [X] T005 [P] [US1] Add contract tests for the success transcript in `internal/runlog/runlog_test.go` per `specs/002-local-run-log/contracts/run-log.md`: timestamp `YYYY-MM-DD HH:MM:SS`, a clock step backward does not move the timestamp earlier, duration uses three decimal seconds, five setup lines and no environment variable names, a step with one output line, a step with empty output, and `summary succeeded steps 2`
+- [X] T006 [P] [US1] Add an engine test that two successful steps emit started, output, and finished events in definition order and that the engine writes no transcript text, in `internal/engine/engine_test.go`
+- [X] T007 [P] [US1] Update the success CLI contract tests in `cmd/truss/run_test.go` to expect the run-log transcript on standard output for `truss run <path>`, including setup before step output and `summary succeeded steps 2`, and confirm they fail against the current `[id]` transcript
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Implement the run log writer in `internal/runlog/runlog.go`: injected clock, monotonic timestamps, setup, step start, one occurrence per output line, step finish with duration and exit, and the succeeded summary
-- [ ] T009 [US1] Emit step events from `internal/engine/engine.go`, stop writing `[id]` lines there, keep validation, definition order, fail-fast, and the structured result, and skip events when the sink is nil
-- [ ] T010 [US1] After a valid definition, write setup and the succeeded summary through `internal/runlog` to standard output from `cmd/truss/run.go`, and pass that writer to the engine. Do not create `.truss/run.log` in this task
+- [X] T008 [US1] Implement the run log writer in `internal/runlog/runlog.go`: injected clock, monotonic timestamps, setup, step start, one occurrence per output line, step finish with duration and exit, and the succeeded summary
+- [X] T009 [US1] Emit step events from `internal/engine/engine.go`, stop writing `[id]` lines there, keep validation, definition order, fail-fast, and the structured result, and skip events when the sink is nil
+- [X] T010 [US1] After a valid definition, write setup and the succeeded summary through `internal/runlog` to standard output from `cmd/truss/run.go`, and pass that writer to the engine. Do not create `.truss/run.log` in this task
 
 **Checkpoint**: User Story 1 passes on its own. A successful local run prints the new transcript.
 
@@ -78,11 +78,11 @@
 
 > Write these tests first and confirm they fail before T012.
 
-- [ ] T011 [P] [US2] Add CLI tests in `cmd/truss/run_test.go` that a finished run's `.truss/run.log` equals standard output, a second finished run replaces that file, and `truss run` of a file outside the working directory still writes `.truss/run.log` in the working directory
+- [X] T011 [P] [US2] Add CLI tests in `cmd/truss/run_test.go` that a finished run's `.truss/run.log` equals standard output, a second finished run replaces that file, and `truss run` of a file outside the working directory still writes `.truss/run.log` in the working directory
 
 ### Implementation for User Story 2
 
-- [ ] T012 [US2] In `cmd/truss/run.go`, after validation succeeds, write the same run-log bytes to standard output and `.truss/run.log.tmp`, then rename that temporary file to `.truss/run.log` when the run finishes. Do not edit ignore files
+- [X] T012 [US2] In `cmd/truss/run.go`, after validation succeeds, write the same run-log bytes to standard output and `.truss/run.log.tmp`, then rename that temporary file to `.truss/run.log` when the run finishes. Do not edit ignore files
 
 **Checkpoint**: User Stories 1 and 2 both pass. The latest run can be opened after the terminal scrolls away.
 
@@ -98,12 +98,12 @@
 
 > Write these tests first and confirm they fail before T015.
 
-- [ ] T013 [P] [US3] Add run-log tests in `internal/runlog/runlog_test.go` for a non-zero `finished` line, a start failure with duration and no exit code, `summary failed`, and `error <pipeline> failed at <id>` per `specs/002-local-run-log/contracts/run-log.md`
-- [ ] T014 [P] [US3] Add CLI tests in `cmd/truss/run_test.go`: invalid YAML and a validation error leave an existing `.truss/run.log` unchanged and print no step line; a three-step run whose second command fails saves that log, omits the third step, and exits 1; when `.truss` is a file, the command prints an error, starts no step, and does not replace a log
+- [X] T013 [P] [US3] Add run-log tests in `internal/runlog/runlog_test.go` for a non-zero `finished` line, a start failure with duration and no exit code, `summary failed`, and `error <pipeline> failed at <id>` per `specs/002-local-run-log/contracts/run-log.md`
+- [X] T014 [P] [US3] Add CLI tests in `cmd/truss/run_test.go`: invalid YAML and a validation error leave an existing `.truss/run.log` unchanged and print no step line; a three-step run whose second command fails saves that log, omits the third step, and exits 1; when `.truss` is a file, the command prints an error, starts no step, and does not replace a log
 
 ### Implementation for User Story 3
 
-- [ ] T015 [US3] Write the failed summary and error line from `internal/runlog/runlog.go`, save that log from `cmd/truss/run.go` when the pipeline run fails, and return a user-visible error before any step when `.truss` or `.truss/run.log.tmp` cannot be created
+- [X] T015 [US3] Write the failed summary and error line from `internal/runlog/runlog.go`, save that log from `cmd/truss/run.go` when the pipeline run fails, and return a user-visible error before any step when `.truss` or `.truss/run.log.tmp` cannot be created
 
 **Checkpoint**: User Stories 1, 2, and 3 pass. A rejected definition cannot be mistaken for a failed run.
 
@@ -119,11 +119,11 @@
 
 > Write these tests first and confirm they fail before T017.
 
-- [ ] T016 [P] [US4] Add CLI contract tests in `cmd/truss/run_test.go` per `specs/002-local-run-log/contracts/cli.md`: `truss`, `truss help`, and `truss --help` print usage naming `run`, `help`, and `version` and exit 0 without creating `.truss/run.log`; `truss version` and `truss --version` print the `// version:` value from `go.mod` and exit 0; any other invocation prints usage to standard error and exits 1; `truss run --help` is a path
+- [X] T016 [P] [US4] Add CLI contract tests in `cmd/truss/run_test.go` per `specs/002-local-run-log/contracts/cli.md`: `truss`, `truss help`, and `truss --help` print usage naming `run`, `help`, and `version` and exit 0 without creating `.truss/run.log`; `truss version` and `truss --version` print the `// version:` value from `go.mod` and exit 0; any other invocation prints usage to standard error and exits 1; `truss run --help` is a path
 
 ### Implementation for User Story 4
 
-- [ ] T017 [US4] Implement usage text, command dispatch, and the version constant that matches `go.mod` in `cmd/truss/main.go`, `cmd/truss/run.go`, and `cmd/truss/version.go`
+- [X] T017 [US4] Implement usage text, command dispatch, and the version constant that matches `go.mod` in `cmd/truss/main.go`, `cmd/truss/run.go`, and `cmd/truss/version.go`
 
 **Checkpoint**: All four stories pass independently.
 
@@ -133,10 +133,10 @@
 
 **Purpose**: Quality gates that apply to the whole feature
 
-- [ ] T018 [P] Walk through `specs/002-local-run-log/quickstart.md` against the built `truss` CLI
-- [ ] T019 Run `gofmt`, `go vet`, and `go test ./...` from the module root that contains `go.mod`
-- [ ] T020 [P] Review `internal/runlog/runlog.go` and `cmd/truss/run.go` so the setup section and summary contain no environment variable names or values
-- [ ] T021 Confirm `specs/002-local-run-log/contracts/cli.md` still records that the unreleased host-engine transcript changed and schema version `"1"` did not
+- [X] T018 [P] Walk through `specs/002-local-run-log/quickstart.md` against the built `truss` CLI
+- [X] T019 Run `gofmt`, `go vet`, and `go test ./...` from the module root that contains `go.mod`
+- [X] T020 [P] Review `internal/runlog/runlog.go` and `cmd/truss/run.go` so the setup section and summary contain no environment variable names or values
+- [X] T021 Confirm `specs/002-local-run-log/contracts/cli.md` still records that the unreleased host-engine transcript changed and schema version `"1"` did not
 
 ---
 

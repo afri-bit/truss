@@ -1,7 +1,7 @@
 # Contract: CLI
 
 **Status**: Replaces the invocation and transcript rules in `specs/001-host-pipeline-engine/contracts/cli.md`  
-**Compatibility**: `truss` with no command, `truss help`, and `truss --help` exit 0. `truss version` and `truss --version` are new. `truss run [<path>]`, fail-fast, and the process exit for a succeeded or failed run stay. The run log contract is [run-log.md](./run-log.md).
+**Compatibility**: Replaces the unreleased host-engine transcript. Schema version `"1"` is unchanged. `truss` with no command, `truss help`, and `truss --help` exit 0. `truss version` and `truss --version` are new. `truss run [<path>]`, fail-fast, and the process exit for a succeeded or failed run stay. The run log contract is [run-log.md](./run-log.md).
 
 ## Commands
 
