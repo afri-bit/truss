@@ -1,22 +1,30 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 → 1.1.0
-- Modified principles: III. Testable Behavior — expanded to require
-  test-first development (failing test before production behavior)
-- Added sections: none
+- Version change: 1.1.0 → 1.2.0
+- Modified principles: none
+- Added sections: Branching — new branches use a feature/, bugfix/, or
+  hotfix/ prefix
 - Removed sections: none
 - Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ updated (Constitution Check)
-  - .specify/templates/spec-template.md ✅ updated (Testing bullet)
-  - .specify/templates/tasks-template.md ✅ already required failing tests
-    before implementation; no further change
+  - .specify/templates/plan-template.md ⚠ pending: `[###-feature-name]`
+    branch placeholder has no prefix (Spec Kit tooling; change only in a
+    task that concerns that tooling)
+  - .specify/templates/spec-template.md ⚠ pending: same branch placeholder
+  - .specify/templates/tasks-template.md ✅ no branch references
   - .specify/templates/commands/*.md ✅ none present
-  - AGENTS.md ✅ unchanged; principles stay in this file
-  - .cursor/rules/tdd.mdc ✅ added (always-on agent workflow)
-  - .cursor/skills/speckit-tasks/SKILL.md ✅ tests are required, test-first
-  - README.md ✅ no principle references requiring change
-- Follow-up TODOs: none
+  - AGENTS.md ✅ unchanged; the naming rule stays in this file
+  - .cursor/rules/*.mdc ✅ no branch rules present
+  - .specify/scripts/bash/common.sh and
+    .specify/extensions/git/scripts/bash/git-common.sh ⚠ pending:
+    `check_feature_branch` accepts only names that start with digits, so
+    it rejects `feature/003-step-dependencies`. The Branching section
+    records a workaround (`SPECIFY_FEATURE`) until that tooling is updated
+  - README.md ✅ no branch naming references
+- Follow-up TODOs: update the Spec Kit branch check and the template
+  placeholders to accept the three prefixes, then remove the tooling note
+  from the Branching section
 -->
+
 
 # TRUSS Constitution
 
@@ -157,6 +165,33 @@ present at runtime.
   project-wide engineering principles. `AGENTS.md` provides agent
   workflow; it MUST NOT duplicate or silently override this constitution.
 
+## Branching
+
+- Every branch created for work in this repository MUST be named
+  `<type>/<name>`, where `<type>` is exactly one of:
+  - `feature/` for a new capability or a behavioral change, and for any
+    other change that is not a `bugfix/` or a `hotfix/`, such as
+    documentation, tests, or maintenance.
+  - `bugfix/` for a non-urgent fix to a defect.
+  - `hotfix/` for an urgent fix to a defect in released code.
+- `<name>` MUST be short, lowercase, and hyphen-separated. For a feature
+  that has a specification, `<name>` SHOULD be the spec directory name
+  under `specs/`, such as `feature/003-step-dependencies`, so the branch
+  and the specification match.
+- Agents and contributors MUST NOT create a branch without one of these
+  prefixes. Branches that already exist keep their names.
+- Tooling note: the Spec Kit scripts under `.specify/scripts/` currently
+  accept only branch names that start with digits, and reject
+  `feature/003-step-dependencies`. Until that tooling is updated in a
+  task that concerns it, create the branch with `GIT_BRANCH_NAME` set to
+  the full prefixed name, and run `/speckit.plan`, `/speckit.tasks`, and
+  `/speckit.implement` with `SPECIFY_FEATURE` set to the unprefixed name,
+  such as `SPECIFY_FEATURE=003-step-dependencies`.
+
+**Rationale**: A fixed prefix tells a reviewer the purpose of a branch
+before opening it, and keeps branch names uniform across contributors and
+agents.
+
 ## Quality Gates
 
 A change is not complete until all of the following hold:
@@ -197,4 +232,4 @@ implementation (Quality Gates), and any change to public contracts.
 Use `AGENTS.md` for agent workflow only; do not treat it as a second
 constitution.
 
-**Version**: 1.1.0 | **Ratified**: 2026-09-16 | **Last Amended**: 2026-10-09
+**Version**: 1.2.0 | **Ratified**: 2026-09-16 | **Last Amended**: 2026-10-27
