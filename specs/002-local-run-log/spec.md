@@ -2,7 +2,7 @@
 
 **Feature Branch**: `002-local-run-log`  
 **Created**: 2026-10-26  
-**Status**: Draft  
+**Status**: Implemented  
 **Input**: User description: "A developer running a pipeline locally needs a run log they can read while it executes and find again afterward. The log shows whether the environment was captured, the operating system and architecture, the host shell, and the working directory, then each step and a closing summary. Every occurrence and every step carries the time it happened. It does not add a secret store, declared variables, or a dump of the invoker's environment. The latest log is saved under .truss/ in the working directory. Help and version are available without starting a run."
 
 ## User Scenarios & Testing *(mandatory)*
