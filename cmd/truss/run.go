@@ -15,11 +15,22 @@ import (
 	"github.com/afri-bit/truss/internal/runlog"
 )
 
-// Run executes a pipeline and writes the run log.
-// It returns the process exit code.
+// usageText is the CLI usage printed for help and for unknown invocations.
+const usageText = "usage: truss run [<path>]\n       truss help\n       truss version\n"
+
+// Run dispatches one CLI invocation and returns the process exit code.
+// Help and version write to stdout and do not start a run.
+// A pipeline run writes the run log to stdout and to .truss/run.log.
 func Run(ctx context.Context, args []string, cwd string, env []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 || args[0] != "run" || len(args) > 2 {
-		fmt.Fprintf(stderr, "error: usage: truss run [<path>]\n")
+	switch {
+	case isHelp(args):
+		fmt.Fprint(stdout, usageText)
+		return 0
+	case isVersion(args):
+		fmt.Fprintln(stdout, Version)
+		return 0
+	case !isRun(args):
+		fmt.Fprint(stderr, usageText)
 		return 1
 	}
 	path := filepath.Join(cwd, "truss.yaml")
@@ -123,6 +134,18 @@ func replaceFile(tmpPath, dest string) error {
 func discardRunLog(tmp *os.File, tmpPath string) {
 	_ = tmp.Close()
 	_ = os.Remove(tmpPath)
+}
+
+func isHelp(args []string) bool {
+	return len(args) == 0 || (len(args) == 1 && (args[0] == "help" || args[0] == "--help"))
+}
+
+func isVersion(args []string) bool {
+	return len(args) == 1 && (args[0] == "version" || args[0] == "--version")
+}
+
+func isRun(args []string) bool {
+	return len(args) >= 1 && len(args) <= 2 && args[0] == "run"
 }
 
 func hostOS(goos string) string {

@@ -351,3 +351,116 @@ func echoHello() string {
 	}
 	return "echo \"Hello from TRUSS\""
 }
+
+const wantUsage = "usage: truss run [<path>]\n       truss help\n       truss version\n"
+
+func TestHelp_PrintsUsageWithoutRunLog(t *testing.T) {
+	cases := [][]string{nil, {"help"}, {"--help"}}
+	for _, args := range cases {
+		dir := t.TempDir()
+		code, out, errOut := invoke(t, dir, args)
+		if code != 0 {
+			t.Fatalf("args %q exit = %d, stderr = %s", args, code, errOut)
+		}
+		if out != wantUsage {
+			t.Fatalf("args %q stdout = %q", args, out)
+		}
+		if errOut != "" {
+			t.Fatalf("args %q stderr = %q", args, errOut)
+		}
+		assertNoRunLog(t, dir)
+	}
+}
+
+func TestVersion_PrintsGoModVersion(t *testing.T) {
+	want := versionFromGoMod(t)
+	if Version != want {
+		t.Fatalf("Version = %q, go.mod // version: = %q", Version, want)
+	}
+	for _, args := range [][]string{{"version"}, {"--version"}} {
+		dir := t.TempDir()
+		code, out, errOut := invoke(t, dir, args)
+		if code != 0 {
+			t.Fatalf("args %q exit = %d, stderr = %s", args, code, errOut)
+		}
+		if out != want+"\n" {
+			t.Fatalf("args %q stdout = %q", args, out)
+		}
+		if errOut != "" {
+			t.Fatalf("args %q stderr = %q", args, errOut)
+		}
+		assertNoRunLog(t, dir)
+	}
+}
+
+func TestUnknownInvocation_PrintsUsageOnStderr(t *testing.T) {
+	cases := [][]string{
+		{"nope"},
+		{"help", "extra"},
+		{"version", "extra"},
+		{"--help", "extra"},
+		{"--version", "extra"},
+		{"run", "a", "b"},
+	}
+	for _, args := range cases {
+		dir := t.TempDir()
+		code, out, errOut := invoke(t, dir, args)
+		if code != 1 {
+			t.Fatalf("args %q exit = %d", args, code)
+		}
+		if errOut != wantUsage {
+			t.Fatalf("args %q stderr = %q", args, errOut)
+		}
+		if out != "" {
+			t.Fatalf("args %q stdout = %q", args, out)
+		}
+		assertNoRunLog(t, dir)
+	}
+}
+
+func TestRun_HelpFlagIsAPath(t *testing.T) {
+	dir := t.TempDir()
+	code, out, errOut := invoke(t, dir, []string{"run", "--help"})
+	if code != 1 {
+		t.Fatalf("exit = %d, stderr = %s", code, errOut)
+	}
+	if !strings.Contains(errOut, "error:") {
+		t.Fatalf("stderr = %q", errOut)
+	}
+	if strings.Contains(out, "usage:") || strings.Contains(errOut, "truss version") {
+		t.Fatalf("stdout = %q, stderr = %q", out, errOut)
+	}
+	assertNoRunLog(t, dir)
+}
+
+func assertNoRunLog(t *testing.T, dir string) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(dir, ".truss", "run.log")); !os.IsNotExist(err) {
+		t.Fatalf("run log exists: %v", err)
+	}
+}
+
+func versionFromGoMod(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+		if err == nil {
+			for _, line := range strings.Split(string(data), "\n") {
+				const prefix = "// version:"
+				if strings.HasPrefix(line, prefix) {
+					return strings.TrimSpace(strings.TrimPrefix(line, prefix))
+				}
+			}
+			t.Fatal("go.mod has no // version: line")
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("go.mod not found")
+		}
+		dir = parent
+	}
+}
