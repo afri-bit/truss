@@ -6,7 +6,7 @@
 [![Go](https://img.shields.io/badge/go-1.27.3-00ADD8?logo=go)](go.mod)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **Status:** early development. The engine runs pipelines on the host today. No version has been tagged yet, and the pipeline schema and CLI output may still change before the first release.
+> **Status:** early development. The first release is [v0.1.0](docs/MILESTONE.md). It is not tagged yet. The pipeline schema and CLI output may still change until that milestone is complete.
 
 ## Contents
 
@@ -313,7 +313,7 @@ SDKs and integrations may be written in other languages. Public contracts such a
 
 ## Roadmap
 
-TRUSS grows from the engine outward. Each item below gets its own specification before it is built, so the scope and order may change.
+The first tagged release is defined in [`docs/MILESTONE.md`](docs/MILESTONE.md). TRUSS grows from the engine outward. Each item below gets its own specification before it is built, so the scope and order may change. Items inside v0.1.0 are built before the tag. The rest wait.
 
 **Execution**
 
@@ -345,6 +345,7 @@ flowchart LR
     spec["Specify<br/>spec.md"] --> clarify["Clarify"] --> plan["Plan<br/>plan.md"] --> tasks["Tasks<br/>tasks.md"] --> impl["Implement<br/>test first"] --> verify["Verify against spec"]
 ```
 
+- [`docs/MILESTONE.md`](docs/MILESTONE.md) holds the current release scope.
 - [`.specify/memory/constitution.md`](.specify/memory/constitution.md) holds the engineering principles.
 - [`specs/`](specs/) holds one folder per feature: spec, plan, contracts, and tasks.
 - [`AGENTS.md`](AGENTS.md) explains the workflow for coding agents.

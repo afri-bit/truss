@@ -29,6 +29,7 @@ Small mechanical changes such as formatting, typo fixes, dependency maintenance,
 
 Use the following project artifacts for their respective purposes:
 
+* `docs/MILESTONE.md` defines what the current release includes and what waits until later. Read it before choosing or expanding a feature.
 * `.specify/memory/constitution.md` defines project-wide engineering principles and constraints.
 * `specs/<feature>/spec.md` defines required feature behavior and intent.
 * `specs/<feature>/plan.md` defines the agreed technical approach.
@@ -44,11 +45,12 @@ If implementation and specification disagree, do not silently modify either side
 Before modifying code for a feature:
 
 1. Read this `AGENTS.md`.
-2. Read `.specify/memory/constitution.md`.
-3. Identify the relevant feature under `specs/`.
-4. Read its `spec.md`.
-5. When present, read its `plan.md` and `tasks.md`.
-6. Inspect the existing implementation relevant to the change.
+2. Read `docs/MILESTONE.md` and stay inside the current release.
+3. Read `.specify/memory/constitution.md`.
+4. Identify the relevant feature under `specs/`.
+5. Read its `spec.md`.
+6. When present, read its `plan.md` and `tasks.md`.
+7. Inspect the existing implementation relevant to the change.
 
 Do not assume repository structure, APIs, or behavior from general conventions when the repository already defines them.
 
