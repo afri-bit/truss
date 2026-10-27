@@ -5,10 +5,119 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/afri-bit/truss/internal/pipeline"
 )
+
+func TestRun_EmitsStepEventsInOrder(t *testing.T) {
+	rec := &eventLog{}
+	p := pipeline.Pipeline{
+		Version: "1",
+		Name:    "hello-world",
+		Steps: []pipeline.Step{
+			{ID: "hello", Run: echoHello()},
+			{ID: "second", Run: "echo second"},
+		},
+	}
+	run, err := Run(context.Background(), p, t.TempDir(), nil, rec)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if run.Status != pipeline.StatusSucceeded || len(run.Steps) != 2 {
+		t.Fatalf("run = %+v", run)
+	}
+	phases := rec.phases()
+	want := []string{
+		"started hello",
+		"output hello",
+		"finished hello",
+		"started second",
+		"output second",
+		"finished second",
+	}
+	if strings.Join(phases, ",") != strings.Join(want, ",") {
+		t.Fatalf("events = %q", phases)
+	}
+	hello := rec.output("hello")
+	second := rec.output("second")
+	if !strings.Contains(hello, "Hello from TRUSS") || !strings.Contains(second, "second") {
+		t.Fatalf("output hello=%q second=%q", hello, second)
+	}
+	for _, chunk := range []string{hello, second} {
+		if strings.Contains(chunk, "step ") || strings.Contains(chunk, "[hello]") || strings.Contains(chunk, "[second]") {
+			t.Fatalf("engine wrote transcript text: %q", chunk)
+		}
+	}
+	if rec.exit("hello") == nil || *rec.exit("hello") != 0 || rec.exit("second") == nil || *rec.exit("second") != 0 {
+		t.Fatalf("exit codes = %+v", rec.events)
+	}
+}
+
+type eventLog struct {
+	events []stepEvent
+}
+
+type stepEvent struct {
+	kind  string
+	id    string
+	chunk string
+	exit  *int
+}
+
+func (r *eventLog) StepStarted(id string) {
+	r.events = append(r.events, stepEvent{kind: "started", id: id})
+}
+
+func (r *eventLog) StepOutput(id string, chunk []byte) {
+	r.events = append(r.events, stepEvent{kind: "output", id: id, chunk: string(chunk)})
+}
+
+func (r *eventLog) StepFinished(id string, exitCode *int, startErr error) {
+	ev := stepEvent{kind: "finished", id: id, exit: exitCode}
+	if startErr != nil {
+		ev.chunk = startErr.Error()
+	}
+	r.events = append(r.events, ev)
+}
+
+func (r *eventLog) phases() []string {
+	var out []string
+	var outputID string
+	for _, ev := range r.events {
+		if ev.kind == "output" {
+			if outputID == ev.id {
+				continue
+			}
+			outputID = ev.id
+			out = append(out, "output "+ev.id)
+			continue
+		}
+		outputID = ""
+		out = append(out, ev.kind+" "+ev.id)
+	}
+	return out
+}
+
+func (r *eventLog) output(id string) string {
+	var b strings.Builder
+	for _, ev := range r.events {
+		if ev.kind == "output" && ev.id == id {
+			b.WriteString(ev.chunk)
+		}
+	}
+	return b.String()
+}
+
+func (r *eventLog) exit(id string) *int {
+	for _, ev := range r.events {
+		if ev.kind == "finished" && ev.id == id {
+			return ev.exit
+		}
+	}
+	return nil
+}
 
 func TestRun_TwoSuccessfulSteps(t *testing.T) {
 	second := "echo second"

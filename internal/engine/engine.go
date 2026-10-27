@@ -4,16 +4,15 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/afri-bit/truss/internal/executor"
 	"github.com/afri-bit/truss/internal/pipeline"
 )
 
 // Run executes a pipeline sequentially on the host. dir and env are captured
-// by the caller and reused for every step. log, when set, receives each step
-// id and the step output as it is produced.
-func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, log io.Writer) (pipeline.PipelineRun, error) {
+// by the caller and reused for every step. events, when set, receives each
+// started step. A nil events value skips those calls and writes no transcript.
+func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, events StepEvents) (pipeline.PipelineRun, error) {
 	if err := ctx.Err(); err != nil {
 		return pipeline.PipelineRun{}, err
 	}
@@ -30,14 +29,21 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, log
 		if err := ctx.Err(); err != nil {
 			return run, err
 		}
-		if log != nil {
-			fmt.Fprintf(log, "[%s]\n", step.ID)
+		var out io.Writer
+		if events != nil {
+			events.StepStarted(step.ID)
+			out = stepOutput{id: step.ID, events: events}
 		}
-		res, err := executor.Execute(ctx, executor.Request{Run: step.Run, Dir: dir, Env: env, Out: log})
+		res, err := executor.Execute(ctx, executor.Request{Run: step.Run, Dir: dir, Env: env, Out: out})
 		if err != nil {
+			if events != nil {
+				events.StepFinished(step.ID, nil, err)
+			}
 			return run, fmt.Errorf("execute step %s: %w", step.ID, err)
 		}
-		finishLogLine(log, res.Stdout, res.Stderr)
+		if events != nil {
+			events.StepFinished(step.ID, res.ExitCode, res.Err)
+		}
 		stepRun := stepResult(step.ID, res)
 		run.Steps = append(run.Steps, stepRun)
 		if stepRun.Status == pipeline.StatusFailed {
@@ -48,14 +54,21 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, log
 	return run, nil
 }
 
-func finishLogLine(log io.Writer, stdout, stderr string) {
-	if log == nil || (stdout == "" && stderr == "") {
-		return
+// stepOutput forwards command bytes to the step-event sink without
+// adding transcript text.
+type stepOutput struct {
+	id     string
+	events StepEvents
+}
+
+func (s stepOutput) Write(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
 	}
-	if (stdout == "" || strings.HasSuffix(stdout, "\n")) && (stderr == "" || strings.HasSuffix(stderr, "\n")) {
-		return
-	}
-	fmt.Fprintln(log)
+	chunk := make([]byte, len(p))
+	copy(chunk, p)
+	s.events.StepOutput(s.id, chunk)
+	return len(p), nil
 }
 
 func stepResult(id string, res executor.Result) pipeline.StepRun {
