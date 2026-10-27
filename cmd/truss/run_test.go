@@ -47,6 +47,134 @@ func TestRun_TwoStepsPrintSucceededSummary(t *testing.T) {
 	}
 }
 
+func TestRun_StartsStepsAfterTheStepsTheyNeed(t *testing.T) {
+	dir := t.TempDir()
+	body := "version: \"1\"\npipeline:\n  name: ordered\nsteps:\n" +
+		"  - id: test\n    needs: [build]\n    run: echo test\n" +
+		"  - id: build\n    run: echo build\n" +
+		"  - id: scan\n    run: echo scan\n"
+	path := filepath.Join(dir, "pipeline.yaml")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errOut := invoke(t, dir, []string{"run", path})
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %s", code, errOut)
+	}
+	build := strings.Index(out, "step build started")
+	test := strings.Index(out, "step test started")
+	scan := strings.Index(out, "step scan started")
+	if build < 0 || test < build || scan < test {
+		t.Fatalf("start order is not build, test, scan:\n%s", out)
+	}
+	buildDone := strings.Index(out, "step build finished")
+	if buildDone < 0 || buildDone > test {
+		t.Fatalf("test started before build finished:\n%s", out)
+	}
+	for _, want := range []string{
+		"setup environment ready",
+		"setup os ",
+		"setup arch ",
+		"setup shell ",
+		"setup directory ",
+		"summary succeeded steps 3",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("report missing %q:\n%s", want, out)
+		}
+	}
+	for _, line := range strings.Split(strings.TrimSuffix(out, "\n"), "\n") {
+		if !timestampPrefix.MatchString(line) {
+			t.Fatalf("line missing timestamp %q\n%s", line, out)
+		}
+		isStepOrSummary := strings.Contains(line, " step ") || strings.Contains(line, " summary ")
+		if isStepOrSummary && strings.Contains(line, "needs") {
+			t.Fatalf("log lists dependencies: %q", line)
+		}
+	}
+	if saved := readRunLog(t, dir); saved != out {
+		t.Fatalf("saved log =\n%s\nstdout =\n%s", saved, out)
+	}
+}
+
+func TestRun_WithoutNeedsRunsInDefinitionOrder(t *testing.T) {
+	cases := map[string]string{
+		"needs omitted":    "",
+		"needs empty list": "    needs: []\n",
+	}
+	for name, needs := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			body := "version: \"1\"\npipeline:\n  name: plain\nsteps:\n" +
+				"  - id: c\n" + needs + "    run: echo c\n" +
+				"  - id: a\n" + needs + "    run: echo a\n" +
+				"  - id: b\n" + needs + "    run: echo b\n"
+			path := filepath.Join(dir, "pipeline.yaml")
+			if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			code, out, errOut := invoke(t, dir, []string{"run", path})
+			if code != 0 {
+				t.Fatalf("exit = %d, stderr = %s", code, errOut)
+			}
+			c := strings.Index(out, "step c started")
+			a := strings.Index(out, "step a started")
+			b := strings.Index(out, "step b started")
+			if c < 0 || a < c || b < a {
+				t.Fatalf("start order is not c, a, b:\n%s", out)
+			}
+			if !strings.Contains(out, "summary succeeded steps 3") {
+				t.Fatalf("summary missing:\n%s", out)
+			}
+			if saved := readRunLog(t, dir); saved != out {
+				t.Fatalf("saved log =\n%s\nstdout =\n%s", saved, out)
+			}
+		})
+	}
+}
+
+func TestRun_DependsOnIsNotADependency(t *testing.T) {
+	dir := t.TempDir()
+	body := "version: \"1\"\npipeline:\n  name: plain\nsteps:\n" +
+		"  - id: first\n    depends_on: [second]\n    run: echo first\n" +
+		"  - id: second\n    run: echo second\n"
+	path := filepath.Join(dir, "pipeline.yaml")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errOut := invoke(t, dir, []string{"run", path})
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %s", code, errOut)
+	}
+	first := strings.Index(out, "step first started")
+	second := strings.Index(out, "step second started")
+	if first < 0 || second < first {
+		t.Fatalf("start order is not first, second:\n%s", out)
+	}
+}
+
+func TestRun_DefaultFileHonorsNeeds(t *testing.T) {
+	dir := t.TempDir()
+	body := "version: \"1\"\npipeline:\n  name: default-file\nsteps:\n" +
+		"  - id: test\n    needs: [build]\n    run: echo test\n" +
+		"  - id: build\n    run: echo build\n"
+	if err := os.WriteFile(filepath.Join(dir, "truss.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errOut := invoke(t, dir, []string{"run"})
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %s", code, errOut)
+	}
+	build := strings.Index(out, "step build started")
+	test := strings.Index(out, "step test started")
+	if build < 0 || test < build {
+		t.Fatalf("start order is not build, test:\n%s", out)
+	}
+	if saved := readRunLog(t, dir); saved != out {
+		t.Fatalf("saved log =\n%s\nstdout =\n%s", saved, out)
+	}
+}
+
 func TestRun_OtherFilenameSucceeds(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "custom.yaml")
@@ -130,6 +258,52 @@ func TestRun_FailedStepStopsPipeline(t *testing.T) {
 	}
 }
 
+func TestRun_FailedStepStopsDependentsAndReadySteps(t *testing.T) {
+	dir := t.TempDir()
+	testMarker := filepath.Join(dir, "test.txt")
+	lintMarker := filepath.Join(dir, "lint.txt")
+	build := "exit 1"
+	write := func(path string) string { return "echo x > '" + path + "'" }
+	if runtime.GOOS == "windows" {
+		build = "exit /b 1"
+		write = func(path string) string { return "echo x> \"" + path + "\"" }
+	}
+	body := "version: \"1\"\npipeline:\n  name: build-pipeline\nsteps:\n" +
+		"  - id: build\n    run: " + build + "\n" +
+		"  - id: test\n    needs: [build]\n    run: " + write(testMarker) + "\n" +
+		"  - id: lint\n    run: " + write(lintMarker) + "\n"
+	path := filepath.Join(dir, "pipeline.yaml")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errOut := invoke(t, dir, []string{"run", path})
+	if code != 1 {
+		t.Fatalf("exit = %d, stderr = %s", code, errOut)
+	}
+	if !strings.Contains(out, "step build started") || !strings.Contains(out, "step build finished") || !strings.Contains(out, "exit 1") {
+		t.Fatalf("report = %s", out)
+	}
+	for _, id := range []string{"test", "lint"} {
+		if strings.Contains(out, "step "+id) {
+			t.Fatalf("step %s appears in the log:\n%s", id, out)
+		}
+	}
+	if !strings.Contains(out, "summary failed steps 1") || !strings.Contains(out, "error build-pipeline failed at build (exit 1)") {
+		t.Fatalf("report = %s", out)
+	}
+	if strings.Contains(errOut, "failed at build") {
+		t.Fatalf("stderr duplicates the run log: %s", errOut)
+	}
+	if saved := readRunLog(t, dir); saved != out {
+		t.Fatalf("saved log =\n%s\nstdout =\n%s", saved, out)
+	}
+	for _, marker := range []string{testMarker, lintMarker} {
+		if _, err := os.Stat(marker); !os.IsNotExist(err) {
+			t.Fatalf("a step ran after build failed: %v", err)
+		}
+	}
+}
+
 func TestRun_RejectedDefinitionLeavesLogUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, ".truss", "run.log")
@@ -166,6 +340,84 @@ func TestRun_RejectedDefinitionLeavesLogUnchanged(t *testing.T) {
 		if string(got) != previous {
 			t.Fatalf("log changed to %q", got)
 		}
+	}
+}
+
+func TestRun_RejectsInvalidDependencyGraph(t *testing.T) {
+	tests := []struct {
+		name  string
+		steps string
+		want  string
+	}{
+		{
+			name:  "unknown id",
+			steps: "  - id: a\n    needs: [ghost]\n    run: echo a\n",
+			want:  `error: step "a" needs unknown step "ghost"`,
+		},
+		{
+			name:  "self dependency",
+			steps: "  - id: a\n    needs: [a]\n    run: echo a\n",
+			want:  `error: step "a" depends on itself`,
+		},
+		{
+			name:  "cycle",
+			steps: "  - id: a\n    needs: [b]\n    run: echo a\n  - id: b\n    needs: [a]\n    run: echo b\n",
+			want:  "error: dependency cycle: a, b",
+		},
+		{
+			name:  "repeated id",
+			steps: "  - id: a\n    run: echo a\n  - id: b\n    needs: [a, a]\n    run: echo b\n",
+			want:  `error: step "b" repeats step "a"`,
+		},
+		{
+			name:  "needs is not a list",
+			steps: "  - id: a\n    needs: build\n    run: echo a\n",
+			want:  `error: step "a" needs must be a list of step ids`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			marker := filepath.Join(dir, "ran.txt")
+			free := "echo x > '" + marker + "'"
+			if runtime.GOOS == "windows" {
+				free = "echo x> \"" + marker + "\""
+			}
+			logPath := filepath.Join(dir, ".truss", "run.log")
+			if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			const previous = "previous log\n"
+			if err := os.WriteFile(logPath, []byte(previous), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			body := "version: \"1\"\npipeline:\n  name: bad-graph\nsteps:\n" +
+				"  - id: free\n    run: " + free + "\n" + tt.steps
+			path := filepath.Join(dir, "pipeline.yaml")
+			if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			code, out, errOut := invoke(t, dir, []string{"run", path})
+			if code != 1 {
+				t.Fatalf("exit = %d, stderr = %s", code, errOut)
+			}
+			if strings.TrimSpace(errOut) != tt.want {
+				t.Fatalf("stderr = %q, want %q", errOut, tt.want)
+			}
+			if out != "" {
+				t.Fatalf("stdout = %q", out)
+			}
+			if _, err := os.Stat(marker); !os.IsNotExist(err) {
+				t.Fatalf("a step command ran: %v", err)
+			}
+			got, err := os.ReadFile(logPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != previous {
+				t.Fatalf("log changed to %q", got)
+			}
+		})
 	}
 }
 

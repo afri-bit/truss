@@ -86,6 +86,8 @@ func Parse(data []byte) (Pipeline, error) {
 						} else {
 							step.runNotString = true
 						}
+					case "needs":
+						parseNeeds(&step, item.Content[j+1])
 					}
 				}
 				p.Steps = append(p.Steps, step)
@@ -94,4 +96,21 @@ func Parse(data []byte) (Pipeline, error) {
 	}
 	p.Name = strings.TrimSpace(p.Name)
 	return p, nil
+}
+
+// parseNeeds stores the step ids listed under a step's needs field. Entries
+// are trimmed like step ids. A value that is not a list of strings marks the
+// step so Validate can reject it; Parse itself does not fail.
+func parseNeeds(step *Step, val *yaml.Node) {
+	if val.Kind != yaml.SequenceNode {
+		step.needsInvalid = true
+		return
+	}
+	for _, entry := range val.Content {
+		if entry.Kind != yaml.ScalarNode || entry.Tag != "!!str" {
+			step.needsInvalid = true
+			continue
+		}
+		step.Needs = append(step.Needs, strings.TrimSpace(entry.Value))
+	}
 }
