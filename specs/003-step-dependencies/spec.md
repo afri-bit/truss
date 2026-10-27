@@ -2,7 +2,7 @@
 
 **Feature Branch**: `003-step-dependencies`  
 **Created**: 2026-10-27  
-**Status**: Draft  
+**Status**: Implemented  
 **Input**: User description: "Add dependency graphs between Steps to the Pipeline Definition. A Step may declare the Steps that must succeed before it may start. Execution stays sequential and deterministic. Invalid graphs are rejected before any command starts. Definitions that declare no dependencies keep today's behavior."
 
 ## User Scenarios & Testing *(mandatory)*
