@@ -199,6 +199,116 @@ func TestRun_StopsAfterFailedStep(t *testing.T) {
 	}
 }
 
+func TestRun_StepWaitsForTheStepsItNeeds(t *testing.T) {
+	rec := &eventLog{}
+	p := pipeline.Pipeline{
+		Version: "1",
+		Name:    "ordered",
+		Steps: []pipeline.Step{
+			{ID: "test", Run: "echo test", Needs: []string{"build"}},
+			{ID: "build", Run: "echo build"},
+			{ID: "scan", Run: "echo scan"},
+		},
+	}
+	run, err := Run(context.Background(), p, t.TempDir(), nil, rec)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if run.Status != pipeline.StatusSucceeded {
+		t.Fatalf("status = %s, run = %+v", run.Status, run)
+	}
+	var started []string
+	for _, ev := range rec.events {
+		if ev.kind == "started" {
+			started = append(started, ev.id)
+		}
+	}
+	if strings.Join(started, ",") != "build,test,scan" {
+		t.Fatalf("start order = %q", started)
+	}
+	var ran []string
+	for _, step := range run.Steps {
+		ran = append(ran, step.ID)
+		if step.Status != pipeline.StatusSucceeded || step.ExitCode == nil || *step.ExitCode != 0 {
+			t.Fatalf("step = %+v", step)
+		}
+	}
+	if strings.Join(ran, ",") != "build,test,scan" {
+		t.Fatalf("result order = %q", ran)
+	}
+}
+
+func TestRun_FailedStepStartsNothingFurther(t *testing.T) {
+	dir := t.TempDir()
+	markers := map[string]string{
+		"test": filepath.Join(dir, "test.txt"),
+		"lint": filepath.Join(dir, "lint.txt"),
+	}
+	fail := "exit 3"
+	if runtime.GOOS == "windows" {
+		fail = "exit /b 3"
+	}
+	write := func(path string) string {
+		if runtime.GOOS == "windows" {
+			return "echo x> \"" + path + "\""
+		}
+		return "echo x > '" + path + "'"
+	}
+	p := pipeline.Pipeline{
+		Version: "1",
+		Name:    "stops",
+		Steps: []pipeline.Step{
+			{ID: "test", Run: write(markers["test"]), Needs: []string{"build"}},
+			{ID: "build", Run: fail},
+			{ID: "lint", Run: write(markers["lint"])},
+		},
+	}
+	run, err := Run(context.Background(), p, dir, nil, nil)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if run.Status != pipeline.StatusFailed {
+		t.Fatalf("status = %s", run.Status)
+	}
+	if len(run.Steps) != 1 || run.Steps[0].ID != "build" {
+		t.Fatalf("steps = %+v", run.Steps)
+	}
+	if got := run.Steps[0]; got.Status != pipeline.StatusFailed || got.ExitCode == nil || *got.ExitCode != 3 {
+		t.Fatalf("build = %+v", got)
+	}
+	for id, marker := range markers {
+		if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+			t.Fatalf("step %s ran after build failed: %v", id, statErr)
+		}
+	}
+}
+
+func TestRun_StartFailureStartsNothingFurther(t *testing.T) {
+	p := pipeline.Pipeline{
+		Version: "1",
+		Name:    "cannot-start",
+		Steps: []pipeline.Step{
+			{ID: "test", Run: "echo test", Needs: []string{"build"}},
+			{ID: "build", Run: "echo build"},
+			{ID: "lint", Run: "echo lint"},
+		},
+	}
+	missing := filepath.Join(t.TempDir(), "missing-dir")
+	run, err := Run(context.Background(), p, missing, nil, nil)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if run.Status != pipeline.StatusFailed {
+		t.Fatalf("status = %s", run.Status)
+	}
+	if len(run.Steps) != 1 || run.Steps[0].ID != "build" {
+		t.Fatalf("steps = %+v", run.Steps)
+	}
+	if got := run.Steps[0]; got.Status != pipeline.StatusFailed || got.ExitCode != nil || got.Error == "" {
+		t.Fatalf("build = %+v, want a start error and no exit code", got)
+	}
+}
+
 func echoHello() string {
 	if runtime.GOOS == "windows" {
 		return "echo Hello from TRUSS"
