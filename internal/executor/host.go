@@ -63,13 +63,21 @@ func (w *lockedWriter) Write(p []byte) (int, error) {
 	return w.w.Write(p)
 }
 
-func shellCommand(run string) (string, []string) {
+// Shell returns the host shell path Execute uses for step commands.
+func Shell() string {
 	if runtime.GOOS == "windows" {
 		shell := os.Getenv("COMSPEC")
 		if shell == "" {
-			shell = "cmd.exe"
+			return "cmd.exe"
 		}
-		return shell, []string{"/c", run}
+		return shell
 	}
-	return "/bin/sh", []string{"-c", run}
+	return "/bin/sh"
+}
+
+func shellCommand(run string) (string, []string) {
+	if runtime.GOOS == "windows" {
+		return Shell(), []string{"/c", run}
+	}
+	return Shell(), []string{"-c", run}
 }

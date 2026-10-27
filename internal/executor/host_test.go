@@ -2,10 +2,28 @@ package executor
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 )
+
+func TestShell_ReportsHostShell(t *testing.T) {
+	got := Shell()
+	if runtime.GOOS == "windows" {
+		want := os.Getenv("COMSPEC")
+		if want == "" {
+			want = "cmd.exe"
+		}
+		if got != want {
+			t.Fatalf("Shell() = %q, want %q", got, want)
+		}
+		return
+	}
+	if got != "/bin/sh" {
+		t.Fatalf("Shell() = %q, want /bin/sh", got)
+	}
+}
 
 func TestExecute_Success(t *testing.T) {
 	run := `echo "Hello from TRUSS"`
