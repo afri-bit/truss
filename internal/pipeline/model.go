@@ -12,9 +12,13 @@ const (
 
 // Step is one unit of work in a pipeline definition.
 type Step struct {
-	ID           string
-	Run          string
+	ID  string
+	Run string
+	// Needs lists the ids of steps that must succeed before this step starts,
+	// in the order they were written. It is empty when the step has none.
+	Needs        []string
 	runNotString bool
+	needsInvalid bool
 }
 
 // Pipeline is the parsed pipeline model. Parsing it executes nothing.
