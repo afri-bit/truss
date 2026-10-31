@@ -1,0 +1,32 @@
+{
+  "work_id": "claude--truss-cursor-to-claude-18fzh9",
+  "title": "Migrate TRUSS from Cursor to Claude Code and an agentic setup",
+  "tier": 0,
+  "branch": "claude/truss-cursor-to-claude-18fzh9",
+  "status": "in_review",
+  "step": "pr",
+  "steps_done": [
+    "speckit-switch",
+    "rules",
+    "hooks",
+    "agents",
+    "skills",
+    "memory",
+    "gate-and-workflows",
+    "docs"
+  ],
+  "requirements": [],
+  "specs": [],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [
+    "Accept ADR 0001 and constitution 1.3.0?",
+    "Rename the session branch to a feature/ prefix?"
+  ],
+  "next_actions": [
+    "Maintainer reviews and merges"
+  ],
+  "pr": null,
+  "created": "2026-10-30T23:50:00Z",
+  "updated": "2026-10-30T23:50:00Z"
+}

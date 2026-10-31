@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/afri-bit/truss/.agent/schema/memory-entry.schema.json",
+  "title": "Memory entry front matter",
+  "description": "The YAML front matter of .agent/memory/MEM-nnnn-slug.md, as a JSON object. Flat keys only; lists are written inline: [a, b].",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "title", "summary", "topics", "created", "updated", "author", "source", "status", "confidence"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^MEM-\\d{4}$" },
+    "type": { "enum": ["semantic", "episodic", "procedural"] },
+    "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 240, "description": "One line." },
+    "topics": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" }
+    },
+    "created": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$" },
+    "updated": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$" },
+    "author": { "type": "string", "minLength": 1, "description": "An agent name, or 'owner'." },
+    "source": { "type": "string", "minLength": 1, "description": "PR, session, file, URL, or 'conversation'." },
+    "status": { "enum": ["active", "superseded", "archived"] },
+    "confidence": { "enum": ["high", "medium", "low"] },
+    "review_by": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Date after which the entry must be re-checked." },
+    "supersedes": { "type": "string", "pattern": "^MEM-\\d{4}$" },
+    "related": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^((BR|FR|NFR)-\\d{3}|ADR-\\d{4}|J-\\d{3}|C-\\d{3}|MEM-\\d{4}|PR-\\d+|specs/[A-Za-z0-9._/-]+)$"
+      }
+    }
+  }
+}
