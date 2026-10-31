@@ -19,8 +19,12 @@ this repository. The full picture (roster, flow, gates, hooks, memory) is in `do
   human, Follow-ups. The orchestrator relays "Needs human" items and puts them at the top of the PR.
 - Review is independent: `/review` runs reviewers as subagents, never in the session that wrote
   the code.
-- An unattended run (started by the `agent` workflow for one issue) uses the `lead` agent as the
-  main session. See `docs/agents.md`.
+- Mode: **supervised**. A person starts every session and reviews every PR. Unattended mode (the
+  `lead` agent, `agent.yml`, `agent-gate.yml`) is a disabled placeholder; do not enable it. See
+  the constitution's "Agentic Operation" and `docs/agents.md`.
+- Agents talk through artifacts: delegation brief, handoff report, work state, log, memory, ADR.
+  Use `/consult` for a second opinion on contract or safety decisions, `/fan-out` for parallel
+  independent tasks, and `/team-status` to see the shared board. Chat is not a record.
 
 ### Risk classes (process matches risk)
 
@@ -95,7 +99,9 @@ Agents work unattended inside these limits. The list with enforcement is in `doc
 
 - Memory and state: `.agent/` (see `.agent/README.md`). At the start of a task run `/recall`; save
   lasting facts with `/remember`; close work with `/handoff`; clean up with `/memory-review`.
-- Rules (loaded by file path): `.claude/rules/`. Agents: `.claude/agents/`. Skills:
+- Other skills: `/milestone-status` (release scope versus specs and code), `/release-readiness`
+  (read-only; never tags).
+- Rules (loaded by file path): `.claude/rules/` (the agent setup itself: `agent-team.md`). Agents: `.claude/agents/`. Skills:
   `.claude/skills/`. Hooks: `.claude/hooks/`. Permissions: `.claude/settings.json`.
 - Spec Kit: `.specify/` (infrastructure, do not edit), `specs/` (artifacts, generated only by skills).
 - Decisions: `docs/decisions/`. Release scope: `docs/MILESTONE.md`. Terms: `docs/GLOSSARY.md`.

@@ -13,7 +13,9 @@
     "skills",
     "memory",
     "gate-and-workflows",
-    "docs"
+    "docs",
+    "agentic-constitution",
+    "placeholders"
   ],
   "requirements": [],
   "specs": [],
@@ -28,5 +30,5 @@
   ],
   "pr": null,
   "created": "2026-10-30T23:50:00Z",
-  "updated": "2026-10-30T23:50:00Z"
+  "updated": "2026-10-31T00:30:00Z"
 }

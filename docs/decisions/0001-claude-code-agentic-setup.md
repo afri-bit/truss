@@ -25,16 +25,22 @@ request to a reviewed pull request with the maintainer approving at the end.
    run `gofmt` after edits. `settings.json` allows the Go toolchain and denies merge, release and tag.
 4. **Shared memory and state in `.agent/`**, using one tool (`scripts/memory.py`, standard library
    only) and checked in CI. It is independent of Claude Code and Spec Kit.
-5. **Enforcement in CI.** An `agent-gate` check verifies that an agent PR followed the pipeline,
-   did not touch guardrail paths, and carries a work state. CODEOWNERS marks the guardrail paths.
-6. **Constitution 1.3.0** adds "Agentic Operation" and drops the obsolete branching tooling note.
+5. **Supervised first.** A person starts every session and reviews every PR. Unattended mode
+   (`lead`, `agent.yml`, `agent-gate.yml`, `scripts/agent_gate.py`) is kept as a disabled placeholder.
+   CODEOWNERS marks the guardrail paths.
+6. **Agent-to-agent and workspace.** Agents communicate through delegation briefs, handoff reports,
+   the work state, the log, memory and ADRs. `.agent/` is the shared board; `/consult`, `/fan-out`
+   and `/team-status` operate on it.
+7. **Constitution 1.3.0** adds principle VI (Supervised Agentic Delivery), an "Agentic Operation"
+   section (modes, team, orchestration, protocol, workspace, autonomy, change control) and a
+   quality gate, and drops the obsolete branching tooling note.
 
 ## Consequences
 
 - Good: one repeatable, auditable way to build features; the maintainer reviews PRs, not steps.
 - Good: mechanical guardrails (hooks, permissions, gate) instead of trust.
 - Bad: more files to maintain; the setup must change with the process (same-PR rule).
-- Bad: `agent.yml` needs the maintainer to add `ANTHROPIC_API_KEY`, the Claude GitHub App and a
-  ruleset on `develop` before it can run. Until then it fails closed.
-- Follow-ups: pin workflow actions by SHA before secrets are added (devops-engineer); enable branch
-  protection on `develop` and `main`; the plan and spec templates still show an unprefixed branch placeholder.
+- Bad: the unattended placeholders can rot; `scripts/agent_gate.py` keeps its tests in CI to slow that.
+- Follow-ups: enabling unattended mode needs a constitution amendment and the steps in
+  `docs/agents.md`; enable branch protection on `develop` and `main`; add principle VI to the plan
+  template's Constitution Check; the templates still show an unprefixed branch placeholder.
