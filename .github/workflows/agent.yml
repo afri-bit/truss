@@ -1,5 +1,10 @@
 name: Agent
 
+# PLACEHOLDER, NOT RUNNING. TRUSS works in supervised mode for now (constitution, Agentic Operation):
+# a person starts every agent session. This workflow is kept for the unattended mode. To enable it,
+# restore the `issues: labeled` trigger below, remove the `if: false` line, and complete the
+# prerequisites (docs/agents.md, "Placeholders for unattended mode").
+
 # A maintainer adds the agent:build label to an issue and the lead agent builds it. The agent opens
 # a pull request against develop; it never merges. A human reviews and merges (docs/agents.md).
 #
@@ -11,8 +16,9 @@ name: Agent
 # branch cannot change the workflow that runs it. The issue title and body are never put into the
 # prompt: the agent reads a context file that holds only text from people with write access.
 on:
-  issues:
-    types: [labeled]
+  workflow_dispatch:
+  # issues:
+  #   types: [labeled]
 
 concurrency:
   group: agent-issue-${{ github.event.issue.number }}
@@ -27,7 +33,8 @@ permissions:
 jobs:
   build:
     name: Build the issue
-    if: github.event.label.name == 'agent:build' && github.event.sender.type == 'User'
+    if: false # placeholder: never runs until unattended mode is turned on
+    # restore with: github.event.label.name == 'agent:build' && github.event.sender.type == 'User'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
