@@ -21,6 +21,8 @@ For behavioral changes or new capabilities:
 5. Implement from the approved specification and plan.
 6. Verify that the implementation converges with the specification.
 
+Claude Code runs this workflow through `/feature` and the `/speckit-*` skills (see `CLAUDE.md`).
+
 Do not jump directly from an informal feature request to implementation when the feature does not yet have sufficient specification.
 
 Small mechanical changes such as formatting, typo fixes, dependency maintenance, or equivalent refactoring do not require a new feature specification unless they alter observable behavior.
@@ -80,13 +82,15 @@ Do not restate, weaken, or silently diverge from those principles here. If this 
 
 Treat `.specify/` as Spec Kit infrastructure and project SDD configuration.
 
-Treat `.cursor/` as Cursor-specific agent integration and tooling.
+Treat `.claude/` as the Claude Code agent setup: agents, skills, rules, hooks, and permissions. `CLAUDE.md` says how Claude Code works in this repository. `docs/agents.md` describes the whole setup.
 
-Do not move project requirements into `.cursor/`.
+Treat `.agent/` as shared agent memory, work state, and event log. Do not store requirements there.
 
-Do not modify generated Spec Kit or Cursor integration files unless the task specifically concerns that tooling.
+Do not move project requirements into `.claude/` or `.agent/`.
 
-The product architecture must not depend on Cursor or Spec Kit being present at runtime.
+Do not modify generated Spec Kit files or the agent setup unless the task specifically concerns that tooling.
+
+The product architecture must not depend on Claude Code or Spec Kit being present at runtime.
 
 ## Completion
 

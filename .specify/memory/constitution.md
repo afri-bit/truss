@@ -1,28 +1,20 @@
 <!--
 Sync Impact Report
-- Version change: 1.1.0 → 1.2.0
-- Modified principles: none
-- Added sections: Branching — new branches use a feature/, bugfix/, or
-  hotfix/ prefix
-- Removed sections: none
+- Version change: 1.2.0 → 1.3.0
+- Modified principles: V (runtime independence now names Claude Code, not Cursor)
+- Added sections: Agentic Operation (agent tooling, autonomy limits, shared memory)
+- Removed sections: Branching tooling note (Spec Kit 1.2.x no longer infers the
+  spec folder from the branch name, so the prefixed-branch workaround is obsolete)
 - Templates requiring updates:
   - .specify/templates/plan-template.md ⚠ pending: `[###-feature-name]`
     branch placeholder has no prefix (Spec Kit tooling; change only in a
     task that concerns that tooling)
   - .specify/templates/spec-template.md ⚠ pending: same branch placeholder
   - .specify/templates/tasks-template.md ✅ no branch references
-  - .specify/templates/commands/*.md ✅ none present
-  - AGENTS.md ✅ unchanged; the naming rule stays in this file
-  - .cursor/rules/*.mdc ✅ no branch rules present
-  - .specify/scripts/bash/common.sh and
-    .specify/extensions/git/scripts/bash/git-common.sh ⚠ pending:
-    `check_feature_branch` accepts only names that start with digits, so
-    it rejects `feature/003-step-dependencies`. The Branching section
-    records a workaround (`SPECIFY_FEATURE`) until that tooling is updated
-  - README.md ✅ no branch naming references
-- Follow-up TODOs: update the Spec Kit branch check and the template
-  placeholders to accept the three prefixes, then remove the tooling note
-  from the Branching section
+  - AGENTS.md ✅ updated: tooling section names `.claude/`, workflow points to CLAUDE.md
+  - CLAUDE.md, docs/agents.md ✅ added: orchestration, risk classes, autonomy
+  - .cursor/ ✅ removed; the Spec Kit integration is now `claude`
+- Follow-up TODOs: none
 -->
 
 
@@ -145,7 +137,7 @@ Assumptions MUST NOT bind TRUSS to a specific CI provider, IDE, agent
 platform, operating system, or SDK language unless a specification
 explicitly requires it.
 
-The product architecture MUST NOT depend on Cursor or Spec Kit being
+The product architecture MUST NOT depend on Claude Code or Spec Kit being
 present at runtime.
 
 **Rationale**: Correct, portable, secret-safe execution is the product.
@@ -157,10 +149,10 @@ present at runtime.
 - SDKs and external integrations MAY use other languages and MUST NOT
   depend on Go-specific types, build tags, or module paths for their
   public contracts.
-- Generated Spec Kit (`.specify/`) and Cursor (`.cursor/`) files are
-  tooling. Project requirements MUST NOT be moved into `.cursor/`.
-  Those files MUST NOT be modified unless the task specifically
-  concerns that tooling.
+- Generated Spec Kit (`.specify/`) files and agent tooling (`.claude/`,
+  `.agent/`, `scripts/`) are tooling. Project requirements MUST NOT be
+  moved into them. Generated files MUST NOT be modified unless the task
+  specifically concerns that tooling.
 - `.specify/memory/constitution.md` is the source of truth for
   project-wide engineering principles. `AGENTS.md` provides agent
   workflow; it MUST NOT duplicate or silently override this constitution.
@@ -180,17 +172,29 @@ present at runtime.
   and the specification match.
 - Agents and contributors MUST NOT create a branch without one of these
   prefixes. Branches that already exist keep their names.
-- Tooling note: the Spec Kit scripts under `.specify/scripts/` currently
-  accept only branch names that start with digits, and reject
-  `feature/003-step-dependencies`. Until that tooling is updated in a
-  task that concerns it, create the branch with `GIT_BRANCH_NAME` set to
-  the full prefixed name, and run `/speckit.plan`, `/speckit.tasks`, and
-  `/speckit.implement` with `SPECIFY_FEATURE` set to the unprefixed name,
-  such as `SPECIFY_FEATURE=003-step-dependencies`.
 
 **Rationale**: A fixed prefix tells a reviewer the purpose of a branch
 before opening it, and keeps branch names uniform across contributors and
 agents.
+
+## Agentic Operation
+
+- Work MAY be done by coding agents under `.claude/` (agents, skills, rules,
+  hooks, permissions). Agents are bound by this constitution exactly as
+  contributors are; agent guidance MUST NOT weaken it.
+- Agents MUST NOT merge, tag, publish a release, force-push, rewrite pushed
+  history, or push to `develop` or `main`. A human reviews and merges every
+  pull request.
+- Review MUST be independent: the session that wrote a change does not
+  review it.
+- Durable agent knowledge lives in `.agent/` (memory, work state, event log).
+  It MUST NOT contain secrets or personal data and MUST NOT restate this
+  constitution or a specification; it links to them.
+- Agent-authored changes to guardrails (`.claude/`, `.github/`, `scripts/`,
+  this file) MUST be listed for the maintainer at the top of the pull request.
+
+**Rationale**: Autonomy is acceptable only inside limits that tools enforce
+and a human can audit.
 
 ## Quality Gates
 
@@ -232,4 +236,4 @@ implementation (Quality Gates), and any change to public contracts.
 Use `AGENTS.md` for agent workflow only; do not treat it as a second
 constitution.
 
-**Version**: 1.2.0 | **Ratified**: 2026-09-16 | **Last Amended**: 2026-10-27
+**Version**: 1.3.0 | **Ratified**: 2026-09-16 | **Last Amended**: 2026-10-30

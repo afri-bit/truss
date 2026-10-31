@@ -348,7 +348,7 @@ flowchart LR
 - [`docs/MILESTONE.md`](docs/MILESTONE.md) holds the current release scope.
 - [`.specify/memory/constitution.md`](.specify/memory/constitution.md) holds the engineering principles.
 - [`specs/`](specs/) holds one folder per feature: spec, plan, contracts, and tasks.
-- [`AGENTS.md`](AGENTS.md) explains the workflow for coding agents.
+- [`AGENTS.md`](AGENTS.md) explains the workflow for coding agents, [`CLAUDE.md`](CLAUDE.md) how Claude Code works here, and [`docs/agents.md`](docs/agents.md) the agent setup (roster, flow, hooks, memory).
 
 ### Checks
 
@@ -359,6 +359,8 @@ go test -race ./...                          # unit, contract, and integration t
 golangci-lint run ./...
 go build -o bin/truss ./cmd/truss
 bash .github/scripts/e2e-test.sh bin/truss   # end-to-end tests of the built binary
+python3 -m unittest discover -s scripts/tests   # agent memory and gate tooling
+python3 scripts/memory.py validate           # agent memory, state, and log
 ```
 
 CI runs `go test ./...` on Linux, macOS, and Windows for every pull request and every push to `main`. The commands above are for a local check.
