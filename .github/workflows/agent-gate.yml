@@ -1,0 +1,74 @@
+name: Agent gate
+
+# Checks that the pipeline in CLAUDE.md was followed (docs/agents.md). It reads the PR description,
+# so it also reruns when the description or the labels change. Kept out of ci.yml so edits do not
+# rerun the cross-platform test matrix.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: agent-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  agent-gate:
+    name: agent-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The pull request head is only read through git. The gate code itself comes from the base
+      # branch, so a pull request cannot switch off the check that judges it. The first pull
+      # request that introduces the gate has no base copy and falls back to its own.
+      - name: Check out the pull request
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out the gate from the base branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          persist-credentials: false
+
+      # The chore label only counts when the last person to add it is a human with write access.
+      - name: Check who added the chore label
+        id: chore
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          trusted=0
+          if gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name' | grep -qx chore; then
+            actor=$(gh api "repos/$REPO/issues/$PR/events" --paginate \
+              | jq -rs '[.[][] | select(.event=="labeled" and .label.name=="chore")] | last | select(. != null) | "\(.actor.type) \(.actor.login)"')
+            type=${actor%% *}
+            login=${actor#* }
+            if [ "$type" = "User" ]; then
+              role=$(gh api "repos/$REPO/collaborators/$login/permission" --jq .role_name || echo none)
+              case "$role" in admin|maintain|write) trusted=1 ;; esac
+            fi
+          fi
+          echo "trusted=$trusted" >> "$GITHUB_OUTPUT"
+
+      - name: Run the gate
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
+          # Comma-separated logins of the account the agent opens PRs as.
+          AGENT_LOGINS: ${{ vars.AGENT_LOGINS || 'claude[bot]' }}
+          CHORE_TRUSTED: ${{ steps.chore.outputs.trusted }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if [ -f trusted/scripts/agent_gate.py ]; then gate=trusted/scripts/agent_gate.py; else gate=scripts/agent_gate.py; fi
+          python3 "$gate"

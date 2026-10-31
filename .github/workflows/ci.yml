@@ -30,3 +30,18 @@ jobs:
       - name: Unit and integration tests
         shell: bash
         run: go test -count=1 ./...
+
+  agent-tooling:
+    name: Agent tooling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Memory, state and gate tests
+        run: python3 -m unittest discover -s scripts/tests
+
+      - name: Validate agent memory, state and log
+        run: python3 scripts/memory.py validate
+
+      - name: Hooks parse
+        run: for f in .claude/hooks/*.sh; do bash -n "$f"; done
