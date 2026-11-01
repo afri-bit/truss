@@ -23,17 +23,30 @@ type Step struct {
 
 // Pipeline is the parsed pipeline model. Parsing it executes nothing.
 type Pipeline struct {
-	Version          string
-	Name             string
-	Steps            []Step
+	Version string
+	Name    string
+	Steps   []Step
+	// Concurrency is the most steps that may run at once. 0 means the
+	// definition did not declare it, which is the same as 1.
+	Concurrency      int
 	nonStringVersion bool
 	stepsNotList     bool
+	// concurrencyBad and concurrencyText record an invalid concurrency value
+	// found at parse time; the text is how the value is shown in the message.
+	concurrencyBad  bool
+	concurrencyText string
+	// unknownField is the first unknown key in document order, and
+	// unknownIn says where it was found (for example "at top level").
+	unknownField string
+	unknownIn    string
 }
 
 // ExecutionPlan is the definition-order list of steps to run.
 type ExecutionPlan struct {
 	Name  string
 	Steps []Step
+	// Concurrency is the most steps that may run at once, at least 1.
+	Concurrency int
 }
 
 // StepRun is one started step. ExitCode is nil when the process did not start.
@@ -44,6 +57,9 @@ type StepRun struct {
 	Output   string
 	Stderr   string
 	Error    string
+	// StoppedBy is the id of the Step whose failure caused this Step to be
+	// stopped. It is empty otherwise.
+	StoppedBy string
 }
 
 // PipelineRun is one execution of a plan. Steps contains only started steps.
@@ -52,4 +68,7 @@ type PipelineRun struct {
 	Status Status
 	Steps  []StepRun
 	Error  string
+	// FailedStep is the id of the first failure the scheduler recorded. It is
+	// empty when the run succeeded.
+	FailedStep string
 }

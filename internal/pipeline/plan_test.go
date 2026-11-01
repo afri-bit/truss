@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -158,5 +159,31 @@ func TestPlan_DoesNotChangeTheDefinition(t *testing.T) {
 	}
 	if p.Steps[0].ID != "test" || p.Steps[1].ID != "build" {
 		t.Fatalf("definition reordered: %+v", p.Steps)
+	}
+}
+
+func TestPlan_Concurrency(t *testing.T) {
+	tests := []struct {
+		name string
+		in   int
+		want int
+	}{
+		{name: "not declared becomes 1", in: 0, want: 1},
+		{name: "1 stays 1", in: 1, want: 1},
+		{name: "2 is copied", in: 2, want: 2},
+		{name: "16 is copied", in: 16, want: 16},
+		{name: "maximum means as many as are ready", in: math.MaxInt, want: math.MaxInt},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := Pipeline{Version: "1", Name: "n", Concurrency: tt.in, Steps: []Step{{ID: "a", Run: "echo a"}}}
+			plan, err := Plan(p)
+			if err != nil {
+				t.Fatalf("Plan() error = %v", err)
+			}
+			if plan.Concurrency != tt.want {
+				t.Fatalf("Concurrency = %d, want %d", plan.Concurrency, tt.want)
+			}
+		})
 	}
 }

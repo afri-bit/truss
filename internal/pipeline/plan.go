@@ -26,7 +26,7 @@ func Plan(p Pipeline) (ExecutionPlan, error) {
 		placed[p.Steps[next].ID] = true
 		steps = append(steps, p.Steps[next])
 	}
-	return ExecutionPlan{Name: p.Name, Steps: steps}, nil
+	return ExecutionPlan{Name: p.Name, Steps: steps, Concurrency: max(p.Concurrency, 1)}, nil
 }
 
 // ready reports whether every step that s needs has already been placed.

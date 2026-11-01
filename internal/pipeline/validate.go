@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -14,8 +15,18 @@ func Validate(p Pipeline) error {
 		}
 		return fmt.Errorf("unsupported schema version %q", p.Version)
 	}
+	if p.unknownField != "" {
+		return fmt.Errorf("unknown field %q %s", p.unknownField, p.unknownIn)
+	}
 	if strings.TrimSpace(p.Name) == "" {
 		return fmt.Errorf("missing pipeline name")
+	}
+	if p.concurrencyBad || p.Concurrency < 0 {
+		text := p.concurrencyText
+		if !p.concurrencyBad {
+			text = strconv.Quote(strconv.Itoa(p.Concurrency))
+		}
+		return fmt.Errorf("pipeline concurrency must be a whole number of at least 1, got %s", text)
 	}
 	if p.stepsNotList {
 		return fmt.Errorf("steps must be a list")

@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+var decimalDigits = regexp.MustCompile(`^[0-9]+$`)
 
 // ParseFile reads a pipeline definition from path. It does not execute steps.
 func ParseFile(ctx context.Context, path string) (Pipeline, error) {
@@ -59,8 +64,16 @@ func Parse(data []byte) (Pipeline, error) {
 				continue
 			}
 			for j := 0; j < len(val.Content); j += 2 {
-				if val.Content[j].Value == "name" && val.Content[j+1].Kind == yaml.ScalarNode {
-					p.Name = val.Content[j+1].Value
+				field, v := val.Content[j].Value, val.Content[j+1]
+				switch field {
+				case "name":
+					if v.Kind == yaml.ScalarNode {
+						p.Name = v.Value
+					}
+				case "concurrency":
+					parseConcurrency(&p, v)
+				default:
+					p.noteUnknown(field, "in pipeline")
 				}
 			}
 		case "steps":
@@ -68,12 +81,13 @@ func Parse(data []byte) (Pipeline, error) {
 				p.stepsNotList = true
 				continue
 			}
-			for _, item := range val.Content {
+			for pos, item := range val.Content {
 				if item.Kind != yaml.MappingNode {
 					p.Steps = append(p.Steps, Step{})
 					continue
 				}
 				var step Step
+				var unknown string
 				for j := 0; j < len(item.Content); j += 2 {
 					switch item.Content[j].Value {
 					case "id":
@@ -88,10 +102,23 @@ func Parse(data []byte) (Pipeline, error) {
 						}
 					case "needs":
 						parseNeeds(&step, item.Content[j+1])
+					default:
+						if unknown == "" {
+							unknown = item.Content[j].Value
+						}
 					}
+				}
+				if unknown != "" {
+					where := fmt.Sprintf("in step %d", pos+1)
+					if step.ID != "" {
+						where = fmt.Sprintf("in step %q", step.ID)
+					}
+					p.noteUnknown(unknown, where)
 				}
 				p.Steps = append(p.Steps, step)
 			}
+		default:
+			p.noteUnknown(key, "at top level")
 		}
 	}
 	p.Name = strings.TrimSpace(p.Name)
@@ -113,4 +140,45 @@ func parseNeeds(step *Step, val *yaml.Node) {
 		}
 		step.Needs = append(step.Needs, strings.TrimSpace(entry.Value))
 	}
+}
+
+// noteUnknown remembers the first unknown field in document order so
+// Validate can reject it.
+func (p *Pipeline) noteUnknown(field, where string) {
+	if p.unknownField == "" {
+		p.unknownField, p.unknownIn = field, where
+	}
+}
+
+// parseConcurrency stores pipeline.concurrency. Only a plain decimal whole
+// number of at least 1 is valid; a number too large for int is clamped to
+// math.MaxInt. Any other value is remembered so Validate can reject it.
+func parseConcurrency(p *Pipeline, val *yaml.Node) {
+	if val.Kind == yaml.AliasNode && val.Alias != nil {
+		val = val.Alias
+	}
+	switch val.Kind {
+	case yaml.SequenceNode:
+		p.concurrencyBad, p.concurrencyText = true, "a list"
+		return
+	case yaml.MappingNode:
+		p.concurrencyBad, p.concurrencyText = true, "a mapping"
+		return
+	}
+	// yaml.v3 may tag a huge decimal number as a float, so the text decides.
+	if (val.Tag == "!!int" || val.Tag == "!!float") && decimalDigits.MatchString(val.Value) {
+		n, err := strconv.ParseInt(val.Value, 10, 64)
+		if err != nil {
+			n = math.MaxInt
+		}
+		if n >= 1 {
+			p.Concurrency = int(min(n, math.MaxInt))
+			return
+		}
+	}
+	shown := val.Value
+	if val.Tag == "!!null" && shown != "" {
+		shown = "null"
+	}
+	p.concurrencyBad, p.concurrencyText = true, strconv.Quote(shown)
 }
