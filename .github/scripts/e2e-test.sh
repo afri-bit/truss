@@ -5,7 +5,7 @@
 # specs/001-host-pipeline-engine/contracts/cli.md and the run-log contract in
 # specs/002-local-run-log/contracts/run-log.md (as extended by spec 003). Log
 # lines start with a timestamp, so assertions match the text after it.
-# Runs under bash on Linux,
+# The concurrency cases follow specs/004-step-concurrency/contracts/. Runs under bash on Linux,
 # macOS, and Git Bash on Windows, where steps execute through cmd /c.
 set -u
 
@@ -56,6 +56,63 @@ has_line() {
 		[[ "${BASH_REMATCH[1]}" == $1 ]] && return 0
 	done <<<"$out"
 	return 1
+}
+
+# run_truss_limited DIR ARGS... is run_truss with a hard 60 second limit, so a
+# regression that serialises steps that wait for each other fails instead of
+# hanging. Uses timeout or gtimeout when present, else a background watchdog.
+run_truss_limited() {
+	local dir="$1"
+	shift
+	local tool=""
+	if command -v timeout >/dev/null 2>&1; then
+		tool=timeout
+	elif command -v gtimeout >/dev/null 2>&1; then
+		tool=gtimeout
+	fi
+	if [ -n "$tool" ]; then
+		(cd "$dir" && "$tool" 60 "$truss" "$@" >"$work/.stdout" 2>"$work/.stderr")
+		code=$?
+	else
+		(cd "$dir" && "$truss" "$@" >"$work/.stdout" 2>"$work/.stderr") &
+		local pid=$!
+		(sleep 60 && kill "$pid" 2>/dev/null) &
+		local watchdog=$!
+		wait "$pid"
+		code=$?
+		kill "$watchdog" 2>/dev/null
+		wait "$watchdog" 2>/dev/null
+	fi
+	out="$(cat "$work/.stdout")"
+	err="$(cat "$work/.stderr")"
+}
+
+# line_no PATTERN prints the 1-based line number in $out of the first
+# timestamped line whose text matches the glob PATTERN, or nothing.
+line_no() {
+	local line n=0
+	while IFS= read -r line; do
+		n=$((n + 1))
+		[[ "$line" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}\ (.*)$ ]] || continue
+		# shellcheck disable=SC2053
+		if [[ "${BASH_REMATCH[1]}" == $1 ]]; then
+			echo "$n"
+			return 0
+		fi
+	done <<<"$out"
+	return 1
+}
+
+# mark_and_wait MARK OTHER prints a step command that creates the file MARK and
+# then waits (bounded, about 20 seconds) until the file OTHER exists. It does
+# not exit; the caller appends what happens next. OTHER may name a file that
+# is never created.
+mark_and_wait() {
+	if $windows; then
+		printf 'echo x> %s & for /l %%i in (1,1,1000) do @if not exist %s ping -n 1 127.0.0.1 >nul' "$1" "$2"
+	else
+		printf 'echo x > %s; i=0; while [ ! -f %s ] && [ $i -lt 400 ]; do i=$((i + 1)); sleep 0.05; done' "$1" "$2"
+	fi
 }
 
 new_dir() {
@@ -191,6 +248,117 @@ if [ "$code" -ne 1 ] || [[ "$err" != *"usage: truss run [<path>]"* ]]; then
 	fail "usage error" "want exit 1 and the usage line"
 else
 	pass "usage error"
+fi
+rm -rf "$work"
+
+# Steps that wait for each other run together under pipeline.concurrency.
+new_dir
+cat >"$work/project/truss.yaml" <<EOF
+version: "1"
+
+pipeline:
+  name: together
+  concurrency: 2
+
+steps:
+  - id: a
+    run: '$(mark_and_wait a.ready b.ready)'
+  - id: b
+    run: '$(mark_and_wait b.ready a.ready)'
+EOF
+run_truss_limited "$work/project" run
+a_started="$(line_no "step a started")"
+b_started="$(line_no "step b started")"
+a_finished="$(line_no "step a finished duration *s exit 0")"
+b_finished="$(line_no "step b finished duration *s exit 0")"
+if [ "$code" -ne 0 ]; then
+	fail "concurrent steps" "want exit 0"
+elif [ -z "$a_started" ] || [ -z "$b_started" ] || [ -z "$a_finished" ] || [ -z "$b_finished" ]; then
+	fail "concurrent steps" "missing started or finished line"
+elif [ "$a_started" -gt "$a_finished" ] || [ "$a_started" -gt "$b_finished" ] ||
+	[ "$b_started" -gt "$a_finished" ] || [ "$b_started" -gt "$b_finished" ]; then
+	fail "concurrent steps" "a step finished before both had started"
+elif ! has_line "summary succeeded steps 2 duration *s"; then
+	fail "concurrent steps" "missing succeeded summary with steps 2"
+else
+	pass "concurrent steps"
+fi
+rm -rf "$work"
+
+# A failed step stops the running steps and starts no more.
+new_dir
+# Commands are chained with ; for sh and & for cmd.
+chain=";"
+bad_exit="exit 3"
+slow_then="echo x > slow-ran.txt"
+never_cmd="echo x > never-ran.txt"
+if $windows; then
+	chain="&"
+	bad_exit="exit /b 3"
+	slow_then="echo x> slow-ran.txt"
+	never_cmd="echo x> never-ran.txt"
+fi
+cat >"$work/project/truss.yaml" <<EOF
+version: "1"
+
+pipeline:
+  name: stop-rest
+  concurrency: 2
+
+steps:
+  - id: slow
+    run: '$(mark_and_wait slow.started never.flag) $chain $slow_then'
+  - id: bad
+    run: '$(mark_and_wait bad.started slow.started) $chain $bad_exit'
+  - id: never
+    needs: [bad]
+    run: '$never_cmd'
+EOF
+run_truss_limited "$work/project" run
+if [ "$code" -ne 1 ]; then
+	fail "stop on failure" "want exit 1"
+elif ! has_line "error stop-rest failed at bad (exit 3)"; then
+	fail "stop on failure" "missing failed step error line"
+elif ! has_line "step slow stopped because step bad failed"; then
+	fail "stop on failure" "missing stopped line for slow"
+elif has_line "step slow finished duration *s exit 0"; then
+	fail "stop on failure" "slow finished successfully"
+elif has_line "step never started"; then
+	fail "stop on failure" "never started"
+elif [ -e "$work/project/slow-ran.txt" ] || [ -e "$work/project/never-ran.txt" ]; then
+	fail "stop on failure" "a stopped or later step ran to its marker"
+else
+	pass "stop on failure"
+fi
+rm -rf "$work"
+
+# A misspelled concurrency field is rejected and leaves the run log alone.
+new_dir
+mkdir "$work/project/.truss"
+printf '2000-01-01 00:00:00 earlier run\n' >"$work/project/.truss/run.log"
+cp "$work/project/.truss/run.log" "$work/before.log"
+cat >"$work/project/truss.yaml" <<EOF
+version: "1"
+
+pipeline:
+  name: typo
+  concurency: 2
+
+steps:
+  - id: touch
+    run: echo ran> marker.txt
+EOF
+run_truss "$work/project" run
+if [ "$code" -ne 1 ]; then
+	fail "unknown field" "want exit 1"
+elif [ "$err" != 'error: unknown field "concurency" in pipeline' ]; then
+	fail "unknown field" "want the unknown field error on stderr"
+elif [ -e "$work/project/marker.txt" ]; then
+	fail "unknown field" "a step command ran"
+elif ! cmp -s "$work/before.log" "$work/project/.truss/run.log"; then
+	fail "unknown field" "run log changed"
+else
+	pass "unknown field"
 fi
 rm -rf "$work"
 
