@@ -4,10 +4,11 @@
   "tier": 2,
   "branch": "claude/truss-cursor-to-claude-18fzh9",
   "status": "in_progress",
-  "step": "planner",
+  "step": "speckit-plan",
   "steps_done": [
     "speckit-specify",
-    "speckit-clarify"
+    "speckit-clarify",
+    "planner"
   ],
   "requirements": [],
   "specs": [],
@@ -19,5 +20,5 @@
   ],
   "pr": null,
   "created": "2026-11-01T09:30:00Z",
-  "updated": "2026-11-01T10:30:00Z"
+  "updated": "2026-11-01T11:15:00Z"
 }

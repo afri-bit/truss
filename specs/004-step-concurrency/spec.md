@@ -13,6 +13,10 @@
 - Q: Should TRUSS now reject pipeline files that contain a field it does not recognise, instead of ignoring it? → A: Yes, reject unknown fields in this feature, as `docs/MILESTONE.md` says. This replaces spec 003's rule that unknown fields stay ignored.
 - Q: Should TRUSS stop a running Step immediately and forcefully, or ask politely first and force it after a wait? → A: Immediately and forcefully, the same way on all three hosts. Commands get no chance to clean up.
 - Q: How should the run log mark a Step that was stopped because another Step failed? → A: Keep the normal finish line and add one line, `step <id> stopped because step <other> failed`, just before it.
+- Q: When should TRUSS end leftover background processes a Step started? → A: When that Step's shell exits. A Step can no longer leave a process running for a later Step; this also applies to sequential runs.
+- Q: Should an interrupt (Ctrl-C or SIGTERM) on `truss` force-end all running Steps? → A: Yes. All running Steps are ended with their whole process trees, `truss` exits non-zero, no log is saved for the interrupted run, and no `cancelled` status appears.
+- Q: When the host reports no Exit Code for a Step (killed by a signal), what does the log show? → A: A diagnostic and no Exit Code, for every Step, never a made-up `-1`.
+- Q: How is the implementation split? → A: Two pull requests: first process-tree stopping and a thread-safe run log, then the schema field, scheduler, CLI, and docs.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -71,6 +75,8 @@ A developer runs a pipeline with several Steps running together and one of them 
 5. **Given** two Steps that fail at about the same time, **When** the developer reads the log, **Then** both appear with their own Exit Codes, and the run's error names the Step whose failure TRUSS observed first.
 6. **Given** a Step that is stopped, **When** the run has ended, **Then** its command and every process that command started, directly or indirectly, have ended, on Linux, macOS, and Windows, and none keeps writing to the log.
 7. **Given** a failed Pipeline Run that used concurrency, **When** the developer opens the latest run log, **Then** the saved text is the log just shown, the summary reports failure, and the error names the pipeline and the failed Step.
+8. **Given** Steps running and the developer interrupts `truss` (Ctrl-C or SIGTERM), **When** `truss` exits, **Then** every running Step and its whole process tree has ended, no further Step started, `truss` exits non-zero, the existing latest run log is unchanged, and no `cancelled` status is reported.
+9. **Given** a Step killed by a signal that TRUSS did not send, **When** the developer reads the log, **Then** the finish line shows a diagnostic and no Exit Code, not `-1`.
 
 ---
 
@@ -107,6 +113,7 @@ A developer runs a Pipeline Definition that does not declare a concurrency limit
 2. **Given** a limit of exactly 1, **When** the developer runs it, **Then** the behavior is identical to omitting the limit.
 3. **Given** a definition with no limit whose second Step fails, **When** the developer runs it, **Then** later Steps are omitted, the log is saved, and the process exits non-zero.
 4. **Given** `truss run` with no path or with a path, **When** the developer runs it, **Then** load behavior is unchanged.
+5. **Given** a Step whose command starts a background process and then exits successfully, **When** the Step's shell exits, **Then** TRUSS ends that background process, so no later Step can rely on it. This is the one deliberate change to sequential behavior (see Compatibility).
 
 ---
 
@@ -128,7 +135,9 @@ A developer runs a Pipeline Definition that does not declare a concurrency limit
 - The latest run log already exists and the new run is rejected before start: it is unchanged.
 - The same pipeline runs on Linux, macOS, and Windows: validation, ordering, and log shape do not change by host; how a running Step is stopped is specified under Cross-platform.
 - A stopped Step gets no chance to clean up after itself (temporary files, locks). Commands that need cleanup must not rely on running to the end.
-- A user interrupts the run (for example with Ctrl-C): this feature does not define or report cancellation.
+- The developer interrupts `truss` with Ctrl-C or SIGTERM: all running Steps are ended, `truss` exits non-zero, and the existing latest run log is unchanged. No `cancelled` status is reported.
+- A Step starts a background process and exits: the background process is ended when the Step's shell exits.
+- A process started by a Step detaches itself from the Step's process group or job (for example `setsid` on Unix): TRUSS cannot guarantee it ends. This is a documented limitation.
 
 ## Requirements *(mandatory)*
 
@@ -144,20 +153,21 @@ A developer runs a Pipeline Definition that does not declare a concurrency limit
 - **FR-008**: The run's error MUST name the pipeline and the Step whose failure TRUSS observed first. A failure of any Step MUST NOT be swallowed: every started Step's own Exit Code or start diagnostic MUST appear in the log.
 - **FR-009**: The run log MUST remain one text that is also what is saved to `.truss/run.log`. Every line a Step writes MUST be one complete line labelled with that Step's id and MUST keep its own local timestamp. Lines from different Steps MAY alternate. A Step's own lines MUST appear in the order that Step wrote them. Timestamps MUST NOT move earlier than the previous line.
 - **FR-010**: The log MUST keep the setup section, each started Step's id, start time, output, finish time, duration, and Exit Code or start diagnostic, and the closing summary of status, number of Steps that started, duration, and finish time. Started Steps MUST be listed in the order they started. The log MUST NOT show the concurrency limit, any Dependencies, or environment variable names or values.
-- **FR-011**: A Step Exit Code of 0 MUST mark that Step succeeded; any other Exit Code MUST mark it failed and MUST be preserved in the log.
-- **FR-012**: When no `concurrency` field is declared, TRUSS MUST run Steps and produce the run log and the process exit exactly as specs 001, 002, and 003 require.
+- **FR-011**: A Step Exit Code of 0 MUST mark that Step succeeded; any other Exit Code MUST mark it failed and MUST be preserved in the log. When the host reports no Exit Code for a Step that started, such as a Step ended by a signal, the finish line MUST show a diagnostic and no Exit Code, for every Step. TRUSS MUST NOT print a made-up Exit Code such as `-1`.
+- **FR-012**: When no `concurrency` field is declared, TRUSS MUST run Steps and produce the run log and the process exit exactly as specs 001, 002, and 003 require, except for FR-011 (no made-up Exit Code), FR-014 (leftover processes), and FR-016 (unknown fields).
 - **FR-013**: `truss run` MUST keep its current load behavior and process exit codes. The process exits 0 only when the Pipeline Run succeeded and the latest run log was saved.
-- **FR-014**: When `truss` exits, on a successful or a failed run, no Step command that TRUSS started, and no process such a command started, MAY still be running. A Step stopped by FR-006 MUST have its whole process tree ended on Linux, macOS, and Windows.
+- **FR-014**: When `truss` exits, on a successful or a failed run, no Step command that TRUSS started, and no process such a command started, MAY still be running. A Step stopped by FR-006 MUST have its whole process tree ended on Linux, macOS, and Windows. When a Step's shell exits, on any run and with any limit, TRUSS MUST end every process that Step started and that is still running.
 - **FR-015**: This feature MUST NOT execute any command other than the Step `run` strings of a Pipeline Run that has started. Each Step MUST still run in the invoker's working directory with the invoker's environment. This feature MUST NOT add per-Step environment, working directory, timeouts, retries, or caching.
 - **FR-016**: Before any Step starts, TRUSS MUST reject a Pipeline Definition that contains a field it does not recognise at the top level, under `pipeline`, or in a Step. The recognised fields are `version`, `pipeline.name`, `pipeline.concurrency`, and per Step `id`, `run`, and `needs`. The error MUST name the unknown field and the Step or section it appears in. Rejection MUST start no Step, write no new run log, and leave an existing `.truss/run.log` unchanged. This replaces the rule in spec 003 that unknown fields stay ignored.
+- **FR-017**: When the developer interrupts `truss` (Ctrl-C or SIGTERM) while a Pipeline Run is in progress, TRUSS MUST start no further Step, MUST end every running Step with its whole process tree as in FR-006, and MUST exit non-zero. It MUST NOT save a run log for the interrupted run, MUST leave an existing `.truss/run.log` unchanged, and MUST NOT report a `cancelled` status.
 
 ### Quality, Safety & Compatibility *(mandatory when applicable)*
 
 - **Testing**: Each user story MUST remain independently testable and MUST be implemented test-first: a failing test for the observable outcome exists before the behavior is implemented. Story 1 uses commands that wait for each other, so a sequential implementation cannot pass. Story 2 checks line labels, completeness of lines, per-Step order, timestamp monotonicity, and equality of the shown and saved log. Story 3 checks that no marker from a stopped or unstarted Step appears and that neither a Step command nor a process it started outlives `truss`. Story 4 checks every invalid value with zero command execution and an unchanged log. Story 5 compares with the spec 003 outcomes. Concurrency tests MUST be repeatable and MUST NOT rely on sleeps as synchronization.
-- **Process execution**: Only Step `run` strings of a started Pipeline Run MAY be executed. Exit Codes MUST be preserved. A failed Step fails the Pipeline Run, running Steps are stopped, and no further Step starts. Stopping a Step MUST NOT hide its failure. Cancellation as a reported status, timeouts, retries, and conditional execution are out of scope.
+- **Process execution**: Only Step `run` strings of a started Pipeline Run MAY be executed. An interrupt of `truss` ends all running Steps (FR-017). Exit Codes MUST be preserved. A failed Step fails the Pipeline Run, running Steps are stopped, and no further Step starts. Stopping a Step MUST NOT hide its failure. Cancellation as a reported status, timeouts, retries, and conditional execution are out of scope.
 - **Secrets**: The setup section, summary, and any TRUSS-written line MUST NOT include environment variable names, values, or secret material. Output a Step command itself writes remains part of that Step's lines.
 - **Cross-platform**: Validation, ordering, and log shape MUST be the same on Linux, macOS, and Windows. How a running Step is stopped depends on the host; the plan MUST name the mechanism for each host and the tests MUST cover each host in CI. A `run` string remains a host-shell string. One Pipeline Definition is not required to be portable across shells.
-- **Compatibility**: This feature adds the optional `pipeline.concurrency` field to schema version `"1"`. Every current definition that uses only recognised fields remains valid and runs as before. A definition that contains an unrecognised field was accepted before and is now rejected (FR-016); this is a deliberate, milestone-directed tightening, and no release has been tagged. The version stays `"1"` because the field is optional and no release has been tagged. When the field is used, the run log gains concurrent output in the shape described in FR-009 and the `stopped` line from FR-007; nothing else is added.
+- **Compatibility**: This feature adds the optional `pipeline.concurrency` field to schema version `"1"`. Every current definition that uses only recognised fields remains valid and runs as before. A definition that contains an unrecognised field was accepted before and is now rejected (FR-016); this is a deliberate, milestone-directed tightening, and no release has been tagged. Two further sequential-mode changes are deliberate: a Step can no longer leave a background process running after its shell exits (FR-014), and a signal death logs a diagnostic instead of `-1` (FR-011). The version stays `"1"` because the field is optional and no release has been tagged. When the field is used, the run log gains concurrent output in the shape described in FR-009 and the `stopped` line from FR-007; nothing else is added.
 - **Portability**: This feature MUST NOT bind TRUSS to a CI provider, IDE, agent platform, OS, or SDK language.
 
 ### Key Entities *(include if feature involves data)*
@@ -193,6 +203,6 @@ A developer runs a Pipeline Definition that does not declare a concurrency limit
 - Status values stay `succeeded` and `failed`. A stopped Step is `failed` with the Exit Code or diagnostic described in FR-007; it is not reported as `cancelled` or `skipped`.
 - Stopping uses no grace period, so TRUSS does not wait for a Step to finish on its own after a failure.
 - "Observed first" is by the order TRUSS records the failures, not by wall-clock time of the commands.
-- A user interrupt (Ctrl-C) is not defined here. Cancellation as a reported status stays out of this release (`docs/MILESTONE.md`).
+- An interrupt ends the run without a reported status. Cancellation as a reported status stays out of this release (`docs/MILESTONE.md`).
 - Glossary terms in `docs/GLOSSARY.md` are the vocabulary for this specification.
-- Out of scope: cancellation as a reported status, per-Step timeouts or retries, per-Step environment or working directory, matrix builds, caching, artifacts, container or remote execution, a daemon, an API, an SDK, and a command for visualizing the Execution Graph.
+- Out of scope: cancellation as a reported status (an interrupt ends the run without one), per-Step timeouts or retries, per-Step environment or working directory, matrix builds, caching, artifacts, container or remote execution, a daemon, an API, an SDK, and a command for visualizing the Execution Graph.
