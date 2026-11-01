@@ -29,7 +29,11 @@ Each Step's shell is the root of a tree that TRUSS can end as a unit: a process 
 | `truss` is interrupted (Ctrl-C, SIGTERM) | Same as a failure, then `truss` exits non-zero (see cli.md) |
 | `truss` exits | Nothing a Step started is still running |
 
-Limitation: a process that leaves the tree on its own (for example `setsid` on Unix) can survive.
+Limitations:
+
+- A process that leaves the tree on its own (for example `setsid` on Unix) can survive.
+- On Linux and macOS a Step runs in its own process group, which is a background group of the terminal. A Step that reads from the terminal (a password prompt, `ssh`, `gpg`, `git` asking for credentials) is stopped by the terminal and waits until `truss` is interrupted. Pipelines should not prompt.
+- If `truss` itself is force-killed (SIGKILL, `taskkill /F`), its Steps are not ended.
 
 ## Outcome of a Step
 

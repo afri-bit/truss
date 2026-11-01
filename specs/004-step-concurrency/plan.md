@@ -92,6 +92,11 @@ Both PRs together exceed the roughly 400-line guideline; the split keeps each re
 - Waiting for a Step's tree to disappear is bounded (about one second on Unix). If a process is still there after the bound, `Wait` returns anyway, logs nothing extra, and the run continues; this covers the same escapees as the `setsid` limitation below.
 
 - A process that detaches from the Step's process group or job (`setsid` on Unix) can survive the stop. Documented, not preventable with the standard library.
+- A Step that opens `/dev/tty` (password prompts, pinentry) runs in a background process group and is stopped by the terminal (SIGTTIN); TRUSS waits for it until interrupted. Timeouts are out of scope.
+- If `truss` is PID 1 of a container without an init, orphaned children become zombies that still count as group members, so the bounded poll runs its full second for such Steps. Run with an init (`--init`).
+- If `truss` itself is force-killed (SIGKILL, `taskkill /F`), Steps survive on Unix and, until `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` is added, on Windows.
+- A blocked live-output writer (a paused terminal) can delay `Wait`; TRUSS's own writes block too.
+- A recycled process-group id can in theory be hit by the cleanup `kill` (see research.md); accepted.
 - Duplicate YAML keys (for example `concurrency` twice) are not detected; the last wins. Follow-up.
 - Windows: a force-killed `truss` leaves its jobs open; `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` needs a struct and `unsafe`. Follow-up.
 - `.github/scripts/e2e-test.sh` and the README "Output" section are stale against the run-log contract; CI runs neither e2e, `-race`, nor `golangci-lint`. PR A repairs the script and CI; README is repaired in PR B.

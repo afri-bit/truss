@@ -30,7 +30,7 @@ Packages `cmd/truss`, `internal/{pipeline,engine,executor,runlog}`. Tests beside
 - [x] T002 [P] Repair `.github/scripts/e2e-test.sh` so it asserts the current run-log contract (labelled `step <id> |` lines, `finished ... exit N`, summary, `error: ` on stderr; remove the stale `[hello]` assertions), then add a CI step that runs it after `go build -o bin/truss ./cmd/truss` on all three OSes — [high] [PR-A] devops-engineer
 - [x] T003 [P] Add `internal/executor/helper_test.go`: `TestMain` re-executes the test binary when env `TRUSS_TEST_HELPER` is set. Subcommands: `touch-and-wait <mine> <other>` (create `mine`, wait until `other` exists or a deadline passes, exit 0 or 3), `print-lines <n>`, `partial <text>` (write text with no newline, then exit), `spawn-grandchild <pidfile>` (start a child that writes its pid to `pidfile` and blocks, then block), `exit <code>`. Export a `helperCmd(args...) string` that returns a `run` string valid under `/bin/sh -c` and `cmd /c`. No sleeps as synchronization — [high] [PR-A] test-writer
 - [x] T004 [P] Add the same helper in `internal/engine/helper_test.go` — [high] [PR-A] test-writer
-- [ ] T005 [P] Add the same helper in `cmd/truss/helper_test.go` — [high] [PR-B] test-writer
+- [x] T005 [P] Add the same helper in `cmd/truss/helper_test.go` (moved into PR-A: needed by the interrupt tests) — [high] [PR-A] test-writer
 
 ---
 
@@ -110,7 +110,7 @@ Packages `cmd/truss`, `internal/{pipeline,engine,executor,runlog}`. Tests beside
 ### Implementation
 
 - [ ] T024 [US3] `internal/engine/engine.go`: on the first failed outcome or `Start` error record `FailedStep`, cancel the run context, start no more Steps, emit `StepStopped` for Steps whose `Result.Stopped` is true, collect every Step's outcome before returning; return `ctx.Err()` when the parent context was cancelled. Make T021 pass — [high] [PR-B] go-engineer
-- [ ] T025 [US3] `cmd/truss/run.go`: `failureLine` uses `run.FailedStep` instead of the last entry in `run.Steps`; `cmd/truss/main.go`: wrap the context with `signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)` (use a build-tag-free form that compiles on Windows). Make T022 and T023 pass — [high] [PR-B] go-engineer
+- [ ] T025 [US3] `cmd/truss/run.go`: `failureLine` uses `run.FailedStep` instead of the last entry in `run.Steps`; `cmd/truss/main.go`: wrap the context with `signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)` (use a build-tag-free form that compiles on Windows). The signal handling and its tests moved into PR-A (review finding: Setpgid without it leaves Steps running after Ctrl-C). Make T022 and T023 pass — [high] [PR-B] go-engineer
 
 **Checkpoint**: US1 to US3 pass together with `-race -count=20`.
 
