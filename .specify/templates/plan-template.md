@@ -1,6 +1,6 @@
 # Implementation Plan: [FEATURE]
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**Branch**: `feature/[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
 **Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
 
 **Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
@@ -39,6 +39,7 @@
 - [ ] Public contract changes identify compatibility impact
 - [ ] No speculative packages, layers, frameworks, or dependencies
 - [ ] Cross-platform behavior is specified for paths, processes, signals, or shells
+- [ ] Agent work follows the constitution's Agentic Operation: independent review, guardrail changes listed for the maintainer, decisions logged
 - [ ] Complexity Tracking records any principle violation and the simpler alternative rejected
 
 Violations MUST be resolved or justified in Complexity Tracking before Phase 0 proceeds.
