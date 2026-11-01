@@ -32,7 +32,12 @@ const copyGrace = 2 * time.Second
 
 // Process is a started Step command. Call Wait exactly once.
 type Process struct {
-	cmd    *exec.Cmd
+	cmd *exec.Cmd
+	// exited receives the result of cmd.Wait, sent by a reaper goroutine that
+	// Start launches as soon as the shell is running in its tree. It is
+	// buffered (capacity 1), so the reaper never blocks and a delivered exit
+	// is observable (len(exited) == 1) before Wait is called.
+	exited chan error
 	tree   tree
 	stdout bytes.Buffer
 	stderr bytes.Buffer
@@ -42,7 +47,9 @@ type Process struct {
 
 // Start launches req.Run in a new host shell, inside its own process tree.
 // A non-nil error means the command did not start: it is a diagnostic with
-// no Exit Code and the returned *Process is nil.
+// no Exit Code and the returned *Process is nil. On success a goroutine reaps
+// the shell as soon as it exits, so its exit is recorded deterministically on
+// every OS; the caller must then call Wait.
 func Start(ctx context.Context, req Request) (*Process, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -105,29 +112,33 @@ func Start(ctx context.Context, req Request) (*Process, error) {
 			_, _ = io.Copy(dst, r)
 		}(p.reads[i], dst)
 	}
+	// The reaper starts only for a Process that Start returns, so a failed
+	// Start leaves no goroutine behind.
+	p.exited = make(chan error, 1)
+	go func() { p.exited <- cmd.Wait() }()
 	return p, nil
 }
 
 // Wait blocks until the shell exits, or ctx is done, in which case the whole
 // tree is force-ended first. Either way it ends leftover processes, waits for
 // them to be gone and returns the Result.
+//
+// Wait must be called exactly once, and always: it collects the reaper's
+// result and releases the tree. A second call would block forever.
 func (p *Process) Wait(ctx context.Context) Result {
-	exited := make(chan error, 1)
-	go func() { exited <- p.cmd.Wait() }()
-
 	var err error
 	killed := false
 	select {
-	case err = <-exited:
+	case err = <-p.exited:
 	case <-ctx.Done():
 		// The shell may have exited by itself just before; only a shell that
 		// had not delivered its exit is ended by TRUSS.
 		select {
-		case err = <-exited:
+		case err = <-p.exited:
 		default:
 			killed = true
 			p.tree.kill()
-			err = <-exited
+			err = <-p.exited
 		}
 	}
 	p.tree.afterExit()

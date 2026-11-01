@@ -44,17 +44,17 @@ func TestStop_AlreadyExitedShellIsNotStoppedEvenWithCancelledContext(t *testing.
 	}
 }
 
-// waitShellExited polls, with a deadline, until the shell process is no longer
-// running (a zombie waiting to be reaped counts as exited).
+// waitShellExited polls, with a deadline, until the reaper has delivered the
+// shell's exit. This is the same signal Wait consumes, so it is deterministic
+// on every OS (no pid probing).
 func waitShellExited(t *testing.T, proc *Process) {
 	t.Helper()
-	pid := proc.cmd.Process.Pid
 	deadline := time.Now().Add(treeDeadline)
 	for time.Now().Before(deadline) {
-		if !pidAlive(pid) {
+		if len(proc.exited) == 1 {
 			return
 		}
 		time.Sleep(time.Millisecond)
 	}
-	t.Fatalf("shell (pid %d) did not exit within %s", pid, treeDeadline)
+	t.Fatalf("shell did not exit within %s", treeDeadline)
 }
