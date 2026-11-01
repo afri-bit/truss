@@ -8,10 +8,8 @@ Sync Impact Report
 - Removed sections: Branching tooling note (Spec Kit 1.2.x no longer infers the spec folder from
   the branch name, so the prefixed-branch workaround is obsolete)
 - Templates requiring updates:
-  - .specify/templates/plan-template.md ⚠ pending: `[###-feature-name]` branch placeholder has no
-    prefix, and the Constitution Check does not yet list principle VI (change only in a task that
-    concerns that tooling)
-  - .specify/templates/spec-template.md ⚠ pending: same branch placeholder
+  - .specify/templates/plan-template.md ✅ branch placeholder prefixed; Constitution Check lists principle VI
+  - .specify/templates/spec-template.md ✅ branch placeholder prefixed
   - .specify/templates/tasks-template.md ✅ no branch references
   - AGENTS.md ✅ updated: tooling section names `.claude/` and `.agent/`
   - CLAUDE.md, docs/agents.md, .claude/rules/agent-team.md ✅ implement the Agentic Operation section

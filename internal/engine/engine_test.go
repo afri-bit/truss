@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -314,4 +315,47 @@ func echoHello() string {
 		return "echo Hello from TRUSS"
 	}
 	return `echo "Hello from TRUSS"`
+}
+
+// cancelOnFinish records events and cancels the run's context as soon as the
+// first Step has finished by itself.
+type cancelOnFinish struct {
+	*eventLog
+	cancel context.CancelFunc
+}
+
+func (c *cancelOnFinish) StepFinished(id string, exitCode *int, startErr error) {
+	c.eventLog.StepFinished(id, exitCode, startErr)
+	c.cancel()
+}
+
+// TestRun_CancelledContextReturnsContextErrorEvenWhenStepExitedByItself covers
+// FR-017: once the context is cancelled the run is interrupted, whatever the
+// Step's own Exit Code was, and no later Step starts.
+func TestRun_CancelledContextReturnsContextErrorEvenWhenStepExitedByItself(t *testing.T) {
+	for _, code := range []string{"0", "3"} {
+		t.Run("exit "+code, func(t *testing.T) {
+			p := pipeline.Pipeline{Version: "1", Name: "interrupted", Steps: []pipeline.Step{
+				{ID: "first", Run: helperCmd("exit", code)},
+				{ID: "second", Run: helperCmd("exit", "0")},
+			}}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			events := &cancelOnFinish{eventLog: &eventLog{}, cancel: cancel}
+
+			run, err := Run(ctx, p, t.TempDir(), nil, events)
+
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("err = %v, want context.Canceled; run = %+v", err, run)
+			}
+			if run.Status == pipeline.StatusFailed {
+				t.Fatalf("interrupted run reported as failed: %+v", run)
+			}
+			for _, ev := range events.events {
+				if ev.id == "second" {
+					t.Fatalf("later Step produced event %+v", ev)
+				}
+			}
+		})
+	}
 }

@@ -12,6 +12,9 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 ### Changed
 
 - Require Go 1.27.3. Go 1.22.5's standard library is affected by GO-2025-3956 (`os/exec` LookPath) and GO-2025-3750 (`os` and `syscall`), which the vulnerability scan reports through the host executor and CLI.
+- Processes a Step starts are ended when that Step's shell exits, so a Step can no longer leave a background process running for a later Step.
+- A Step ended by a signal is logged with a diagnostic and no Exit Code instead of `exit -1`.
+- On Linux and macOS each Step runs in its own process group so TRUSS can end it with everything it started. A Step that waits for terminal input (a password prompt) is stopped by the terminal until `truss` is interrupted. Interrupting `truss` (Ctrl-C or SIGTERM) now ends the running Steps and exits with status 1.
 
 ### Added
 

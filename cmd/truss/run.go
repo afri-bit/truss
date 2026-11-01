@@ -67,6 +67,12 @@ func Run(ctx context.Context, args []string, cwd string, env []string, stdout, s
 		fmt.Fprintf(stderr, "error: %s\n", err.Error())
 		return 1
 	}
+	if err := ctx.Err(); err != nil {
+		// FR-017: an interrupted run never saves a run log.
+		discardRunLog(tmp, tmpPath)
+		fmt.Fprintf(stderr, "error: %s\n", err.Error())
+		return 1
+	}
 	if run.Status != pipeline.StatusSucceeded {
 		log.SummaryFailed(len(run.Steps), failureLine(run))
 		if err := commitRunLog(tmp, tmpPath, dest); err != nil {

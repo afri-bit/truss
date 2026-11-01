@@ -3,8 +3,8 @@
   "title": "Migrate TRUSS from Cursor to Claude Code and an agentic setup",
   "tier": 0,
   "branch": "claude/truss-cursor-to-claude-18fzh9",
-  "status": "in_review",
-  "step": "pr",
+  "status": "done",
+  "step": "merged",
   "steps_done": [
     "speckit-switch",
     "rules",
@@ -15,7 +15,8 @@
     "gate-and-workflows",
     "docs",
     "agentic-constitution",
-    "placeholders"
+    "placeholders",
+    "merged-pr-2"
   ],
   "requirements": [],
   "specs": [],
@@ -30,5 +31,5 @@
   ],
   "pr": null,
   "created": "2026-10-30T23:50:00Z",
-  "updated": "2026-10-31T00:30:00Z"
+  "updated": "2026-11-01T09:00:00Z"
 }

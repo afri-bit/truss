@@ -12,6 +12,10 @@ import (
 // Run executes a pipeline sequentially on the host. dir and env are captured
 // by the caller and reused for every step. events, when set, receives each
 // started step. A nil events value skips those calls and writes no transcript.
+//
+// When ctx is cancelled the run is interrupted (FR-017): the error is ctx.Err()
+// itself, no later Step starts, and the returned run is partial. Callers must
+// ignore the returned run whenever err is not nil.
 func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, events StepEvents) (pipeline.PipelineRun, error) {
 	if err := ctx.Err(); err != nil {
 		return pipeline.PipelineRun{}, err
@@ -24,6 +28,7 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 		return pipeline.PipelineRun{}, err
 	}
 
+	// Status is only final when Run returns a nil error.
 	run := pipeline.PipelineRun{Name: plan.Name, Status: pipeline.StatusSucceeded}
 	for _, step := range plan.Steps {
 		if err := ctx.Err(); err != nil {
@@ -39,10 +44,18 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 			if events != nil {
 				events.StepFinished(step.ID, nil, err)
 			}
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return run, ctxErr
+			}
 			return run, fmt.Errorf("execute step %s: %w", step.ID, err)
 		}
 		if events != nil {
 			events.StepFinished(step.ID, res.ExitCode, res.Err)
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			// FR-017: an interrupt wins over however the Step ended; no
+			// later Step starts and the run is not an ordinary result.
+			return run, ctxErr
 		}
 		stepRun := stepResult(step.ID, res)
 		run.Steps = append(run.Steps, stepRun)
@@ -50,6 +63,9 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 			run.Status = pipeline.StatusFailed
 			return run, nil
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return run, err
 	}
 	return run, nil
 }

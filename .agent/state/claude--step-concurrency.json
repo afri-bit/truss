@@ -1,0 +1,27 @@
+{
+  "work_id": "claude--step-concurrency",
+  "title": "Specify and plan step concurrency (spec 004)",
+  "tier": 2,
+  "branch": "claude/truss-cursor-to-claude-18fzh9",
+  "status": "in_progress",
+  "step": "commit-specs",
+  "steps_done": [
+    "speckit-specify",
+    "speckit-clarify",
+    "planner",
+    "speckit-plan",
+    "speckit-tasks",
+    "speckit-analyze"
+  ],
+  "requirements": [],
+  "specs": [],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [
+    "specify, clarify, planner, plan, tasks, analyze"
+  ],
+  "pr": null,
+  "created": "2026-11-01T09:30:00Z",
+  "updated": "2026-11-01T00:44:23Z"
+}

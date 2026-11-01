@@ -163,3 +163,4 @@ A developer runs a Pipeline Definition that does not use `needs`. Steps still ru
 - Status values shown for a finished run remain `succeeded` and `failed`. Omitted Steps are not reported as `skipped` or `cancelled`.
 - Glossary terms in `docs/GLOSSARY.md` are the vocabulary for this specification.
 - Out of scope: concurrent execution, cancellation, timeouts, retries, conditional or run-on-failure Steps, per-Step environment or working directory, matrix builds, caching, artifacts, container or remote execution, a daemon, an API, an SDK, and a command for visualizing the Execution Graph.
+- Amended by `specs/004-step-concurrency/`: unknown fields are rejected from that feature on, which replaces the rule above that they stay ignored.
