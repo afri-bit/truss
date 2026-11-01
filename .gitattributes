@@ -1,0 +1,2 @@
+# Append-only event logs: keep both sides when branches add lines.
+.agent/log/*.jsonl merge=union

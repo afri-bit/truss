@@ -1,0 +1,39 @@
+---
+paths:
+  - "**/*.go"
+  - "specs/**/plan.md"
+---
+
+# Go packages and boundaries
+
+TRUSS is one Go module. The engine is independent of the CLI (constitution principle IV).
+
+| Package | Job | Must not |
+|---|---|---|
+| `cmd/truss` | Flags, I/O, exit codes, user-facing output | Hold execution logic |
+| `internal/pipeline` | Load, validate and plan a pipeline definition | Run anything or print |
+| `internal/engine` | Run a validated plan through the executor, return a result | Print or read flags |
+| `internal/executor` | Run one step command on the host shell, report exit code and output | Decide ordering |
+| `internal/runlog` | Format and write the run log | Execute steps |
+
+Update this table in the same change when a package is added or its job changes.
+
+## Rules
+
+- One package, one purpose. No `internal/util`, no `pkg/` public API unless a spec requires it.
+- `internal/*` returns results and errors. Only `cmd/` writes user-facing output.
+- Interfaces live where they are consumed, are small, and exist only at a real boundary
+  (several implementations, isolation, or testing). Do not add one "for later".
+- Extend behavior with a new type that satisfies a small interface. Honor cancellation, wrap
+  errors, never panic on user input.
+- Do not add layers, frameworks, top-level directories or a daemon/API before a spec asks.
+- Keep external contracts (pipeline file, CLI output, run log) free of Go-specific details so
+  other languages can consume them.
+
+```go
+// Bad: the engine prints.
+func (e *Engine) Run(ctx context.Context) error { fmt.Println("starting"); return e.exec.Start(ctx) }
+
+// Good: the engine returns a result; cmd/ prints.
+func (e *Engine) Run(ctx context.Context) (Result, error) { return e.exec.Start(ctx) }
+```
