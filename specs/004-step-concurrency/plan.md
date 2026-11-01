@@ -97,7 +97,7 @@ Both PRs together exceed the roughly 400-line guideline; the split keeps each re
 - If `truss` itself is force-killed (SIGKILL, `taskkill /F`), Steps survive on Unix and, until `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` is added, on Windows.
 - A blocked live-output writer (a paused terminal) can delay `Wait`; TRUSS's own writes block too.
 - A recycled process-group id can in theory be hit by the cleanup `kill` (see research.md); accepted.
-- Windows: a Step's own failure racing the kill could be marked stopped until `endedByKill` checks a distinctive job exit code (task T024, required before the `stopped` line ships in PR-B). On a real console Ctrl-C the Steps also receive the event themselves; the run is still discarded because the engine returns the context error whenever it is set.
+- Windows: `Stopped` is true only when the shell's exit code is the distinctive code TRUSS ends the job with (21586), after CI showed the constant-true version mislabelled a Step that exited by itself. On a real console Ctrl-C the Steps also receive the event themselves; the run is still discarded because the engine returns the context error whenever it is set.
 - Duplicate YAML keys (for example `concurrency` twice) are not detected; the last wins. Follow-up.
 - Windows: a force-killed `truss` leaves its jobs open; `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` needs a struct and `unsafe`. Follow-up.
 - `.github/scripts/e2e-test.sh` and the README "Output" section are stale against the run-log contract; CI runs neither e2e, `-race`, nor `golangci-lint`. PR A repairs the script and CI; README is repaired in PR B.

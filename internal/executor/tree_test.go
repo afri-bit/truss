@@ -75,8 +75,8 @@ func TestStop_CancelEndsShellAndGrandchild(t *testing.T) {
 		t.Fatalf("Stopped = false, result = %+v", res)
 	}
 	if runtime.GOOS == "windows" {
-		if res.ExitCode == nil || *res.ExitCode != 1 {
-			t.Fatalf("ExitCode = %v, want 1", res.ExitCode)
+		if want := wantStoppedExitCode(); res.ExitCode == nil || *res.ExitCode != want {
+			t.Fatalf("ExitCode = %v, want %d", res.ExitCode, want)
 		}
 		return
 	}

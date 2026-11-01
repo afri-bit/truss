@@ -43,7 +43,7 @@ Limitations:
 | Exit Code other than 0 | `failed` | `exit <code>` |
 | Cannot be started | `failed` | diagnostic, no Exit Code |
 | Ended by a signal (any cause) | `failed` | diagnostic, no Exit Code; never `-1` |
-| Stopped by TRUSS | `failed` | the `stopped` line, then the Exit Code the host reports (Windows: `exit 1`) or the signal diagnostic (Unix) |
+| Stopped by TRUSS | `failed` | the `stopped` line, then the Exit Code the host reports (Windows: `exit 21586`, the code TRUSS ends the job with, so a Step that fails by itself is never confused with a stopped one) or the signal diagnostic (Unix) |
 
 A Step that exits 0 on its own while a stop is in progress is `succeeded`.
 

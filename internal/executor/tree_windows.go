@@ -60,12 +60,17 @@ func attach(cmd *exec.Cmd) (tree, error) {
 	return &jobTree{job: syscall.Handle(job)}, nil
 }
 
-// kill terminates every process in the job with exit code 1. Idempotent.
+// stoppedExitCode is the exit code TRUSS gives every process it ends through
+// the job object. It is distinctive (0x5452, "TR") so a shell that was ended by
+// TRUSS can be told apart from one that exited by itself.
+const stoppedExitCode = 0x5452
+
+// kill terminates every process in the job with stoppedExitCode. Idempotent.
 func (j *jobTree) kill() {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	if j.job != 0 {
-		_, _, _ = procTerminateJobObject.Call(uintptr(j.job), 1)
+		_, _, _ = procTerminateJobObject.Call(uintptr(j.job), stoppedExitCode)
 	}
 }
 
@@ -85,7 +90,9 @@ func (j *jobTree) release() {
 // signalName: Windows has no POSIX signals, so a missing exit code is unknown.
 func signalName(*os.ProcessState) string { return "unknown" }
 
-// endedByKill: a job-object kill leaves only an exit code, so it cannot be
-// told apart from the shell's own exit. Wait only asks after it issued the
-// kill while the shell had not yet delivered its exit, so that is enough.
-func endedByKill(*os.ProcessState) bool { return true }
+// endedByKill reports whether the shell exited with stoppedExitCode, the code
+// only a job-object kill by TRUSS produces. A shell that exited by itself
+// before the job was terminated keeps its own code and is not reported.
+func endedByKill(st *os.ProcessState) bool {
+	return st != nil && st.ExitCode() == stoppedExitCode
+}
