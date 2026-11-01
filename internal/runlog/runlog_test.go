@@ -2,8 +2,11 @@ package runlog
 
 import (
 	"bytes"
+	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -252,4 +255,106 @@ func occurrences(t *testing.T, out string) []string {
 		got = append(got, m[2])
 	}
 	return got
+}
+
+// forwardClock is safe for concurrent use and only moves forward.
+func forwardClock(start time.Time) func() time.Time {
+	var mu sync.Mutex
+	cur := start
+	return func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		cur = cur.Add(250 * time.Millisecond)
+		return cur
+	}
+}
+
+func TestLog_ConcurrentOutput(t *testing.T) {
+	const workers = 8
+	const lines = 20
+	var buf bytes.Buffer
+	log := New(&buf, forwardClock(time.Date(2026, 10, 26, 8, 0, 0, 0, time.Local)))
+
+	var wg sync.WaitGroup
+	for w := range workers {
+		id := fmt.Sprintf("s%d", w)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.StepStarted(id)
+			var text strings.Builder
+			for n := range lines {
+				fmt.Fprintf(&text, "%s line %d\n", id, n)
+			}
+			data := []byte(text.String())
+			// Split at arbitrary points, including inside a line.
+			for i := 0; i < len(data); {
+				size := 1 + (i*7+w)%11
+				end := min(i+size, len(data))
+				log.StepOutput(id, data[i:end])
+				i = end
+			}
+			code := 0
+			log.StepFinished(id, &code, nil)
+		}()
+	}
+	wg.Wait()
+
+	out := buf.String()
+	got := splitLines(t, out)
+	outLine := regexp.MustCompile(`^\S+ \S+ step (s\d) \| (s\d) line (\d+)$`)
+	ctrlLine := regexp.MustCompile(`^\S+ \S+ step (s\d) (started|finished duration \d+\.\d{3}s exit 0)$`)
+	next := map[string]int{}
+	var prev string
+	for _, line := range got {
+		if strings.Count(line, " step ") != 1 {
+			t.Fatalf("line must carry exactly one step label: %q\n%s", line, out)
+		}
+		ts := stamp(line)
+		if ts == "" || (prev != "" && ts < prev) {
+			t.Fatalf("bad or decreasing timestamp in %q (previous %q)", line, prev)
+		}
+		prev = ts
+		if m := outLine.FindStringSubmatch(line); m != nil {
+			if m[1] != m[2] {
+				t.Fatalf("output of %s labelled %s: %q", m[2], m[1], line)
+			}
+			n, _ := strconv.Atoi(m[3])
+			if n != next[m[1]] {
+				t.Fatalf("step %s line %d out of order, want %d\n%s", m[1], n, next[m[1]], out)
+			}
+			next[m[1]]++
+			continue
+		}
+		if !ctrlLine.MatchString(line) {
+			t.Fatalf("incomplete or malformed line: %q\n%s", line, out)
+		}
+	}
+	for w := range workers {
+		if id := fmt.Sprintf("s%d", w); next[id] != lines {
+			t.Fatalf("step %s wrote %d output lines, want %d", id, next[id], lines)
+		}
+	}
+}
+
+func TestLog_StepStopped(t *testing.T) {
+	t0 := time.Date(2026, 10, 26, 8, 1, 2, 0, time.Local)
+	var buf bytes.Buffer
+	log := New(&buf, clockAt(t0))
+	log.StepStarted("b")
+	log.StepOutput("b", []byte("half a li"))
+	log.StepStopped("b", "a")
+	code := 1
+	log.StepFinished("b", &code, nil)
+
+	got := occurrences(t, buf.String())
+	want := []string{
+		"step b started",
+		"step b | half a li",
+		"step b stopped because step a failed",
+		"step b finished duration 0.000s exit 1",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
 }

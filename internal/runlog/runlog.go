@@ -5,12 +5,17 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 )
 
 // Log writes timestamped run-log lines to w.
 // now is the clock. Timestamps do not move earlier than the previous line.
+// A Log is safe for concurrent use: each exported method formats, stamps and
+// writes under one lock, so lines from different Steps never interleave
+// within a line.
 type Log struct {
+	mu      sync.Mutex
 	w       io.Writer
 	now     func() time.Time
 	prev    time.Time
@@ -32,6 +37,8 @@ func New(w io.Writer, now func() time.Time) *Log {
 // Setup writes the five environment lines before any step.
 // The lines name osName, arch, shell, and dir, and no environment variables.
 func (l *Log) Setup(osName, arch, shell, dir string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.setupAt = l.stamp()
 	l.writeAt(l.setupAt, "setup environment ready")
 	l.line("setup os " + osName)
@@ -42,6 +49,8 @@ func (l *Log) Setup(osName, arch, shell, dir string) {
 
 // StepStarted writes the start line for id.
 func (l *Log) StepStarted(id string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	ts := l.stamp()
 	l.stepAt[id] = ts
 	l.pending[id] = &bytes.Buffer{}
@@ -50,6 +59,8 @@ func (l *Log) StepStarted(id string) {
 
 // StepOutput writes one occurrence for each completed output line in chunk.
 func (l *Log) StepOutput(id string, chunk []byte) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	if len(chunk) == 0 {
 		return
 	}
@@ -70,6 +81,8 @@ func (l *Log) StepOutput(id string, chunk []byte) {
 // StepFinished writes the step duration and exit code.
 // startErr replaces the exit code when the command did not start.
 func (l *Log) StepFinished(id string, exitCode *int, startErr error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.flush(id)
 	finish := l.stamp()
 	dur := formatDuration(finish.Sub(l.stepAt[id]))
@@ -84,15 +97,29 @@ func (l *Log) StepFinished(id string, exitCode *int, startErr error) {
 	l.writeAt(finish, fmt.Sprintf("step %s finished duration %s exit %d", id, dur, code))
 }
 
+// StepStopped records that Step id was stopped because Step by failed.
+// It first writes the Step's pending partial output line. The caller still
+// calls StepFinished afterwards.
+func (l *Log) StepStopped(id, by string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.flush(id)
+	l.line("step " + id + " stopped because step " + by + " failed")
+}
+
 // SummarySucceeded writes the closing line for a successful run.
 // steps is the number of steps that started.
 func (l *Log) SummarySucceeded(steps int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.summary("succeeded", steps)
 }
 
 // SummaryFailed writes the failed summary and one error line.
 // errorText names the pipeline and the failed step, without an "error " prefix.
 func (l *Log) SummaryFailed(steps int, errorText string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.summary("failed", steps)
 	l.line("error " + errorText)
 }
