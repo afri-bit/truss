@@ -33,7 +33,7 @@ Do not tag v0.1.0 until every item in this section has a specification and an im
 - `needs` lists step ids that must succeed before a step starts. A time delay is an ordinary `run` command, not a schema field.
 - Concurrency defaults to 1, so a file with no `needs` stays sequential. A higher concurrency runs steps whose needs are already met.
 - A failure still fails the whole run. Independent branches do not continue.
-- Unknown pipeline fields are rejected once that specification lands, so a misspelled `needs` cannot run in file order.
+- Unknown pipeline fields are rejected, so a misspelled `needs` or `concurrency` cannot run in file order.
 
 ### Already specified
 
@@ -42,8 +42,9 @@ Do not tag v0.1.0 until every item in this section has a specification and an im
 | Sequential host engine | `specs/001-host-pipeline-engine/` | Implemented |
 | Local run log, help, and version | `specs/002-local-run-log/` | Implemented |
 | Step `needs`, still one step at a time | `specs/003-step-dependencies/` | Implemented |
+| Step concurrency (`pipeline.concurrency`) | `specs/004-step-concurrency/` | Implemented |
 
-The next specification is concurrency: ready steps run together when the pipeline raises the limit above 1. Do not start that code before its spec, plan, and tasks exist. Until then, execution stays sequential even when steps declare `needs`.
+Concurrency now exists. A pipeline runs steps together only when it raises `pipeline.concurrency` above 1. Without that, execution stays sequential, even when steps declare `needs`.
 
 ### Not in v0.1.0
 

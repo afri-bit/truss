@@ -15,9 +15,17 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 - Processes a Step starts are ended when that Step's shell exits, so a Step can no longer leave a background process running for a later Step.
 - A Step ended by a signal is logged with a diagnostic and no Exit Code instead of `exit -1`.
 - On Linux and macOS each Step runs in its own process group so TRUSS can end it with everything it started. A Step that waits for terminal input (a password prompt) is stopped by the terminal until `truss` is interrupted. Interrupting `truss` (Ctrl-C or SIGTERM) now ends the running Steps and exits with status 1.
+- Unknown fields in a pipeline definition are now rejected, at the top level, under `pipeline`, and in a Step. Before, they were ignored. The error names the field and where it appears.
 
 ### Added
 
+- Local run log in `.truss/run.log`. Each run shows a setup section, each Step's start, output, finish, duration and exit code, and a summary. The saved text is the text shown during the run. The latest log is replaced by the next finished run (specs/002-local-run-log).
+- `truss help` and `truss version` (and `--help` and `--version`). They print usage or the version, exit 0, and start no Step.
+- Optional `needs` on a Step. A Step starts only after every Step it lists has succeeded. Dependencies are validated before any command runs: unknown ids, self-dependencies, repeated ids, cycles, and a `needs` value that is not a list of ids are rejected (specs/003-step-dependencies).
+- Optional `pipeline.concurrency`, a whole number of at least 1 that defaults to 1. Ready Steps start in definition order, never more than the limit at once. Any other value is rejected before a command starts (specs/004-step-concurrency).
+- A `stopped` run-log line, `step <id> stopped because step <other> failed`, for a running Step that is stopped after another Step fails.
+- Interrupt handling. Ctrl-C or SIGTERM ends every running Step, `truss` exits 1, and no log is saved for the interrupted run.
+- Process-tree cleanup. A stopped Step's whole process tree is ended on Linux, macOS, and Windows. Processes a Step starts are ended when its shell exits.
 - Go module `github.com/afri-bit/truss` for Go 1.27.3, and the `truss` command (`cmd/truss`).
 - Pipeline schema version `"1"`. A definition has `version`, `pipeline.name`, and one or more `steps`. Each step has a unique `id` and a single `run` string. The host shell interprets that string, including quotes, pipes, and environment expansion.
 - `truss run <path>` loads the given file. Any filename is valid. `truss run` with no path loads `truss.yaml` from the working directory.

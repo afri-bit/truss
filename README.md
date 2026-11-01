@@ -80,12 +80,12 @@ flowchart LR
 
 Available today:
 
-- YAML pipeline definitions (schema version `"1"`).
+- YAML pipeline definitions (schema version `"1"`), with optional `needs` between steps.
 - Validation before execution. An invalid definition never starts a command.
-- Sequential host execution through `/bin/sh -c` on Unix and `cmd /c` on Windows.
+- Host execution through `/bin/sh -c` on Unix and `cmd /c` on Windows. Steps run one at a time unless `pipeline.concurrency` is raised.
 - Each step runs in the invoker's working directory with the invoker's environment.
-- Output streamed live, step by step.
-- Fail-fast behavior. The first failed step stops the run and reports its real exit code.
+- A local run log, shown live and saved to `.truss/run.log`.
+- Fail-fast behavior. The first failed step stops the run, stops the steps still running, and reports its real exit code.
 - Linux, macOS, and Windows support.
 
 ## Getting started
@@ -129,37 +129,76 @@ Run it:
 
 ```console
 $ truss run
-[hello]
-Hello from TRUSS
-[where]
-running in /home/me/project
+2026-11-01 10:00:00 setup environment ready
+...
+2026-11-01 10:00:00 step hello started
+2026-11-01 10:00:00 step hello | Hello from TRUSS
+2026-11-01 10:00:00 step hello finished duration 0.002s exit 0
+...
+2026-11-01 10:00:00 summary succeeded steps 2 duration 0.004s
 ```
+
+The full log is described under [Output](#output).
 
 ## Usage
 
 ```text
 truss run [<path>]
+truss help
+truss version
 ```
 
 | Command | Behavior |
 |---|---|
 | `truss run` | Loads `truss.yaml` from the current directory. It does not search for other filenames. |
 | `truss run <path>` | Loads the given file. Any filename is valid. |
-| anything else | Prints `usage: truss run [<path>]` and exits 1 without running anything. |
+| `truss help`, `truss --help`, or `truss` with no command | Prints usage and exits 0. Starts no step and writes no run log. |
+| `truss version`, `truss --version` | Prints the version and exits 0. Starts no step and writes no run log. |
+| anything else | Prints usage and exits 1 without running anything. |
 
 ### Output
 
-Each step prints its id in brackets, followed by its stdout and stderr as the process writes them. A successful run prints nothing else.
+`truss run` prints one run log. Every line starts with the local time, `YYYY-MM-DD HH:MM:SS`. The same text is saved to `.truss/run.log` in the working directory when the run finishes, so you can open it later. The next finished run replaces it. A run that is rejected before it starts does not change it.
 
-When a step fails, later steps are skipped and one line on standard error names the pipeline, the step, and the step's exit code:
+A run starts with a setup section. It shows that the environment is ready, the operating system, the architecture, the host shell, and the working directory. It never lists environment variable names, values, or secrets.
+
+This is the log of a run where the second step fails (paths and timestamps trimmed):
 
 ```console
-$ truss run ci.yaml
-[first]
-first
-[second]
-error: fail-fast failed at second (exit 3)
+$ truss run truss.yaml
+2026-11-01 10:00:00 setup environment ready
+2026-11-01 10:00:00 setup os linux
+2026-11-01 10:00:00 setup arch amd64
+2026-11-01 10:00:00 setup shell /bin/sh
+2026-11-01 10:00:00 setup directory /home/me/project
+2026-11-01 10:00:00 step first started
+2026-11-01 10:00:00 step first | one
+2026-11-01 10:00:00 step first finished duration 0.002s exit 0
+2026-11-01 10:00:00 step second started
+2026-11-01 10:00:00 step second | two
+2026-11-01 10:00:00 step second finished duration 0.001s exit 3
+2026-11-01 10:00:00 summary failed steps 2 duration 0.003s
+2026-11-01 10:00:00 error demo failed at second (exit 3)
 ```
+
+The lines TRUSS writes:
+
+| Line | Meaning |
+|---|---|
+| `setup ...` | The setup section, described above. |
+| `step <id> started` | The step began. |
+| `step <id> \| <text>` | One line the step wrote. The label always names the step. |
+| `step <id> stopped because step <other> failed` | The step was stopped because another step failed. It appears only when steps run together. |
+| `step <id> finished duration <s>s exit <code>` | The step ended with that exit code. |
+| `step <id> finished duration <s>s error <diagnostic>` | The step could not start, or it ended by a signal. It has no exit code. TRUSS never prints `-1`. |
+| `summary <status> steps <n> duration <s>s` | The result is `succeeded` or `failed`. `<n>` counts the steps that started. |
+| `error <pipeline> failed at <step> (exit <code>)` | The run failed. It names the first failure TRUSS observed. |
+
+When steps run together (see [`pipeline.concurrency`](#pipeline-definition)), lines from different steps may alternate. Every line still has its step's label, and each step's own lines stay in the order that step wrote them. Started steps are listed in the order they started.
+
+If a step fails while other steps are running, TRUSS stops those steps right away. Each stopped step shows its output so far, then the `stopped` line, then its finish line. Steps that had not started do not appear in the log.
+
+Ctrl-C on any host, or SIGTERM on Linux and macOS, interrupts the run. TRUSS ends all running steps and their processes, prints `error: context canceled` to standard error, and exits 1. An interrupted run saves no log, and the existing `.truss/run.log` stays as it was.
 
 An invalid definition is rejected before any step runs:
 
@@ -172,10 +211,18 @@ error: missing or unsupported schema version
 
 | Outcome | `truss` exit code |
 |---|---|
-| Every step succeeded | `0` |
-| A step failed, or the file is missing, unreadable, invalid YAML, or fails validation | `1` |
+| The run succeeded and `.truss/run.log` was saved | `0` |
+| `truss help`, `truss version`, or bare `truss` | `0` |
+| A step failed, the definition was rejected (file missing, unreadable, invalid YAML, failed validation, unknown field, invalid `concurrency`), the log location is unusable, usage was wrong, or the run was interrupted | `1` |
 
-The `truss` exit code is not the step's exit code. The step's exit code appears in the error line.
+The `truss` exit code is not the step's exit code. The step's exit code appears in the log.
+
+### Steps and the terminal
+
+- A step cannot rely on terminal input. Do not run commands that ask for a password. On Linux and macOS, a step that reads from the terminal is stopped by the terminal and waits until you interrupt `truss`.
+- When a step's shell exits, TRUSS ends any process that step started and left running. A later step cannot depend on it.
+- A step that is stopped gets no chance to clean up. Do not rely on a command reaching its last line.
+- On Windows, a stopped step exits with code `21586`, so a step that failed on its own is never mistaken for a stopped one.
 
 ## Pipeline definition
 
@@ -184,11 +231,15 @@ version: "1"            # required, quoted string; only "1" is supported
 
 pipeline:
   name: build-and-test  # required, non-empty
+  concurrency: 2        # optional, whole number of at least 1; default 1
 
 steps:                  # required, at least one step
   - id: build           # required, unique within the pipeline
     run: go build ./... # required, one command string for the host shell
+  - id: lint
+    run: golangci-lint run ./...
   - id: test
+    needs: [build]      # optional, step ids that must succeed first
     run: go test ./...
 ```
 
@@ -196,11 +247,71 @@ steps:                  # required, at least one step
 |---|---|
 | `version` | Must be the string `"1"`. A bare number such as `1` is rejected. |
 | `pipeline.name` | Required and non-empty. |
-| `steps` | A list with at least one step. Steps run in the order they are listed. |
+| `pipeline.concurrency` | Optional. A whole number of at least 1. Default 1. The most steps that may run at the same time. |
+| `steps` | A list with at least one step. |
 | `steps[].id` | Required, non-empty, and unique. |
 | `steps[].run` | Required and non-empty. The host shell interprets it, including quotes, pipes, and variable expansion. |
+| `steps[].needs` | Optional list of step ids. The step starts only after each listed step has succeeded. |
 
-Every step starts a new shell, so `cd` or `export` in one step does not carry over to the next. The full contract lives in [`specs/001-host-pipeline-engine/contracts/pipeline-v1.md`](specs/001-host-pipeline-engine/contracts/pipeline-v1.md).
+Any other field is an error. TRUSS does not ignore it. A typo such as `concurency` or `need` stops the run before any step starts.
+
+Every step starts a new shell, so `cd` or `export` in one step does not carry over to the next. The full contract for the first version lives in [`specs/001-host-pipeline-engine/contracts/pipeline-v1.md`](specs/001-host-pipeline-engine/contracts/pipeline-v1.md). The dependency and concurrency rules are in [`specs/003-step-dependencies/`](specs/003-step-dependencies/) and [`specs/004-step-concurrency/contracts/pipeline-v1.md`](specs/004-step-concurrency/contracts/pipeline-v1.md).
+
+### Recognised fields
+
+| Where | Fields |
+|---|---|
+| Top level | `version`, `pipeline`, `steps` |
+| `pipeline` | `name`, `concurrency` |
+| Each step | `id`, `run`, `needs` |
+
+Unknown fields are rejected. The error names the field and where it appears:
+
+```console
+$ truss run truss.yaml
+error: unknown field "concurency" in pipeline
+```
+
+The other messages follow the same form: `unknown field "<name>" at top level`, and `unknown field "<name>" in step "<id>"` (or `in step <N>` when the step has no id).
+
+### Steps start in order
+
+Steps start in the order they are written, subject to two rules:
+
+- A step with `needs` starts only after every step it lists has succeeded. A step with no `needs` does not wait for the step written above it. `needs` is the only dependency.
+- At most `pipeline.concurrency` steps run at the same time. When more steps are ready than the limit allows, the ones written earliest start first. A freed slot goes to the next ready step.
+
+With the default limit of 1, steps run one at a time. A higher limit lets independent steps overlap. This example runs `lint` and `test` together. `package` starts after both have succeeded:
+
+```yaml
+version: "1"
+
+pipeline:
+  name: build-and-test
+  concurrency: 2
+
+steps:
+  - id: lint
+    run: golangci-lint run ./...
+  - id: test
+    run: go test ./...
+  - id: package
+    needs: [lint, test]
+    run: go build ./cmd/truss
+```
+
+If any step fails, TRUSS starts no more steps and stops the steps that are still running. The run fails. Independent branches do not keep running.
+
+### Limits that are rejected
+
+A `concurrency` value must be a whole number of at least 1. TRUSS rejects everything else before any step starts, including `0`, `-1`, `1.5`, `"two"`, `true`, an empty value, and a list:
+
+```console
+$ truss run truss.yaml
+error: pipeline concurrency must be a whole number of at least 1, got "0"
+```
+
+A rejected definition writes no new run log and leaves an existing `.truss/run.log` unchanged.
 
 ## Architecture
 
@@ -254,10 +365,10 @@ sequenceDiagram
     CLI->>Engine: run pipeline
     Engine->>Pipeline: validate and plan
     Pipeline-->>Engine: execution plan or validation error
-    loop each step, in order
+    loop each ready step, up to the concurrency limit
         Engine->>Host: execute run string
         Host-->>Engine: exit code, output, start error
-        Note over Engine: stop at the first failed step
+        Note over Engine: on the first failed step, stop running steps and start no more
     end
     Engine-->>CLI: pipeline run result
     CLI-->>User: streamed log, error line, exit code
@@ -269,7 +380,7 @@ sequenceDiagram
 |---|---|
 | `cmd/truss` | Arguments, file resolution, terminal output, process exit codes. No execution logic. |
 | `internal/pipeline` | Pipeline model, YAML parsing, validation, and the execution plan. Never executes anything. |
-| `internal/engine` | Runs a plan step by step, applies fail-fast, and returns structured results. Independent of the CLI. |
+| `internal/engine` | Runs a plan (ready steps first, up to the concurrency limit), applies fail-fast, and returns structured results. Independent of the CLI. |
 | `internal/executor` | Runs one command in the host shell and reports its exit code, output, and start errors. |
 
 Rules the code follows:
@@ -317,8 +428,6 @@ The first tagged release is defined in [`docs/MILESTONE.md`](docs/MILESTONE.md).
 
 **Execution**
 
-- Dependency graphs between steps
-- Concurrent step execution
 - Cancellation
 - Container execution
 - Remote workers

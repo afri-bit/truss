@@ -182,18 +182,14 @@ A result may contain:
 
 The state of a pipeline or step run.
 
-Examples may include:
+The reported statuses are:
 
 ```text
-pending
-running
 succeeded
 failed
-cancelled
-skipped
 ```
 
-The canonical states are defined by specification.
+A step that is stopped because another step failed is `failed`. A step that never started is omitted from the run log, not reported as `skipped`. An interrupted run reports no status. `cancelled` is not a status in v0.1.0.
 
 ### Exit Code
 
