@@ -48,7 +48,7 @@ func Start(ctx context.Context, req Request) (*Process, error) {
 		return nil, err
 	}
 	shell, args := shellCommand(req.Run)
-	cmd := exec.Command(shell, args...) //nolint:gosec // running the declared Step command is the purpose
+	cmd := exec.Command(shell, args...)
 	if req.Dir != "" {
 		cmd.Dir = req.Dir
 	}
@@ -116,13 +116,19 @@ func (p *Process) Wait(ctx context.Context) Result {
 	go func() { exited <- p.cmd.Wait() }()
 
 	var err error
-	stopped := false
+	killed := false
 	select {
 	case err = <-exited:
 	case <-ctx.Done():
-		stopped = true
-		p.tree.kill()
-		err = <-exited
+		// The shell may have exited by itself just before; only a shell that
+		// had not delivered its exit is ended by TRUSS.
+		select {
+		case err = <-exited:
+		default:
+			killed = true
+			p.tree.kill()
+			err = <-exited
+		}
 	}
 	p.tree.afterExit()
 	p.drain()
@@ -134,7 +140,7 @@ func (p *Process) Wait(ctx context.Context) Result {
 		res.ExitCode = &code
 		return res
 	}
-	res.Stopped = stopped
+	res.Stopped = killed && endedByKill(p.cmd.ProcessState)
 	var exitErr *exec.ExitError
 	if !errors.As(err, &exitErr) {
 		res.Err = fmt.Errorf("wait for command: %w", err)

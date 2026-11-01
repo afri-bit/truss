@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
@@ -13,5 +15,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err.Error())
 		os.Exit(1)
 	}
-	os.Exit(Run(context.Background(), args, cwd, os.Environ(), os.Stdout, os.Stderr))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	code := Run(ctx, args, cwd, os.Environ(), os.Stdout, os.Stderr)
+	stop()
+	os.Exit(code)
 }

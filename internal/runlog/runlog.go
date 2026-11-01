@@ -79,7 +79,8 @@ func (l *Log) StepOutput(id string, chunk []byte) {
 }
 
 // StepFinished writes the step duration and exit code.
-// startErr replaces the exit code when the command did not start.
+// startErr replaces the exit code when the command did not start or was ended
+// by a signal; it is a diagnostic and carries no Exit Code.
 func (l *Log) StepFinished(id string, exitCode *int, startErr error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

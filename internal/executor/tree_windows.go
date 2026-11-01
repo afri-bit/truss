@@ -40,7 +40,7 @@ func prepare(cmd *exec.Cmd) {
 
 // attach puts the suspended shell into a new job object and resumes it.
 func attach(cmd *exec.Cmd) (tree, error) {
-	h, err := syscall.OpenProcess(processTerminate|processSetQuota|processSuspendResume, false, uint32(cmd.Process.Pid))
+	h, err := syscall.OpenProcess(processTerminate|processSetQuota|processSuspendResume, false, uint32(cmd.Process.Pid)) //nolint:gosec // G115: a Windows pid is a DWORD
 	if err != nil {
 		return nil, fmt.Errorf("open process: %w", err)
 	}
@@ -84,3 +84,8 @@ func (j *jobTree) release() {
 
 // signalName: Windows has no POSIX signals, so a missing exit code is unknown.
 func signalName(*os.ProcessState) string { return "unknown" }
+
+// endedByKill: a job-object kill leaves only an exit code, so it cannot be
+// told apart from the shell's own exit. Wait only asks after it issued the
+// kill while the shell had not yet delivered its exit, so that is enough.
+func endedByKill(*os.ProcessState) bool { return true }

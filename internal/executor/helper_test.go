@@ -20,6 +20,8 @@ func TestMain(m *testing.M) {
 	if len(os.Args) > 1 && os.Args[1] == helperFlag {
 		os.Exit(runHelper(os.Args[2:]))
 	}
+	// Helper processes under -race otherwise sleep 1s at exit.
+	_ = os.Setenv("GORACE", "atexit_sleep_ms=0")
 	os.Exit(m.Run())
 }
 

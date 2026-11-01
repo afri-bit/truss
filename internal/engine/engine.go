@@ -35,9 +35,20 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 			out = stepOutput{id: step.ID, events: events}
 		}
 		res, err := executor.Execute(ctx, executor.Request{Run: step.Run, Dir: dir, Env: env, Out: out})
+		if err == nil && res.Stopped && ctx.Err() != nil {
+			// FR-017: the run was interrupted; the stopped Step is not an
+			// ordinary failure and no later Step starts.
+			if events != nil {
+				events.StepFinished(step.ID, res.ExitCode, res.Err)
+			}
+			return run, ctx.Err()
+		}
 		if err != nil {
 			if events != nil {
 				events.StepFinished(step.ID, nil, err)
+			}
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return run, ctxErr
 			}
 			return run, fmt.Errorf("execute step %s: %w", step.ID, err)
 		}
