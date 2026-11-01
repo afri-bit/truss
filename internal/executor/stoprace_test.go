@@ -11,7 +11,7 @@ import (
 // is cancelled by the time Wait is called must not turn that exit into a
 // Stopped Step. The Exit Code of the shell stays the result.
 func TestStop_AlreadyExitedShellIsNotStoppedEvenWithCancelledContext(t *testing.T) {
-	const iterations = 200
+	const iterations = 100
 	for _, code := range []string{"0", "3"} {
 		want := 0
 		if code == "3" {

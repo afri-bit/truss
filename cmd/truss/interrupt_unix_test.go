@@ -91,6 +91,9 @@ func TestMain_InterruptEndsStepsAndKeepsLog(t *testing.T) {
 			if !strings.Contains(errOut, "error:") || !strings.Contains(errOut, "context canceled") {
 				t.Fatalf("stderr = %q, want error: ... context canceled", errOut)
 			}
+			if all := strings.ToLower(withoutSetupDirectory(stdout.String())); strings.Contains(all, "cancelled") {
+				t.Fatalf("stdout reports a cancelled status:\n%s", stdout.String())
+			}
 			requireGone(t, "grandchild", grandchild)
 			requireGone(t, "step process", parent)
 			assertLogUntouched(t, logPath, previous)

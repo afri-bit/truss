@@ -138,3 +138,58 @@ func withoutSetupDirectory(out string) string {
 	}
 	return strings.Join(kept, "\n")
 }
+
+// cancelOnFinishedLine is a stdout that cancels the run's context the moment
+// the run log reports a finished Step. The Step has then ended by itself, so
+// it was never Stopped, and the context is done before the run is judged.
+type cancelOnFinishedLine struct {
+	bytes.Buffer
+	cancel context.CancelFunc
+}
+
+func (w *cancelOnFinishedLine) Write(p []byte) (int, error) {
+	n, err := w.Buffer.Write(p)
+	if strings.Contains(string(p), " finished duration ") {
+		w.cancel()
+	}
+	return n, err
+}
+
+// TestRun_ContextCancelledAfterStepFinishedKeepsLogAndPrintsError covers
+// FR-017: an interrupted run never saves a run log and never prints a normal
+// failure, even when the Step exited on its own before the interrupt landed.
+func TestRun_ContextCancelledAfterStepFinishedKeepsLogAndPrintsError(t *testing.T) {
+	dir := t.TempDir()
+	body := "version: \"1\"\npipeline:\n  name: interrupt\nsteps:\n  - id: bad\n    run: " +
+		yamlSingle(helperCmd("exit", "3")) + "\n  - id: later\n    run: " +
+		yamlSingle(helperCmd("exit", "0")) + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "truss.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(dir, ".truss", "run.log")
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	previous := []byte("previous log\nsecond line\n")
+	if err := os.WriteFile(logPath, previous, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stdout := &cancelOnFinishedLine{cancel: cancel}
+	var stderr bytes.Buffer
+
+	code := Run(ctx, []string{"run"}, dir, os.Environ(), stdout, &stderr)
+
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "error: context canceled") {
+		t.Fatalf("stderr = %q, want it to contain %q (stdout:\n%s)", stderr.String(), "error: context canceled", stdout.String())
+	}
+	if all := strings.ToLower(withoutSetupDirectory(stdout.String())); strings.Contains(all, "failed") || strings.Contains(all, "cancelled") {
+		t.Fatalf("output reports a final status:\n%s", stdout.String())
+	}
+	assertLogUntouched(t, logPath, previous)
+}

@@ -52,7 +52,7 @@ func signalName(st *os.ProcessState) string {
 }
 
 // endedByKill reports whether the shell was terminated by SIGKILL, the signal
-// TRUSS sends to the group. killIssued has already been established by the
+// TRUSS sends to the group. killed has already been established by the
 // caller.
 func endedByKill(st *os.ProcessState) bool {
 	ws, ok := st.Sys().(syscall.WaitStatus)
