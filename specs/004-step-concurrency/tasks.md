@@ -109,7 +109,7 @@ Packages `cmd/truss`, `internal/{pipeline,engine,executor,runlog}`. Tests beside
 
 ### Implementation
 
-- [ ] T024 [US3] `internal/engine/engine.go`: on the first failed outcome or `Start` error record `FailedStep`, cancel the run context, start no more Steps, emit `StepStopped` for Steps whose `Result.Stopped` is true, collect every Step's outcome before returning; return `ctx.Err()` when the parent context was cancelled. Make T021 pass — [high] [PR-B] go-engineer
+- [ ] T024 [US3] **Before the `stopped` line ships:** make Windows `endedByKill` precise — end the job with a distinctive exit code (not a constant true) and have `endedByKill` check it, so a Step that fails on its own is never labelled stopped; update research.md and contracts/execution.md (they say `exit 1`). `internal/engine/engine.go`: on the first failed outcome or `Start` error record `FailedStep`, cancel the run context, start no more Steps, emit `StepStopped` for Steps whose `Result.Stopped` is true, collect every Step's outcome before returning; return `ctx.Err()` when the parent context was cancelled. Make T021 pass — [high] [PR-B] go-engineer
 - [ ] T025 [US3] `cmd/truss/run.go`: `failureLine` uses `run.FailedStep` instead of the last entry in `run.Steps`; `cmd/truss/main.go`: wrap the context with `signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)` (use a build-tag-free form that compiles on Windows). The signal handling and its tests moved into PR-A (review finding: Setpgid without it leaves Steps running after Ctrl-C). Make T022 and T023 pass — [high] [PR-B] go-engineer
 
 **Checkpoint**: US1 to US3 pass together with `-race -count=20`.
