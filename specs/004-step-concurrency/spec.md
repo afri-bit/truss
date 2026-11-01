@@ -16,6 +16,7 @@
 - Q: When should TRUSS end leftover background processes a Step started? → A: When that Step's shell exits. A Step can no longer leave a process running for a later Step; this also applies to sequential runs.
 - Q: Should an interrupt (Ctrl-C or SIGTERM) on `truss` force-end all running Steps? → A: Yes. All running Steps are ended with their whole process trees, `truss` exits non-zero, no log is saved for the interrupted run, and no `cancelled` status appears.
 - Q: When the host reports no Exit Code for a Step (killed by a signal), what does the log show? → A: A diagnostic and no Exit Code, for every Step, never a made-up `-1`.
+- Q: A Step that reads from the terminal (password prompts) hangs on Linux and macOS once Steps run in their own process groups. How should TRUSS handle that? → A: Document it as a limitation. Pipelines are non-interactive; Ctrl-C still ends a hung Step.
 - Q: How is the implementation split? → A: Two pull requests: first process-tree stopping and a thread-safe run log, then the schema field, scheduler, CLI, and docs.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -134,6 +135,7 @@ A developer runs a Pipeline Definition that does not declare a concurrency limit
 - Every Step is independent and the limit is 1: sequential, definition order.
 - The latest run log already exists and the new run is rejected before start: it is unchanged.
 - The same pipeline runs on Linux, macOS, and Windows: validation, ordering, and log shape do not change by host; how a running Step is stopped is specified under Cross-platform.
+- A Step that waits for input from the terminal (a password prompt) is stopped by the terminal on Linux and macOS and waits until `truss` is interrupted. Pipelines are non-interactive.
 - A stopped Step gets no chance to clean up after itself (temporary files, locks). Commands that need cleanup must not rely on running to the end.
 - The developer interrupts `truss` with Ctrl-C or SIGTERM: all running Steps are ended, `truss` exits non-zero, and the existing latest run log is unchanged. No `cancelled` status is reported.
 - A Step starts a background process and exits: the background process is ended when the Step's shell exits.
@@ -201,6 +203,7 @@ A developer runs a Pipeline Definition that does not declare a concurrency limit
 - Output labelling uses the existing `step <id> | ` line form from the local run log, so a sequential log and a concurrent log read the same way.
 - The live log and the saved log are the same text; concurrency does not introduce a second format.
 - Status values stay `succeeded` and `failed`. A stopped Step is `failed` with the Exit Code or diagnostic described in FR-007; it is not reported as `cancelled` or `skipped`.
+- Pipelines are non-interactive: a Step cannot rely on reading from the terminal.
 - Stopping uses no grace period, so TRUSS does not wait for a Step to finish on its own after a failure.
 - "Observed first" is by the order TRUSS records the failures, not by wall-clock time of the commands.
 - An interrupt ends the run without a reported status. Cancellation as a reported status stays out of this release (`docs/MILESTONE.md`).
