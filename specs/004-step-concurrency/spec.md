@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/truss-cursor-to-claude-18fzh9` (assigned by the session; the constitution's name for it would be `feature/004-step-concurrency`)  
 **Created**: 2026-11-01  
-**Status**: Draft  
+**Status**: Implemented  
 **Input**: User description: "Add concurrent step execution. The Pipeline Definition declares a concurrency limit; the default is 1, so a pipeline with no limit stays sequential. A higher limit lets TRUSS start Steps whose Dependencies have all succeeded, up to the limit at the same time, in definition order. A failure still fails the whole Pipeline Run: running Steps are stopped, Steps that have not started never run, and independent branches do not continue. The run log stays readable while Steps run together. Invalid limits are rejected before any command starts."
 
 ## Clarifications

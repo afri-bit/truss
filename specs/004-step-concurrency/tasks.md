@@ -66,13 +66,13 @@ Packages `cmd/truss`, `internal/{pipeline,engine,executor,runlog}`. Tests beside
 
 ### Tests first
 
-- [ ] T014 [P] [US1] In `internal/pipeline/parse_test.go` and `plan_test.go` add failing tests: `concurrency: 2` parses to `Pipeline.Concurrency == 2`; omitted gives 0; `Plan` copies a value of at least 1 (0 becomes 1) — [high] [PR-B] test-writer
-- [ ] T015 [P] [US1] In `internal/engine/engine_test.go` add failing tests `TestRun_Concurrent*` for spec scenarios 1–6: rendezvous pair succeeds at limit 2 and fails by deadline at limit 1; `a,b,c` at limit 2 (c starts only after a finish; assert via event order and a counter that never exceeds the limit); `build/lint/test(needs build)` at limit 3; `a,b(needs a),c,d(needs c)` at limit 2; limit larger than ready Steps; strict chain at limit 2 runs one at a time. Use a fake `StepEvents` that records order — [high] [PR-B] test-writer
+- [x] T014 [P] [US1] In `internal/pipeline/parse_test.go` and `plan_test.go` add failing tests: `concurrency: 2` parses to `Pipeline.Concurrency == 2`; omitted gives 0; `Plan` copies a value of at least 1 (0 becomes 1) — [high] [PR-B] test-writer
+- [x] T015 [P] [US1] In `internal/engine/engine_test.go` add failing tests `TestRun_Concurrent*` for spec scenarios 1–6: rendezvous pair succeeds at limit 2 and fails by deadline at limit 1; `a,b,c` at limit 2 (c starts only after a finish; assert via event order and a counter that never exceeds the limit); `build/lint/test(needs build)` at limit 3; `a,b(needs a),c,d(needs c)` at limit 2; limit larger than ready Steps; strict chain at limit 2 runs one at a time. Use a fake `StepEvents` that records order — [high] [PR-B] test-writer
 
 ### Implementation
 
-- [ ] T016 [US1] `internal/pipeline/model.go`, `parse.go`, `plan.go`: add `Pipeline.Concurrency`, `ExecutionPlan.Concurrency`, `PipelineRun.FailedStep`, `StepRun.StoppedBy`; parse a valid decimal `!!int` of at least 1 under `pipeline.concurrency` (clamp to `math.MaxInt` on overflow); `Plan` copies a normalized value. Rejections come in US4 — [high] [PR-B] go-engineer
-- [ ] T017 [US1] `internal/engine/engine.go`, `log.go`: implement the scheduler from research.md ("Scheduling"): one goroutine owns state; scan `p.Steps` in definition order; start synchronously while running < limit and every need succeeded; reserve the Step's slot in `run.Steps`; `Wait` in a goroutine reporting on a channel; call `StepStarted`/`StepOutput`/`StepFinished` as today; add `StepStopped(id, failedID string)` to `StepEvents`; keep `Plan(p)` validation. Make T015 pass; failure handling is US3 — [high] [PR-B] go-engineer
+- [x] T016 [US1] `internal/pipeline/model.go`, `parse.go`, `plan.go`: add `Pipeline.Concurrency`, `ExecutionPlan.Concurrency`, `PipelineRun.FailedStep`, `StepRun.StoppedBy`; parse a valid decimal `!!int` of at least 1 under `pipeline.concurrency` (clamp to `math.MaxInt` on overflow); `Plan` copies a normalized value. Rejections come in US4 — [high] [PR-B] go-engineer
+- [x] T017 [US1] `internal/engine/engine.go`, `log.go`: implement the scheduler from research.md ("Scheduling"): one goroutine owns state; scan `p.Steps` in definition order; start synchronously while running < limit and every need succeeded; reserve the Step's slot in `run.Steps`; `Wait` in a goroutine reporting on a channel; call `StepStarted`/`StepOutput`/`StepFinished` as today; add `StepStopped(id, failedID string)` to `StepEvents`; keep `Plan(p)` validation. Make T015 pass; failure handling is US3 — [high] [PR-B] go-engineer
 
 **Checkpoint**: US1 passes on its own with `go test -race -count=20 -run Concurren ./internal/engine`.
 
@@ -86,12 +86,12 @@ Packages `cmd/truss`, `internal/{pipeline,engine,executor,runlog}`. Tests beside
 
 ### Tests first
 
-- [ ] T018 [P] [US2] In `cmd/truss/run_test.go` add failing tests: overlapping Steps (helper `print-lines`) produce only complete lines each with one `step <id> |` label; each Step's lines are in order; timestamps never go backwards; `.truss/run.log` equals stdout; a partial line (`partial`) appears once, complete, at Step end — [high] [PR-B] test-writer
-- [ ] T019 [P] [US2] In `cmd/truss/run_test.go` add failing tests: setup section and summary unchanged (status, Steps started, duration, finish time); started Steps listed in start order; no line shows the limit, any `needs`, or any environment variable name or value — [high] [PR-B] test-writer
+- [x] T018 [P] [US2] In `cmd/truss/run_test.go` add failing tests: overlapping Steps (helper `print-lines`) produce only complete lines each with one `step <id> |` label; each Step's lines are in order; timestamps never go backwards; `.truss/run.log` equals stdout; a partial line (`partial`) appears once, complete, at Step end — [high] [PR-B] test-writer
+- [x] T019 [P] [US2] In `cmd/truss/run_test.go` add failing tests: setup section and summary unchanged (status, Steps started, duration, finish time); started Steps listed in start order; no line shows the limit, any `needs`, or any environment variable name or value — [high] [PR-B] test-writer
 
 ### Implementation
 
-- [ ] T020 [US2] Run T018 and T019 with `-race -count=20`. Fix gaps only in `internal/runlog/runlog.go` or `cmd/truss/run.go` (expected: none after T012 and T017). Record in the commit message if nothing needed changing — [high] [PR-B] go-engineer
+- [x] T020 [US2] Run T018 and T019 with `-race -count=20`. Fix gaps only in `internal/runlog/runlog.go` or `cmd/truss/run.go` (expected: none after T012 and T017). Record in the commit message if nothing needed changing — [high] [PR-B] go-engineer
 
 ---
 
@@ -103,14 +103,14 @@ Packages `cmd/truss`, `internal/{pipeline,engine,executor,runlog}`. Tests beside
 
 ### Tests first
 
-- [ ] T021 [P] [US3] In `internal/engine/engine_test.go` add failing tests `TestRun_Stop*`: failed `a` stops running `b` (event `StepStopped(b, a)` before `StepFinished(b)`); ready but unstarted `c` never starts and is absent from `run.Steps`; start failure while another Step runs (diagnostic, no Exit Code, other Step stopped); two near-simultaneous failures keep both Exit Codes and `FailedStep` is the first recorded; the grandchild pid of a stopped Step is gone after `Run` returns; a Step that exits 0 during the stop is `succeeded` — [high] [PR-B] test-writer
-- [ ] T022 [P] [US3] In `cmd/truss/run_test.go` add failing tests: failed concurrent run → exit 1, summary failed, error line names the pipeline and `FailedStep`, stopped line placed right before the finish line, saved log equals stdout, no marker file; a Step killed by an external signal shows `error <diagnostic>` and no `exit` (Unix) — [high] [PR-B] test-writer
-- [ ] T023 [P] [US3] In `cmd/truss/run_test.go` and `cmd/truss/main_test.go` add failing tests for FR-017: cancelling the context passed to `Run` while Steps run ends all Steps and their tree, prints `error: context canceled`, exits 1, leaves an existing `.truss/run.log` byte-for-byte unchanged, shows no `cancelled`; the context-cancel test runs on all three OSes; on Unix a second test builds the binary, sends SIGINT and SIGTERM, and checks the same; on Windows the console Ctrl-C is checked by hand and noted in the PR (SIGTERM does not exist there) — [high] [PR-B] test-writer
+- [x] T021 [P] [US3] In `internal/engine/engine_test.go` add failing tests `TestRun_Stop*`: failed `a` stops running `b` (event `StepStopped(b, a)` before `StepFinished(b)`); ready but unstarted `c` never starts and is absent from `run.Steps`; start failure while another Step runs (diagnostic, no Exit Code, other Step stopped); two near-simultaneous failures keep both Exit Codes and `FailedStep` is the first recorded; the grandchild pid of a stopped Step is gone after `Run` returns; a Step that exits 0 during the stop is `succeeded` — [high] [PR-B] test-writer
+- [x] T022 [P] [US3] In `cmd/truss/run_test.go` add failing tests: failed concurrent run → exit 1, summary failed, error line names the pipeline and `FailedStep`, stopped line placed right before the finish line, saved log equals stdout, no marker file; a Step killed by an external signal shows `error <diagnostic>` and no `exit` (Unix) — [high] [PR-B] test-writer
+- [x] T023 [P] [US3] In `cmd/truss/run_test.go` and `cmd/truss/main_test.go` add failing tests for FR-017: cancelling the context passed to `Run` while Steps run ends all Steps and their tree, prints `error: context canceled`, exits 1, leaves an existing `.truss/run.log` byte-for-byte unchanged, shows no `cancelled`; the context-cancel test runs on all three OSes; on Unix a second test builds the binary, sends SIGINT and SIGTERM, and checks the same; on Windows the console Ctrl-C is checked by hand and noted in the PR (SIGTERM does not exist there) — [high] [PR-B] test-writer
 
 ### Implementation
 
 - [x] T024 [US3] **Done in PR-A after the Windows CI failure:** make Windows `endedByKill` precise — end the job with a distinctive exit code (not a constant true) and have `endedByKill` check it, so a Step that fails on its own is never labelled stopped; update research.md and contracts/execution.md (they say `exit 1`). `internal/engine/engine.go`: on the first failed outcome or `Start` error record `FailedStep`, cancel the run context, start no more Steps, emit `StepStopped` for Steps whose `Result.Stopped` is true, collect every Step's outcome before returning; return `ctx.Err()` when the parent context was cancelled. Make T021 pass — [high] [PR-B] go-engineer
-- [ ] T025 [US3] `cmd/truss/run.go`: `failureLine` uses `run.FailedStep` instead of the last entry in `run.Steps`; `cmd/truss/main.go`: wrap the context with `signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)` (use a build-tag-free form that compiles on Windows). The signal handling and its tests moved into PR-A (review finding: Setpgid without it leaves Steps running after Ctrl-C). Make T022 and T023 pass — [high] [PR-B] go-engineer
+- [x] T025 [US3] `cmd/truss/run.go`: `failureLine` uses `run.FailedStep` instead of the last entry in `run.Steps`; `cmd/truss/main.go`: wrap the context with `signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)` (use a build-tag-free form that compiles on Windows). The signal handling and its tests moved into PR-A (review finding: Setpgid without it leaves Steps running after Ctrl-C). Make T022 and T023 pass — [high] [PR-B] go-engineer
 
 **Checkpoint**: US1 to US3 pass together with `-race -count=20`.
 
@@ -124,13 +124,13 @@ Packages `cmd/truss`, `internal/{pipeline,engine,executor,runlog}`. Tests beside
 
 ### Tests first
 
-- [ ] T026 [P] [US4] In `internal/pipeline/parse_test.go` and `validate_test.go` add failing table tests: `0`, `-1`, `1.5`, `1.0`, `"two"`, `"3"`, `true`, `[]`, `{}`, empty, `null`, `0x10`, `0o7`, `1_000`, `+3` each rejected with `pipeline concurrency must be a whole number of at least 1, got "<value>"` (`got a list`/`got a mapping`); unknown field at top level, under `pipeline`, in a Step, and in a Step without an id (`in step N`) each rejected with the messages in contracts/pipeline-v1.md; check order (version, unknown field, name, concurrency, steps, id, run, needs); a valid limit with a bad graph gives the existing needs error; a definition with only recognised fields is accepted. **Rewrite** `parse_test.go` "depends_on is ignored" and `validate_test.go` `TestValidate_DependsOnIsNotNeeds` to expect the `unknown field "depends_on" in step "<id>"` rejection (FR-016 replaces the old rule; say so in the commit message) — [high] [PR-B] test-writer
-- [ ] T027 [P] [US4] In `cmd/truss/run_test.go` add failing tests: each invalid value and a misspelled `concurency` run no command (marker absent), exit 1, print `error: ...`, and leave an existing `.truss/run.log` byte-for-byte unchanged. **Rewrite** `TestRun_DependsOnIsNotADependency` to expect rejection with exit 1 and no Step run — [high] [PR-B] test-writer
+- [x] T026 [P] [US4] In `internal/pipeline/parse_test.go` and `validate_test.go` add failing table tests: `0`, `-1`, `1.5`, `1.0`, `"two"`, `"3"`, `true`, `[]`, `{}`, empty, `null`, `0x10`, `0o7`, `1_000`, `+3` each rejected with `pipeline concurrency must be a whole number of at least 1, got "<value>"` (`got a list`/`got a mapping`); unknown field at top level, under `pipeline`, in a Step, and in a Step without an id (`in step N`) each rejected with the messages in contracts/pipeline-v1.md; check order (version, unknown field, name, concurrency, steps, id, run, needs); a valid limit with a bad graph gives the existing needs error; a definition with only recognised fields is accepted. **Rewrite** `parse_test.go` "depends_on is ignored" and `validate_test.go` `TestValidate_DependsOnIsNotNeeds` to expect the `unknown field "depends_on" in step "<id>"` rejection (FR-016 replaces the old rule; say so in the commit message) — [high] [PR-B] test-writer
+- [x] T027 [P] [US4] In `cmd/truss/run_test.go` add failing tests: each invalid value and a misspelled `concurency` run no command (marker absent), exit 1, print `error: ...`, and leave an existing `.truss/run.log` byte-for-byte unchanged. **Rewrite** `TestRun_DependsOnIsNotADependency` to expect rejection with exit 1 and no Step run — [high] [PR-B] test-writer
 
 ### Implementation
 
-- [ ] T028 [US4] `internal/pipeline/parse.go`, `model.go`: extend the node walk with a `default:` branch at the three levels recording the first unknown key and its location; detect an invalid `concurrency` node (null, empty, wrong tag, non-decimal text, sequence, mapping) and keep its source text; do not fail `Parse` for these (schema checks stay in `Validate`) — [high] [PR-B] go-engineer
-- [ ] T029 [US4] `internal/pipeline/validate.go`: report the unknown field and the invalid limit in the order and with the messages of contracts/pipeline-v1.md; also reject a negative `Concurrency` set from Go code; existing messages unchanged. Make T026 and T027 pass — [high] [PR-B] go-engineer
+- [x] T028 [US4] `internal/pipeline/parse.go`, `model.go`: extend the node walk with a `default:` branch at the three levels recording the first unknown key and its location; detect an invalid `concurrency` node (null, empty, wrong tag, non-decimal text, sequence, mapping) and keep its source text; do not fail `Parse` for these (schema checks stay in `Validate`) — [high] [PR-B] go-engineer
+- [x] T029 [US4] `internal/pipeline/validate.go`: report the unknown field and the invalid limit in the order and with the messages of contracts/pipeline-v1.md; also reject a negative `Concurrency` set from Go code; existing messages unchanged. Make T026 and T027 pass — [high] [PR-B] go-engineer
 
 ---
 
@@ -142,23 +142,23 @@ Packages `cmd/truss`, `internal/{pipeline,engine,executor,runlog}`. Tests beside
 
 ### Tests first
 
-- [ ] T030 [P] [US5] In `internal/engine/engine_test.go` add tests: for every spec 003 table (`TestPlan`/engine order tables), at limit 1 the scheduler's start order equals `pipeline.Plan(p).Steps`; omitted and `1` give identical events — [high] [PR-B] test-writer
-- [ ] T031 [P] [US5] In `cmd/truss/run_test.go` add tests: the spec 003 successful and failed definitions with no limit and with `concurrency: 1` produce the spec 002/003 log shape (timestamps stripped) and exit codes; a Step that starts a background process (`spawn-grandchild`) and exits 0 has that process ended when the Step finishes (FR-014); each Step still runs in the invoker's working directory with the invoker's environment and no command other than the Step `run` strings runs (FR-015) — [high] [PR-B] test-writer
+- [x] T030 [P] [US5] In `internal/engine/engine_test.go` add tests: for every spec 003 table (`TestPlan`/engine order tables), at limit 1 the scheduler's start order equals `pipeline.Plan(p).Steps`; omitted and `1` give identical events — [high] [PR-B] test-writer
+- [x] T031 [P] [US5] In `cmd/truss/run_test.go` add tests: the spec 003 successful and failed definitions with no limit and with `concurrency: 1` produce the spec 002/003 log shape (timestamps stripped) and exit codes; a Step that starts a background process (`spawn-grandchild`) and exits 0 has that process ended when the Step finishes (FR-014); each Step still runs in the invoker's working directory with the invoker's environment and no command other than the Step `run` strings runs (FR-015) — [high] [PR-B] test-writer
 
 ### Implementation
 
-- [ ] T032 [US5] Run T030 and T031. Fix any gap in `internal/engine/engine.go` or `cmd/truss/run.go`; if nothing fails, record that in the commit message. Do not weaken either test — [high] [PR-B] go-engineer
+- [x] T032 [US5] Run T030 and T031. Fix any gap in `internal/engine/engine.go` or `cmd/truss/run.go`; if nothing fails, record that in the commit message. Do not weaken either test — [high] [PR-B] go-engineer
 
 ---
 
 ## Phase 8: Polish and cross-cutting (PR-B)
 
-- [ ] T033 [P] Extend `.github/scripts/e2e-test.sh` with: a concurrent success (helper-built binary or `go run` of a tiny rendezvous program so it works under `sh` and Git Bash), a fail-fast stop with no marker, and an unknown-field rejection; run in CI on three OSes — [high] [PR-B] devops-engineer
-- [ ] T034 [P] `README.md`: document `pipeline.concurrency`, `needs`, the recognised fields, the `stopped` line, interrupt, and repair the "Output" section to match the run-log contract — [low] [PR-B] docs-writer
-- [ ] T035 [P] `CHANGELOG.md` `[Unreleased]`: add entries for specs 002 and 003 (missing today) and for 004 — Added (concurrency, `stopped` line, interrupt handling); Changed (unknown fields rejected, leftover processes ended at Step end, signal diagnostic instead of `-1`) — [low] [PR-B] docs-writer
-- [ ] T036 [P] `docs/MILESTONE.md`: add spec 004 to the "Already specified" table and update the "next specification" paragraph — [low] [PR-B] docs-writer
-- [ ] T037 `docs/decisions/0002-step-concurrency-and-process-trees.md` via `/adr`: optional `concurrency` in schema v1, strict fields, process-tree ownership per OS, stdlib-only Windows job object, Exit Code of a stopped Step, leftover cleanup at Step end, interrupt handling; status `Proposed` — [high] [PR-B] docs-writer
-- [ ] T038 [P] `docs/GLOSSARY.md`: check "Concurrent Execution" and "Status"; edit only if wrong (expected: no change) — [low] [PR-B] docs-writer
+- [x] T033 [P] Extend `.github/scripts/e2e-test.sh` with: a concurrent success (helper-built binary or `go run` of a tiny rendezvous program so it works under `sh` and Git Bash), a fail-fast stop with no marker, and an unknown-field rejection; run in CI on three OSes — [high] [PR-B] devops-engineer
+- [x] T034 [P] `README.md`: document `pipeline.concurrency`, `needs`, the recognised fields, the `stopped` line, interrupt, and repair the "Output" section to match the run-log contract — [low] [PR-B] docs-writer
+- [x] T035 [P] `CHANGELOG.md` `[Unreleased]`: add entries for specs 002 and 003 (missing today) and for 004 — Added (concurrency, `stopped` line, interrupt handling); Changed (unknown fields rejected, leftover processes ended at Step end, signal diagnostic instead of `-1`) — [low] [PR-B] docs-writer
+- [x] T036 [P] `docs/MILESTONE.md`: add spec 004 to the "Already specified" table and update the "next specification" paragraph — [low] [PR-B] docs-writer
+- [x] T037 `docs/decisions/0002-step-concurrency-and-process-trees.md` via `/adr`: optional `concurrency` in schema v1, strict fields, process-tree ownership per OS, stdlib-only Windows job object, Exit Code of a stopped Step, leftover cleanup at Step end, interrupt handling; status `Proposed` — [high] [PR-B] docs-writer
+- [x] T038 [P] `docs/GLOSSARY.md`: check "Concurrent Execution" and "Status"; edit only if wrong (expected: no change) — [low] [PR-B] docs-writer
 - [ ] T039 Run `/verify` (gofmt, vet, golangci-lint, `go test -race ./...`, `-count=20` stress, e2e); then `/review` with `reviewer`, `spec-reviewer`, `security-reviewer`, `portability-reviewer`; fix blockers; update the work state and `/handoff` — [high] [PR-B] orchestrator
 - [ ] T040 Tick finished tasks in this file, set `Status: Implemented` in `spec.md` and the checklist, list open tasks in the PR description — [low] [PR-B] docs-writer
 
