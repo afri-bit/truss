@@ -175,6 +175,12 @@ func failureLine(run pipeline.PipelineRun) string {
 		return run.Name + " failed"
 	}
 	step := run.Steps[len(run.Steps)-1]
+	for _, s := range run.Steps {
+		if s.ID == run.FailedStep {
+			step = s
+			break
+		}
+	}
 	if step.Error != "" {
 		return fmt.Sprintf("%s failed at %s: %s", run.Name, step.ID, step.Error)
 	}
