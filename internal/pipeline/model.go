@@ -1,6 +1,9 @@
 package pipeline
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Status is the outcome of a pipeline run or a step run.
 type Status string
@@ -141,4 +144,30 @@ type PipelineRun struct {
 	// FailedStep is the id of the first failure the scheduler recorded. It is
 	// empty when the run succeeded.
 	FailedStep string
+}
+
+// Failure returns one line that names the pipeline, the step that failed
+// first and its exit code or diagnostic. It is meant for a failed run.
+func (r PipelineRun) Failure() string {
+	if len(r.Steps) == 0 {
+		if r.Error != "" {
+			return r.Error
+		}
+		return r.Name + " failed"
+	}
+	step := r.Steps[len(r.Steps)-1]
+	for _, s := range r.Steps {
+		if s.ID == r.FailedStep {
+			step = s
+			break
+		}
+	}
+	if step.Error != "" {
+		return fmt.Sprintf("%s failed at %s: %s", r.Name, step.ID, step.Error)
+	}
+	code := 0
+	if step.ExitCode != nil {
+		code = *step.ExitCode
+	}
+	return fmt.Sprintf("%s failed at %s (exit %d)", r.Name, step.ID, code)
 }

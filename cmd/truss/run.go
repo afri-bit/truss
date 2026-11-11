@@ -60,7 +60,7 @@ func Run(ctx context.Context, args []string, cwd string, env []string, stdout, s
 	if abs, absErr := filepath.Abs(cwd); absErr == nil {
 		dir = abs
 	}
-	log.Setup(hostOS(runtime.GOOS), runtime.GOARCH, executor.Shell(), dir)
+	log.Setup(runlog.OSName(runtime.GOOS), runtime.GOARCH, executor.Shell(), dir)
 	run, err := engine.Run(ctx, def, cwd, env, log)
 	if err != nil {
 		discardRunLog(tmp, tmpPath)
@@ -74,7 +74,7 @@ func Run(ctx context.Context, args []string, cwd string, env []string, stdout, s
 		return 1
 	}
 	if run.Status != pipeline.StatusSucceeded {
-		log.SummaryFailed(len(run.Steps), failureLine(run))
+		log.SummaryFailed(len(run.Steps), run.Failure())
 		if err := commitRunLog(tmp, tmpPath, dest); err != nil {
 			fmt.Fprintf(stderr, "error: %s\n", err.Error())
 			return 1
@@ -152,41 +152,4 @@ func isVersion(args []string) bool {
 
 func isRun(args []string) bool {
 	return len(args) >= 1 && len(args) <= 2 && args[0] == "run"
-}
-
-func hostOS(goos string) string {
-	switch goos {
-	case "darwin":
-		return "macOS"
-	case "linux":
-		return "linux"
-	case "windows":
-		return "windows"
-	default:
-		return goos
-	}
-}
-
-func failureLine(run pipeline.PipelineRun) string {
-	if len(run.Steps) == 0 {
-		if run.Error != "" {
-			return run.Error
-		}
-		return run.Name + " failed"
-	}
-	step := run.Steps[len(run.Steps)-1]
-	for _, s := range run.Steps {
-		if s.ID == run.FailedStep {
-			step = s
-			break
-		}
-	}
-	if step.Error != "" {
-		return fmt.Sprintf("%s failed at %s: %s", run.Name, step.ID, step.Error)
-	}
-	code := 0
-	if step.ExitCode != nil {
-		code = *step.ExitCode
-	}
-	return fmt.Sprintf("%s failed at %s (exit %d)", run.Name, step.ID, code)
 }
