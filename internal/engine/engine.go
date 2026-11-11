@@ -2,7 +2,11 @@ package engine
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
+	"path/filepath"
+	"sort"
 
 	"github.com/afri-bit/truss/internal/executor"
 	"github.com/afri-bit/truss/internal/pipeline"
@@ -12,6 +16,10 @@ import (
 // of Steps at once. dir and env are captured by the caller and reused for every
 // step. events, when set, receives each started step. A nil events value skips
 // those calls and writes no transcript.
+//
+// A Step may add environment variables, name its own working directory and
+// set a timeout; a Step that runs past its timeout fails with a diagnostic
+// and no Exit Code.
 //
 // One scheduler goroutine owns all state. Steps start in definition order once
 // every Step they need has succeeded. On the first failure the remaining
@@ -45,14 +53,14 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 		res  executor.Result
 	}
 	done := make(chan outcome)
-	started := make(map[string]bool, len(p.Steps))
-	succeeded := make(map[string]bool, len(p.Steps))
+	started := make(map[string]bool, len(plan.Graph))
+	succeeded := make(map[string]bool, len(plan.Graph))
 	running := 0
 	failed := false
 
 	for {
 		// Start every ready Step, in definition order, while a slot is free.
-		for _, step := range p.Steps {
+		for _, step := range plan.Graph {
 			if failed || ctx.Err() != nil || running >= limit {
 				break
 			}
@@ -65,7 +73,7 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 				events.StepStarted(step.ID)
 				out = stepOutput{id: step.ID, events: events}
 			}
-			proc, err := executor.Start(runCtx, executor.Request{Run: step.Run, Dir: dir, Env: env, Out: out})
+			proc, err := executor.Start(runCtx, executor.Request{Run: step.Run, Dir: stepDir(dir, step.Dir), Env: stepEnv(env, step.Env), Out: out})
 			slot := len(run.Steps)
 			run.Steps = append(run.Steps, pipeline.StepRun{})
 			if err != nil {
@@ -80,9 +88,23 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 				break
 			}
 			running++
-			go func(slot int, id string) {
-				done <- outcome{slot: slot, id: id, res: proc.Wait(runCtx)}
-			}(slot, step.ID)
+			go func(slot int, step pipeline.Step) {
+				waitCtx := runCtx
+				if step.Timeout > 0 {
+					var release context.CancelFunc
+					waitCtx, release = context.WithTimeout(runCtx, step.Timeout)
+					defer release()
+				}
+				res := proc.Wait(waitCtx)
+				o := outcome{slot: slot, id: step.ID, res: res}
+				if res.Stopped && runCtx.Err() == nil && errors.Is(waitCtx.Err(), context.DeadlineExceeded) {
+					// The step's own limit ended it, not a failure elsewhere.
+					o.res.Stopped = false
+					o.res.ExitCode = nil
+					o.res.Err = fmt.Errorf("timed out after %s", step.Timeout)
+				}
+				done <- o
+			}(slot, step)
 		}
 		if running == 0 {
 			break
@@ -128,6 +150,35 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 		return run, err
 	}
 	return run, nil
+}
+
+// stepDir resolves a step's working directory against the run directory.
+func stepDir(runDir, dir string) string {
+	if dir == "" || filepath.IsAbs(dir) {
+		if dir == "" {
+			return runDir
+		}
+		return dir
+	}
+	return filepath.Join(runDir, dir)
+}
+
+// stepEnv returns the run environment with the step's variables appended.
+// A later entry wins when the process starts, so step values override.
+func stepEnv(base []string, extra map[string]string) []string {
+	if len(extra) == 0 {
+		return base
+	}
+	names := make([]string, 0, len(extra))
+	for name := range extra {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	env := append([]string(nil), base...)
+	for _, name := range names {
+		env = append(env, name+"="+extra[name])
+	}
+	return env
 }
 
 func allDone(ids []string, done map[string]bool) bool {
