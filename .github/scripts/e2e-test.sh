@@ -109,7 +109,9 @@ line_no() {
 # is never created.
 mark_and_wait() {
 	if $windows; then
-		printf 'echo x> %s & for /l %%i in (1,1,1000) do @if not exist %s ping -n 1 127.0.0.1 >nul' "$1" "$2"
+		# The loop is parenthesized: in cmd, text after "if ... cmd &" on the same
+		# line belongs to the if, so a chained command would be skipped.
+		printf 'echo x> %s & (for /l %%i in (1,1,1000) do @if not exist %s ping -n 1 127.0.0.1 >nul)' "$1" "$2"
 	else
 		printf 'echo x > %s; i=0; while [ ! -f %s ] && [ $i -lt 400 ]; do i=$((i + 1)); sleep 0.05; done' "$1" "$2"
 	fi
@@ -294,7 +296,6 @@ slow_then="echo x > slow-ran.txt"
 never_cmd="echo x > never-ran.txt"
 if $windows; then
 	chain="&"
-	# After "&", cmd /c reports 0 for "exit /b 3". Plain "exit 3" ends cmd with that code.
 	bad_exit="exit 3"
 	slow_then="echo x> slow-ran.txt"
 	never_cmd="echo x> never-ran.txt"
