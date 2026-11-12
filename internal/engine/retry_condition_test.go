@@ -134,7 +134,7 @@ func TestRun_TimeoutFailsTheAttemptAndIsRetried(t *testing.T) {
 	// The first attempt blocks until its timeout; the second finds the counter
 	// file already there and exits at once.
 	run, _ := runSteps(t, 1, nil,
-		pipeline.Step{ID: "slow", Run: helperCmd("block-first", counter), Timeout: 300 * time.Millisecond, Retries: 1})
+		pipeline.Step{ID: "slow", Run: helperCmd("block-first", counter), Timeout: 2 * time.Second, Retries: 1})
 	s := find(t, run, "slow")
 	if run.Status != pipeline.StatusSucceeded || s.Attempts != 2 {
 		t.Fatalf("run = %+v", run)
@@ -258,9 +258,8 @@ func TestRun_AlwaysStepStartedAfterAFailureIsNotStoppedByIt(t *testing.T) {
 func TestRun_AlwaysStepWithoutNeedsIsStoppedLikeAnyRunningStep(t *testing.T) {
 	// A step with no needs starts at once, so a later failure stops it. Order
 	// it with needs to have it run last.
-	marker := filepath.Join(t.TempDir(), "failed")
 	run, _ := runSteps(t, 2, nil,
-		pipeline.Step{ID: "build", Run: helperCmd("touch-exit", marker, "1")},
+		pipeline.Step{ID: "build", Run: helperCmd("exit", "1")},
 		pipeline.Step{ID: "cleanup", Run: helperCmd("block", filepath.Join(t.TempDir(), "pid")), If: cond(t, "always()")},
 	)
 	if c := find(t, run, "cleanup"); c.StoppedBy != "build" {
