@@ -91,6 +91,29 @@ func await(t *testing.T, m *Manager, id string, statuses ...string) api.Run {
 	}
 }
 
+// awaitStep polls until the step of the run has the given status. A run is
+// "running" slightly before its first step starts, so tests that act on a
+// step wait for the step itself.
+func awaitStep(t *testing.T, m *Manager, id, step, status string) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		run, err := m.Get(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range run.Steps {
+			if s.ID == step && s.Status == status {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("step %s of run %s never became %s: %+v", step, id, status, run.Steps)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 func release(t *testing.T, gate string) {
 	t.Helper()
 	if err := os.WriteFile(gate, nil, 0o600); err != nil {
@@ -219,6 +242,7 @@ func TestCancel_EndsARunningRunAndAQueuedRun(t *testing.T) {
 	d := def("p", "", pipeline.Step{ID: "wait", Run: waitFor(gate)}, pipeline.Step{ID: "after", Run: "echo x", Needs: []string{"wait"}})
 	first, second := submit(t, m, "p", d), submit(t, m, "p", d)
 	await(t, m, first.ID, api.RunRunning)
+	awaitStep(t, m, first.ID, "wait", api.StepRunning)
 
 	if got, err := m.Cancel(second.ID); err != nil || got.Status != api.RunCancelled {
 		t.Fatalf("cancel queued: %+v %v", got, err)
