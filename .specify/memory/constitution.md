@@ -1,20 +1,18 @@
 <!--
 Sync Impact Report
-- Version change: 1.2.0 → 1.3.0
-- Modified principles: V (runtime independence names Claude Code, not Cursor)
-- Added principles: VI. Supervised Agentic Delivery
-- Added sections: Agentic Operation (modes, agent team, orchestration, agent-to-agent protocol,
-  shared workspace, rules/skills/hooks, autonomy limits, memory, change control)
-- Removed sections: Branching tooling note (Spec Kit 1.2.x no longer infers the spec folder from
-  the branch name, so the prefixed-branch workaround is obsolete)
+- Version change: 1.3.0 → 2.0.0
+- Modified principles: I (a specification records behavior; it no longer gates code),
+  III (tests ship with the behavior; test-first is recommended, not mandatory),
+  VI (the maintainer may widen autonomy for a session)
+- Modified sections: Agentic Operation / Orchestration (delegation and the Spec Kit sequence are
+  tools, not obligations), Autonomy limits, Quality Gates 1-3
+- Reason: the maintainer asked for the MVP (daemon, schedules, registry, desktop) to be built
+  without the process holding it back. See docs/decisions/0005-specs-record-they-do-not-gate.md
 - Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ branch placeholder prefixed; Constitution Check lists principle VI
-  - .specify/templates/spec-template.md ✅ branch placeholder prefixed
-  - .specify/templates/tasks-template.md ✅ no branch references
-  - AGENTS.md ✅ updated: tooling section names `.claude/` and `.agent/`
-  - CLAUDE.md, docs/agents.md, .claude/rules/agent-team.md ✅ implement the Agentic Operation section
-  - .cursor/ ✅ removed; the Spec Kit integration is now `claude`
-- Follow-up TODOs: add principle VI to the plan template's Constitution Check
+  - CLAUDE.md, AGENTS.md, .claude/rules/tdd.md, .claude/rules/go-architecture.md ✅ updated
+  - docs/agents.md and the /feature skill ⚠ still describe the full pipeline as mandatory;
+    read them as the recommended flow for contract and execution-safety work
+- Follow-up TODOs: align docs/agents.md and .claude/skills/feature with 2.0.0
 -->
 
 
@@ -22,25 +20,32 @@ Sync Impact Report
 
 ## Core Principles
 
-### I. Specification-Governed Behavior
+### I. Specified Behavior
 
-TRUSS is developed with Spec-Driven Development. Required behavior MUST
-be defined in `specs/<feature>/spec.md` before implementation of new
-capabilities or behavioral changes. Technical decisions MUST live in
-`plan.md`. Implementation work MUST live in `tasks.md`.
+Behavior that users or integrations can depend on MUST be written down in
+`specs/<feature>/spec.md`: what it does, why, and how to tell that it
+works. A specification is a record of intent, not a gate. It MAY be
+written before, during, or right after the implementation, and it MUST be
+part of the same pull request as the behavior it describes.
+
+`spec.md` is the only required artifact. `plan.md`, `tasks.md`, contracts
+and the other Spec Kit outputs are aids: use them when a change is large
+or risky enough to need them, skip them when it is not. Technical
+decisions that outlive a feature belong in a decision record under
+`docs/decisions/`.
 
 Source code records the current implementation, not automatically the
 intended behavior. When implementation and specification disagree, the
-discrepancy MUST be identified before either side is changed. Agents and
-contributors MUST NOT invent requirements, silently expand scope, or
-resolve material ambiguity by arbitrary choice.
+discrepancy MUST be named before either side is changed. Material
+ambiguity MUST be surfaced: either ask, or decide and record the decision
+where a reviewer will see it.
 
 Mechanical changes (formatting, typo fixes, dependency maintenance, or
-equivalent refactoring) MAY proceed without a new specification only when
-observable behavior is unchanged.
+equivalent refactoring) need no specification.
 
-**Rationale**: Portable pipeline behavior must be reviewable and testable
-independently of any one implementation language or contributor.
+**Rationale**: Portable pipeline behavior must be reviewable independently
+of the code. A specification earns its keep by being read, not by being
+written first.
 
 ### II. Idiomatic Go Quality
 
@@ -66,34 +71,26 @@ mutable state MUST NOT be introduced without a demonstrated need.
 **Rationale**: Consistent Go practice keeps the engine reviewable,
 testable, and safe under cancellation and failure.
 
-### III. Testable Behavior (NON-NEGOTIABLE)
+### III. Tested Behavior (NON-NEGOTIABLE)
 
-Behavior implemented from a specification MUST be testable. New behavior
-and behavioral changes MUST be developed test-first:
+New behavior and behavioral changes MUST ship with tests in the same
+change. Tests MUST assert observable behavior rather than internal
+implementation details. Mechanical changes that do not alter observable
+behavior MAY proceed without a new test.
 
-1. Write or update a test that asserts the specified observable behavior.
-2. Run it and confirm it fails because the behavior is missing or wrong.
-3. Implement only enough to make that test pass.
-4. Refactor while those tests stay green.
+Writing the test first is the recommended way to work and the default for
+regression fixes, which SHOULD start from a test that reproduces the
+defect. It is not a rule that blocks a change: what matters is that the
+behavior is covered when the change is reviewed.
 
-Tests MUST assert observable behavior rather than internal implementation
-details. Production behavior MUST NOT be added before a failing test
-exists for it. Mechanical changes that do not alter observable behavior
-MAY proceed without a new test.
-
-Regression fixes MUST start from a failing test that demonstrates the
-defect when practical. Tests MUST NOT be weakened or removed merely to
-make an implementation pass. The relevant `go test` suite MUST pass
-before an implementation task is considered complete.
-
-User stories in a specification MUST include an independent test
-description. Features that change process execution, CLI contracts, or
-other public interfaces MUST include integration or contract tests for
-those boundaries, not only unit tests of internals.
+Tests MUST NOT be weakened or removed merely to make an implementation
+pass. The relevant `go test` suite MUST pass before work is considered
+complete. Features that change process execution, CLI contracts, the
+daemon API, or other public interfaces MUST include integration or
+contract tests for those boundaries, not only unit tests of internals.
 
 **Rationale**: TRUSS executes user-defined pipelines; unverified behavior
-is an operational risk, not a style preference. Test-first keeps the
-specified outcome ahead of the implementation.
+is an operational risk, not a style preference.
 
 ### IV. Maintainable Simplicity
 
@@ -145,14 +142,15 @@ present at runtime.
 ### VI. Supervised Agentic Delivery
 
 TRUSS is built by a team of coding agents working under human supervision.
-Agent work MUST follow the same specification-governed, test-first,
-execution-safe process as human work; agent guidance MUST NOT weaken any
+Agent work MUST meet the same standard as human work: specified, tested,
+and execution-safe; agent guidance MUST NOT weaken any
 principle in this constitution. Process MUST match risk: a mechanical change
 needs less ceremony than a change to process execution or a public contract.
 
 A person starts, reviews, and merges every unit of agent work. Autonomy
-beyond that is allowed only inside the limits in the Agentic Operation
-section, enforced by tooling where possible and by review where not.
+beyond that is allowed inside the limits in the Agentic Operation
+section. The maintainer MAY widen those limits for one session by saying
+so; the agent records that grant in the pull request.
 
 **Rationale**: Agents multiply throughput and mistakes alike. Written roles,
 mechanical guardrails, and independent review keep the multiplication on the
@@ -220,13 +218,12 @@ they MUST NOT contradict it.
 
 ### Orchestration
 
-- The main session is the orchestrator. It classifies the work by risk (tier 0 chore, tier 1
-  feature, tier 2 contract or execution safety), runs the matching pipeline through skills, and
-  delegates. It does not do hands-on work that a role exists for.
+- The main session owns the work. It classifies the work by risk (tier 0 chore, tier 1 feature,
+  tier 2 contract or execution safety) and chooses how much process the risk deserves. It MAY
+  delegate to the roles in `.claude/agents/` and MAY do the work itself.
 - Subagents do not start other subagents. Independent tasks are delegated in parallel in one turn.
-- The pipeline for a feature is the Spec Kit sequence (specify, clarify, plan, tasks, analyze,
-  implement) followed by verify, independent review, and a pull request. Steps are not skipped or
-  reordered; a step with nothing to report says so.
+- The Spec Kit sequence (specify, clarify, plan, tasks, analyze, implement) is the recommended
+  route for contract and execution-safety work. It is not mandatory; principle I says what is.
 - Loops are bounded: at most three rounds per quality loop and three attempts per task, then
   escalate (retry with context, stronger model, written consultation, then a person).
 
@@ -270,10 +267,10 @@ Agents communicate through written artifacts, never through assumed shared conte
 
 - Agents MAY read, edit, test, format, create branches, commit, push their own feature branch,
   open pull requests against `develop`, write ADRs and docs, and update memory and work state.
-- Agents MUST ask the maintainer before: starting a feature outside `docs/MILESTONE.md`, choosing
-  between materially different readings of a requirement, adding a third-party module, making an
-  incompatible change to a public contract, amending this constitution, or anything involving
-  cost, credentials, or releases.
+- Agents MUST ask the maintainer before: starting a feature outside `docs/MILESTONE.md`, adding a
+  third-party module, making an incompatible change to a released public contract, amending this
+  constitution, or anything involving cost, credentials, or releases. A grant from the maintainer
+  for the session (principle VI) answers these in advance.
 - Agents MUST NOT merge, tag or publish a release, force-push, rewrite pushed history, push to
   `develop` or `main`, read or write secret files, skip hooks, or weaken, skip, or delete a test
   or check to get green.
@@ -297,12 +294,12 @@ Agents communicate through written artifacts, never through assumed shared conte
 
 A change is not complete until all of the following hold:
 
-1. Implemented behavior matches the active specification, or any
-   deviation is documented and accepted.
-2. The implementation follows the technical plan, or intentional
-   deviations are documented.
-3. Specified tests were written first and failed before the behavior
-   existed, and `go test` for the affected packages passes.
+1. Implemented behavior matches its specification, and the specification
+   is in the same pull request.
+2. Where a technical plan exists, the implementation follows it or the
+   deviation is documented.
+3. The behavior is covered by tests in the same change, and `go test`
+   for the affected packages passes.
 4. `gofmt` and `go vet` succeed for changed Go code.
 5. Process-execution, cancellation, exit-code, and secret-handling
    requirements remain intact when those layers are touched.
@@ -335,4 +332,4 @@ implementation (Quality Gates), and any change to public contracts.
 Use `AGENTS.md` for agent workflow only; do not treat it as a second
 constitution.
 
-**Version**: 1.3.0 | **Ratified**: 2026-09-16 | **Last Amended**: 2026-10-30
+**Version**: 2.0.0 | **Ratified**: 2026-09-16 | **Last Amended**: 2026-11-12
