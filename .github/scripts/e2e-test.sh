@@ -451,6 +451,49 @@ if [ "$code" -ne 1 ]; then
 else
 	pass "daemon status"
 fi
+# Secrets: stored from standard input, passed to a step, redacted in the log.
+mkdir -p "$work/secrets"
+show_cmd='echo token=$E2E_TOKEN'
+if [ "$windows" = true ]; then
+	show_cmd='echo token=%E2E_TOKEN%' # the step runs under cmd.exe
+fi
+cat >"$work/secrets/truss.yaml" <<EOF_SECRETS
+version: "1"
+pipeline:
+  name: secrets
+steps:
+  - id: show
+    run: '$show_cmd'
+    secrets: [E2E_TOKEN]
+EOF_SECRETS
+run_truss "$work/secrets" run
+if [ "$code" -ne 1 ] || [[ "$err" != *"missing secrets: E2E_TOKEN"* ]] || [[ "$out" == *"started"* ]]; then
+	fail "secret missing" "want exit 1 before any step"
+else
+	pass "secret missing"
+fi
+(cd "$work/secrets" && printf %s "e2e-canary-value" | "$truss" secret set E2E_TOKEN >"$work/.stdout" 2>"$work/.stderr")
+code=$?
+out="$(cat "$work/.stdout")"
+err="$(cat "$work/.stderr")"
+if [ "$code" -ne 0 ] || [ "$out" != "secret E2E_TOKEN saved" ]; then
+	fail "secret set" "want exit 0 and the saved line"
+else
+	pass "secret set"
+fi
+run_truss "$work/secrets" secret list
+if [ "$code" -ne 0 ] || [ "$out" != "E2E_TOKEN" ]; then
+	fail "secret list" "want the name only"
+else
+	pass "secret list"
+fi
+run_truss "$work/secrets" run
+if [ "$code" -ne 0 ] || [[ "$out" == *"e2e-canary-value"* ]] || ! has_line "step show | token=***"; then
+	fail "secret redaction" "want exit 0 and the value replaced by ***"
+else
+	pass "secret redaction"
+fi
+
 unset TRUSS_HOME
 rm -rf "$work"
 
