@@ -259,15 +259,3 @@ func TestRunTrack_InterruptClosesTheRunAsCancelled(t *testing.T) {
 		t.Fatalf("run log exists: %v", err)
 	}
 }
-
-func TestRun_DoubleDashTakesTheNextArgumentAsThePath(t *testing.T) {
-	s := newSession(t, false)
-	s.write("--track", definition("odd-name", "", stepDef{id: "hi", run: helperCmd("exit", "0")}))
-	code, out, errOut := s.truss("run", "--", "--track")
-	if code != 0 || !strings.Contains(out, "summary succeeded steps 1") {
-		t.Fatalf("exit %d\nstdout: %s\nstderr: %s", code, out, errOut)
-	}
-	if code, _, errOut := s.truss("run", "--", "a", "b"); code != 1 || errOut != usageText {
-		t.Fatalf("exit %d, stderr %q", code, errOut)
-	}
-}

@@ -77,17 +77,13 @@ func Run(ctx context.Context, args []string, cwd string, env []string, stdout, s
 	switch args[0] {
 	case "run":
 		// --track is the only option of run; any other argument is the path,
-		// so a file named like a flag still runs (spec 001). After "--" every
-		// argument is a path, which also covers a file named --track.
+		// so a file named like a flag still runs (spec 001).
 		var pos []string
-		track, literal := false, false
+		track := false
 		for _, a := range in.args {
-			switch {
-			case a == "--" && !literal:
-				literal = true
-			case a == "--track" && !literal:
+			if a == "--track" {
 				track = true
-			default:
+			} else {
 				pos = append(pos, a)
 			}
 		}
