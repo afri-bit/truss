@@ -294,7 +294,8 @@ slow_then="echo x > slow-ran.txt"
 never_cmd="echo x > never-ran.txt"
 if $windows; then
 	chain="&"
-	bad_exit="exit /b 3"
+	# After "&", cmd /c reports 0 for "exit /b 3". Plain "exit 3" ends cmd with that code.
+	bad_exit="exit 3"
 	slow_then="echo x> slow-ran.txt"
 	never_cmd="echo x> never-ran.txt"
 fi
