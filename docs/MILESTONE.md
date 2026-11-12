@@ -24,6 +24,7 @@ that matches it. `go.mod` already says `// version: 0.1.0`. The changelog stays 
 | Step concurrency | `pipeline.concurrency`, strict fields, stoppable process trees | `004-step-concurrency` | Implemented |
 | Jobs, schedules, step settings | `jobs`, `on.schedule`, `env`, `dir`, `timeout`, `overlap`, `truss validate` | `005-jobs-schedules-and-step-settings` | Implemented |
 | Daemon | Background service, registry, cron scheduling with missed-run policy, run queue and history, HTTP API, CLI commands | `006-daemon-registry-and-scheduling` | Implemented |
+| Run tracking and queue | Queued runs survive a daemon restart; `truss run --track` reports a local run to the daemon (`local` trigger) | `010-run-tracking-and-queue` | Implemented |
 | TRUSS Desktop | Dashboard, pipeline control, run view with graph and live log | `007-truss-desktop` | First version |
 
 **Operating systems.** Linux, macOS and Windows. A `run` string is a command for that host's

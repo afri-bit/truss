@@ -73,6 +73,8 @@ RUN                     PIPELINE     STATUS     TRIGGER  CREATED              DU
 - Cancelling the run in Desktop or with `truss cancel <run-id>` stops it: it exits `1` with
   `error: cancelled from the daemon`.
 - The id is printed on stderr, so stdout stays the run log.
+- `--track` is the only option of `run`. For a file literally named `--track`, write `./--track` or
+  `truss run -- --track`.
 
 ## Registered pipelines
 

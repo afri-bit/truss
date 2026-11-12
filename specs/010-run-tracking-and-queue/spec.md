@@ -52,8 +52,8 @@ Written alongside the implementation (constitution 2.0.0, principle I).
 - **FR-007** `truss run [<path>] --track` runs the pipeline exactly as `truss run` does: in the
   caller's process, shell, working directory and environment, with the same run log on stdout, the
   same `.truss/run.log`, the same exit code. `--track` is the only option of `run`; any other
-  argument is the path. (Compatibility: a definition file literally named `--track` must now be
-  written `./--track`.)
+  argument is the path. (Compatibility: a definition file literally named `--track` is now written
+  `./--track` or `-- --track`; after `--` every argument is the path.)
 - **FR-008** `--track` needs a daemon. When none runs, `truss run --track` prints the usual
   `error: ... (start it with: truss daemon start)` line on stderr, exits `1`, writes nothing to
   stdout and runs nothing. A definition that does not load fails as it does without `--track`,

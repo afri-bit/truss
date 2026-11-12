@@ -1,6 +1,6 @@
 # 0006. Tracked local runs report to the daemon
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 
 ## Context
