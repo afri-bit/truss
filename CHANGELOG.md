@@ -21,6 +21,7 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 ### Added
 
+- **Secrets.** `truss secret set|list|remove` keeps credentials in `secrets.json` in the TRUSS home (private file, not encrypted; `set` reads standard input or a hidden prompt, never an argument). A pipeline, job or step lists `secrets: [NAME]` and receives them as environment variables. A missing secret fails the run before any step starts. Stored values in step output are replaced by `***` in the run log, saved logs, API and Desktop; encoded or transformed values are not caught (specs/012-secrets, ADR 0006).
 - **The daemon.** `truss daemon start`, `stop`, `status` and `run` manage a background service that listens on `127.0.0.1:7878`. It keeps its state under `~/.truss` (or `TRUSS_HOME`) and protects its HTTP API (`/api/v1`) with a token only your user can read.
 - **Registered pipelines.** `truss register [<path>] [--name <name>]`, `unregister`, `pipelines`, `pause` and `resume`. The daemon stores the file's path, reads it again before every run, and notices edits.
 - **Daemon runs.** `truss trigger <name> [--follow]`, `runs`, `logs <run-id> [--follow]` and `cancel`. Runs queue up; `--max-runs` limits how many execute at once (default 4). The newest 200 runs and their logs are kept.

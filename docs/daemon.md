@@ -115,6 +115,7 @@ directory is private to your user.
 |---|---|
 | `daemon.json` | Address, process id and access token of the running daemon. Removed on stop. |
 | `registry.json` | Registered pipelines. |
+| `secrets.json` | Stored secrets, plain text, `0600` (see [`truss secret`](cli.md#secrets)). Read at the start of each run that declares secrets. |
 | `clock.json` | When the scheduler last looked at the clock. |
 | `runs/<run-id>/run.json` | One run: status, times, steps. |
 | `runs/<run-id>/run.log` | Its run log, the same format `truss run` prints. |

@@ -32,6 +32,28 @@ $ truss run
 2026-11-12 09:00:00 summary succeeded steps 1 duration 0.006s
 ```
 
+## Secrets
+
+Secrets need no daemon. The value is never an argument, so it stays out of your shell history
+and the process list.
+
+| Command | What it does |
+|---|---|
+| `truss secret set <name>` | Stores a secret. On a terminal it asks twice, with no echo. From a pipe or file the whole input is the value, minus one trailing newline. |
+| `truss secret list` | Prints the names, one per line. Never values. |
+| `truss secret remove <name>` | Deletes a secret. An unknown name is an error. |
+
+```console
+$ printf %s "$NPM_TOKEN" | truss secret set NPM_TOKEN
+secret NPM_TOKEN saved
+```
+
+Secrets live in `secrets.json` in the [TRUSS home](daemon.md#where-state-lives). They are **not
+encrypted**. On Linux and macOS the file is `0600` and TRUSS refuses to read it if others can.
+On Windows there are no mode bits: the file relies on the permissions it inherits from your user
+profile, and TRUSS does not change them. The daemon has no API for secrets. Pipelines use them
+through [`secrets`](pipeline-reference.md#secrets).
+
 ## The daemon
 
 | Command | What it does |

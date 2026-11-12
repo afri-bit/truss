@@ -295,7 +295,7 @@ The full map is in [docs/architecture.md](docs/architecture.md).
 After v0.1.0, roughly in this order. Scope and order may change.
 
 - **Desktop:** a packaged window with tray icon, notifications and start at login
-- **Pipelines:** conditions, retries, matrix builds, artifacts, a secret store
+- **Pipelines:** conditions, retries, matrix builds, artifacts
 - **Triggers:** file changes and webhooks
 - **Execution:** containers, then remote workers
 - **Ecosystem:** SDKs and CI-provider bridges, so the same file runs in CI

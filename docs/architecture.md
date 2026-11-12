@@ -51,6 +51,7 @@ two callers of the same engine, so a pipeline behaves the same in both.
 | `internal/cron` | Parse cron expressions and compute the next matching time. | Know what a match starts. |
 | `internal/engine` | Run a plan: start ready steps, respect concurrency, stop on failure, report events. | Print, read flags, or know about the daemon. |
 | `internal/executor` | Run one command in the host shell inside a stoppable process tree. | Decide ordering. |
+| `internal/secrets` | Keep named secret values in a private file; remove values from output streams. | Know pipelines or the engine. |
 | `internal/runlog` | Format and write the run log. | Execute steps. |
 | `internal/home` | Locate the TRUSS home directory and read and write its JSON files safely. | Hold state. |
 | `internal/registry` | Remember registered pipeline files by name. | Read pipeline content. |

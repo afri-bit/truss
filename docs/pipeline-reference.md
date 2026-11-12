@@ -57,6 +57,7 @@ jobs:                         # either jobs ...
 | `pipeline` | yes | Name and run settings. |
 | `on` | no | What starts the pipeline besides you. |
 | `env` | no | Environment variables for every step. |
+| `secrets` | no | Names of stored secrets for every step. |
 | `steps` | one of the two | A list of steps that may depend on each other. |
 | `jobs` | one of the two | Named groups of steps that depend on each other. |
 
@@ -124,8 +125,45 @@ Values are taken as text, so `RETRIES: 3` sets the string `3`.
 Every run started by the daemon also sets `TRUSS_RUN_ID`, `TRUSS_PIPELINE` and `TRUSS_TRIGGER`
 (`manual`, `schedule` or `catch-up`).
 
-TRUSS has no secret store yet. Do not put secrets in a pipeline file; the run log never prints
-variable names or values, but the file itself is plain text.
+Do not put secrets in `env`: the file is plain text. Use [`secrets`](#secrets).
+
+## `secrets`
+
+A list of secret names, allowed at the top level, on a job, and on a step. Each name must be
+stored first with `truss secret set <name>` (see [the CLI](cli.md#secrets)). A declared secret
+becomes an environment variable of the same name in the steps that declare it, directly or
+through their job or the pipeline, and in no other step. It overrides an `env` entry of the same name.
+
+```yaml
+secrets: [GITHUB_TOKEN]          # every step
+jobs:
+  publish:
+    steps:
+      - id: npm
+        run: npm publish
+        secrets: [NPM_TOKEN]     # this step only
+```
+
+- A secret that is not stored fails the run **before any step starts**. The error lists the
+  missing names and says `truss secret set <name>`. `truss run` exits 1; a daemon run is
+  recorded as failed.
+- Names follow the rule for `env` names. A repeated name, a non-list or a non-string is a
+  validation error. `truss validate` lists the names a step uses and does not read the store.
+- A pipeline that declares no secret never reads the store.
+
+**Redaction.** In a run of a pipeline that declares secrets, every stored value (not only the
+declared ones) that appears in step output is replaced by `***` in the run log,
+`.truss/run.log`, the daemon's stored log, the API and Desktop. A value split over several
+output chunks is still caught.
+
+Redaction is exact text matching. It **cannot** catch a value that a step:
+
+- encodes or transforms (base64, hex, URL encoding, upper case, reversed, characters inserted);
+- splits across lines of its own;
+- writes to a file, sends over the network or passes to another program's own log.
+
+A very short secret is replaced wherever it appears, which can garble unrelated output. Do not
+print secrets from a step, and do not run `set -x` or `env` in a step that has them.
 
 ## `steps`
 
@@ -138,6 +176,7 @@ Windows). Every step starts a new shell, so `cd` or `export` in one step does no
 | `run` | yes | The command line, as you would type it. |
 | `needs` | no | Ids of steps that must succeed first. Top-level steps only. |
 | `env` | no | Variables for this step. |
+| `secrets` | no | Stored secrets for this step. |
 | `dir` | no | Working directory, relative to where the run starts: your current directory for `truss run`, the file's directory for the daemon. |
 | `timeout` | no | Ends the step when it runs longer: `90s`, `5m`, `1h30m`. |
 
@@ -154,6 +193,7 @@ A job is a named list of steps for one purpose: build, test, deploy.
 | `steps` | yes | Run in the order written, one after another. |
 | `needs` | no | Ids of jobs that must succeed first. |
 | `env` | no | Variables for every step of the job. |
+| `secrets` | no | Stored secrets for every step of the job. |
 | `dir` | no | Working directory for the job's steps; a step's own `dir` replaces it. |
 
 Job ids use letters, digits, `.`, `_` and `-`. In logs and in TRUSS Desktop a step of a job is
