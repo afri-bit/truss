@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -397,6 +398,19 @@ func (d *Daemon) logf(format string, args ...any) {
 }
 
 func stamp(t time.Time) string { return t.Format("2006-01-02 15:04:05") }
+
+// CheckAddress reports why address cannot be a daemon address: it is not
+// host:port with a numeric port, or not on the loopback interface.
+func CheckAddress(address string) error {
+	if err := checkLoopback(address); err != nil {
+		return err
+	}
+	_, port, _ := net.SplitHostPort(address)
+	if n, err := strconv.Atoi(port); err != nil || n < 0 || n > 65535 {
+		return fmt.Errorf("daemon address %q: the port must be a number from 0 to 65535", address)
+	}
+	return nil
+}
 
 // checkLoopback refuses addresses that would expose the API to the network.
 func checkLoopback(address string) error {

@@ -520,6 +520,23 @@ else
 	pass "secret redaction"
 fi
 
+# Start at login: a binary in a temporary directory must be refused before
+# anything is installed. HOME and USERPROFILE point at an empty directory so a
+# regression would not write into the real home; the refusal itself is what
+# keeps systemctl, launchctl and schtasks from being run.
+mkdir -p "$work/copy" "$work/fakehome"
+ext=""
+$windows && ext=".exe"
+cp "$truss" "$work/copy/truss-copy$ext"
+(cd "$work/project" && HOME="$work/fakehome" USERPROFILE="$work/fakehome" "$work/copy/truss-copy$ext" daemon install >"$work/.stdout" 2>"$work/.stderr")
+code=$?
+out="$(cat "$work/.stdout")"
+err="$(cat "$work/.stderr")"
+if [ "$code" -ne 1 ] || [[ "$err" != *"looks temporary"* ]]; then
+	fail "daemon install refuses a temporary binary" "want exit 1 and the reason"
+else
+	pass "daemon install refuses a temporary binary"
+fi
 unset TRUSS_HOME
 rm -rf "$work"
 

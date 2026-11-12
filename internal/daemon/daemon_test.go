@@ -389,6 +389,18 @@ func TestDaemon_RemovesItsEndpointFileOnStop(t *testing.T) {
 	}
 }
 
+func TestCheckAddress(t *testing.T) {
+	for addr, ok := range map[string]bool{
+		"127.0.0.1:7878": true, "127.0.0.1:0": true, "[::1]:9000": true,
+		"0.0.0.0:7878": false, "localhost": false, "127.0.0.1:abc": false,
+		"127.0.0.1:70000": false, `127.0.0.1:1" --max-runs 5 "`: false,
+	} {
+		if err := CheckAddress(addr); (err == nil) != ok {
+			t.Errorf("CheckAddress(%q) = %v, want ok=%v", addr, err, ok)
+		}
+	}
+}
+
 // queuedRecord writes the run.json a daemon leaves behind for a run that was
 // queued when it stopped.
 func queuedRecord(t *testing.T, h home.Dir, id, pipelineName string) {

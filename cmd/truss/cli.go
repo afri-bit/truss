@@ -24,6 +24,8 @@ The daemon:
   daemon start [--address <host:port>] [--max-runs <n>]
   daemon stop | status                manage the background service
   daemon run                          run the service in this terminal
+  daemon install [--address <host:port>] [--max-runs <n>]
+  daemon uninstall                    start the daemon at login, or stop doing so
   desktop [--no-open]                 open TRUSS Desktop in the browser
 
 Secrets (no daemon needed; values come from standard input, never an argument):
