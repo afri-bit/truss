@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/afri-bit/truss/internal/api"
 	"github.com/afri-bit/truss/internal/pipeline"
@@ -222,5 +223,24 @@ func TestTrack_RunLeftRunningByAStoppedDaemonFails(t *testing.T) {
 	}
 	if _, err := again.Track("p", graph("a")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTrack_KeepsCreationOrderWhenTheClockDoesNotMove(t *testing.T) {
+	frozen := time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
+	m := open(t, Options{Now: func() time.Time { return frozen }})
+	var ids []string
+	for range 6 {
+		run, err := m.Track("p", graph("a"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, run.ID)
+	}
+	list := m.List("p", 0)
+	for i, run := range list {
+		if want := ids[len(ids)-1-i]; run.ID != want {
+			t.Fatalf("position %d is %s, want %s (newest first)", i, run.ID, want)
+		}
 	}
 }
