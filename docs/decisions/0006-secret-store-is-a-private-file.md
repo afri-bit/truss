@@ -1,6 +1,6 @@
 # 0006. The secret store is a private file in the TRUSS home
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 
 ## Context
