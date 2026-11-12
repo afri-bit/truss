@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"time"
 
@@ -63,7 +64,11 @@ type definition struct {
 	def     pipeline.Pipeline
 	plan    pipeline.ExecutionPlan
 	err     error
-	// scheduled records whether the schedules are active (valid and not paused).
+	// armed holds the schedules given to the scheduler: those of the last
+	// definition that was valid. A file that turns invalid keeps them, so a
+	// fire time that passes is recorded as a failed run (FR-021).
+	armed []pipeline.Schedule
+	// scheduled records whether armed is registered with the scheduler.
 	scheduled bool
 }
 
@@ -173,7 +178,7 @@ func (d *Daemon) Stop() { d.stopOnce.Do(func() { close(d.stop) }) }
 // is called. It then cancels active runs, removes the endpoint file and
 // returns.
 func (d *Daemon) Serve(ctx context.Context) error {
-	server := &http.Server{Handler: d.handler(), ReadHeaderTimeout: 10 * time.Second}
+	server := &http.Server{Handler: d.handler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 2 * time.Minute}
 	served := make(chan error, 1)
 	go func() { served <- server.Serve(d.listener) }()
 	d.logf("daemon started on %s (pid %d, home %s)", d.endpoint.Address, d.endpoint.PID, d.opts.Home)
@@ -279,27 +284,50 @@ func (d *Daemon) load(e registry.Entry, since time.Time, force bool) *definition
 	cur := old
 	if force || (!unchanged && !missingStill) {
 		cur = &definition{}
+		if old != nil {
+			cur.armed, cur.scheduled = old.armed, old.scheduled
+		}
 		if statErr != nil {
 			cur.err = fmt.Errorf("read pipeline definition: %w", statErr)
 		} else {
 			cur.modTime, cur.size = info.ModTime(), info.Size()
 			cur.def, cur.plan, cur.err = readDefinition(e.Path)
 		}
+		if cur.err == nil {
+			cur.armed = cur.def.Schedules
+		}
 		d.defs[e.Name] = cur
 	}
-	want := cur.err == nil && !e.Paused && len(cur.def.Schedules) > 0
-	if cur != old || want != cur.scheduled {
-		if want {
-			d.sched.Set(e.Name, cur.def.Schedules, since)
-		} else {
-			d.sched.Remove(e.Name)
-		}
-		cur.scheduled = want
+	// The scheduler is told again only when the schedules really changed (or
+	// were switched on or off). Reloading an unchanged file, as a manual
+	// trigger does, must not move the clock a schedule counts from.
+	want := !e.Paused && len(cur.armed) > 0
+	switch {
+	case want && (!cur.scheduled || old == nil || !reflect.DeepEqual(old.armed, cur.armed)):
+		d.sched.Set(e.Name, cur.armed, since)
+		cur.scheduled = true
+	case !want && cur.scheduled:
+		d.sched.Remove(e.Name)
+		cur.scheduled = false
 	}
 	return cur
 }
 
+// maxDefinitionBytes bounds a registered definition file; the daemon reads
+// these on every change and must not be made to read without limit.
+const maxDefinitionBytes = 1 << 20
+
 func readDefinition(path string) (pipeline.Pipeline, pipeline.ExecutionPlan, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return pipeline.Pipeline{}, pipeline.ExecutionPlan{}, fmt.Errorf("read pipeline definition: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return pipeline.Pipeline{}, pipeline.ExecutionPlan{}, fmt.Errorf("%s is not a regular file", path)
+	}
+	if info.Size() > maxDefinitionBytes {
+		return pipeline.Pipeline{}, pipeline.ExecutionPlan{}, fmt.Errorf("%s is too large (%d bytes, the limit is %d)", path, info.Size(), maxDefinitionBytes)
+	}
 	def, err := pipeline.ParseFile(context.Background(), path)
 	if err != nil {
 		return def, pipeline.ExecutionPlan{}, err
