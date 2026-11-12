@@ -158,3 +158,27 @@ func (r Run) Copy() Run {
 	copy(c.Steps, r.Steps)
 	return c
 }
+
+// DirEntry is one name in a directory listing for the register dialog.
+type DirEntry struct {
+	Name string `json:"name"`
+	// Kind is "dir" or "file". Files are only listed when they end in
+	// .yaml or .yml.
+	Kind string `json:"kind"`
+	// Link is true when the name is a symbolic link; Kind describes its target.
+	Link bool `json:"link,omitempty"`
+}
+
+// DirListing answers GET /fs. It carries names only, never file content.
+type DirListing struct {
+	// Path is the real (symlink-free) absolute path that was listed.
+	Path string `json:"path"`
+	// Parent is the directory above Path, or empty at a root.
+	Parent string `json:"parent"`
+	// Roots are the places to start from: "/" on Linux and macOS, the
+	// existing drive roots on Windows.
+	Roots   []string   `json:"roots"`
+	Entries []DirEntry `json:"entries"`
+	// Truncated is true when the directory held more names than were returned.
+	Truncated bool `json:"truncated,omitempty"`
+}

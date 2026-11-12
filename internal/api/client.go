@@ -196,3 +196,17 @@ func (c *Client) Log(ctx context.Context, id string, offset int64) ([]byte, int6
 	}
 	return data, next, resp.Header.Get(HeaderRunStatus), nil
 }
+
+// Browse lists a directory for the register dialog. An empty path means the
+// user's home directory.
+func (c *Client) Browse(ctx context.Context, path string, hidden bool) (DirListing, error) {
+	q := url.Values{}
+	if path != "" {
+		q.Set("path", path)
+	}
+	if hidden {
+		q.Set("hidden", "true")
+	}
+	var l DirListing
+	return l, c.call(ctx, http.MethodGet, "/fs?"+q.Encode(), nil, &l)
+}
