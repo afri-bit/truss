@@ -59,7 +59,7 @@ test("an empty daemon shows helpful empty states", async () => {
     await page.evaluate(() => { location.hash = "#/pipelines"; });
     await page.getByText("No pipelines registered yet").waitFor();
     // Picker over a folder with nothing to show.
-    await page.locator("#register-path").fill(empty.homeDir + "/.secret-dir/x.yaml");
+    await page.locator("#register-path").fill(require("node:path").join(empty.homeDir, ".secret-dir", "x.yaml"));
     await page.locator("#browse").click();
     await page.locator("#picker-path", { hasText: ".secret-dir" }).waitFor().catch(() => {});
     assert.deepEqual(page.problems, []);

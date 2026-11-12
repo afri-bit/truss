@@ -70,7 +70,7 @@ func (d *Daemon) browse(w http.ResponseWriter, r *http.Request) error {
 		if !showHidden && strings.HasPrefix(name, ".") {
 			continue
 		}
-		entry := api.DirEntry{Name: name, Link: de.Type()&fs.ModeSymlink != 0}
+		entry := api.DirEntry{Name: name, Link: de.Type()&(fs.ModeSymlink|fs.ModeIrregular) != 0} // Windows junctions are irregular
 		// Stat follows a link to its target; a broken link fails and is left out.
 		st, err := os.Stat(filepath.Join(resolved, name))
 		if err != nil {

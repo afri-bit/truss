@@ -48,7 +48,7 @@ Written alongside the implementation (constitution 2.0.0, principle I).
 ## Out of scope
 
 Reading or previewing file content; creating folders; editing pipeline files; UI tests on macOS
-and Windows (the suite is portable Node; only Linux runs it in CI for now).
+and Windows (the suite has only run on Linux; its paths and process handling are written to be portable but unverified elsewhere).
 
 ## Compatibility
 

@@ -129,12 +129,20 @@ func TestBrowse_SymlinksAreReportedHonestly(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(outside, "p.yaml"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(outside, filepath.Join(root, "link-dir")); err != nil {
-		t.Skipf("symlinks unavailable: %v", err)
+	links := [][2]string{
+		{outside, "link-dir"},
+		{filepath.Join(outside, "p.yaml"), "link.yaml"},
+		{filepath.Join(root, "gone"), "broken"},
+		{filepath.Join(outside, "p.yaml"), "link.txt"},
 	}
-	_ = os.Symlink(filepath.Join(outside, "p.yaml"), filepath.Join(root, "link.yaml"))
-	_ = os.Symlink(filepath.Join(root, "gone"), filepath.Join(root, "broken"))
-	_ = os.Symlink(filepath.Join(outside, "p.yaml"), filepath.Join(root, "link.txt"))
+	for _, l := range links {
+		if err := os.Symlink(l[0], filepath.Join(root, l[1])); err != nil {
+			if os.Getenv("CI") != "" {
+				t.Fatalf("symlinks must work in CI: %v", err)
+			}
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+	}
 
 	l, err := c.Browse(context.Background(), root, false)
 	if err != nil {

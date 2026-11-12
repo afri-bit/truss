@@ -15,7 +15,7 @@ const exe = process.platform === "win32" ? ".exe" : "";
 const TRUSS_BIN = path.resolve(process.env.TRUSS_BIN || path.join(__dirname, "..", "..", "bin", "truss" + exe));
 
 // Pipelines the tests register. Commands work in sh and in cmd.exe.
-const NODE_SLEEP = `node -e "setTimeout(() => {}, 120000)"`;
+const NODE_SLEEP = `node -e "setTimeout(Function.prototype,120000)"`;
 const FIXTURES = {
   "ok.yaml": `version: "1"
 pipeline:
@@ -65,7 +65,8 @@ async function startDaemon() {
   if (!fs.existsSync(TRUSS_BIN)) {
     throw new Error(`truss binary not found at ${TRUSS_BIN}; run "go build -o bin/truss ./cmd/truss" or set TRUSS_BIN`);
   }
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "truss-ui-"));
+  // Resolved, because the daemon reports real paths (macOS /var -> /private/var, Windows 8.3 names).
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "truss-ui-")));
   const homeDir = path.join(root, "home"); // the user's HOME: where the file picker starts
   const trussHome = path.join(root, "truss");
   const pipelines = path.join(homeDir, "pipelines");
@@ -113,7 +114,8 @@ async function startDaemon() {
       const timer = setTimeout(() => child.kill(), 5000);
       await exited;
       clearTimeout(timer);
-      fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
+      // Best effort: on Windows a step that outlives the daemon can still hold the folder.
+      try { fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 }); } catch { /* temp dir */ }
     },
   };
 }

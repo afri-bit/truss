@@ -39,7 +39,7 @@ test("register through the file picker, then run, pause, resume and unregister",
   assert.equal(await page.locator("#register-path").inputValue(), "", "form is cleared after registering");
 
   // Typing a path by hand works too.
-  await page.locator("#register-path").fill(d.pipelines + "/ok.yaml");
+  await page.locator("#register-path").fill(require("node:path").join(d.pipelines, "ok.yaml"));
   await page.locator("#register-name").fill("ok-by-hand");
   await page.getByRole("button", { name: "Register", exact: true }).click();
   await card("ok-by-hand").waitFor();
@@ -94,7 +94,7 @@ test("register form follows a sensible keyboard order", async () => {
 
 test("the picker closes on Escape, shows errors, and handles an unlistable start", async () => {
   await page.evaluate(() => { location.hash = "#/pipelines"; });
-  await page.locator("#register-path").fill(d.homeDir + "/gone/x.yaml"); // folder does not exist: falls back to home
+  await page.locator("#register-path").fill(require("node:path").join(d.homeDir, "gone", "x.yaml")); // folder does not exist: falls back to home
   await page.locator("#browse").click();
   await page.locator("#picker-path").waitFor();
   assert.equal(await page.locator("#picker-path").textContent(), d.homeDir);
