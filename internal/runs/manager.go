@@ -532,10 +532,8 @@ func (f *follower) StepStarted(id string) {
 	f.log.StepStarted(id)
 	now := f.m.opts.Now()
 	f.step(id, func(s *api.Step) {
-		s.Status, s.ExitCode, s.Error, s.FinishedAt = api.StepRunning, nil, "", nil
-		if s.StartedAt == nil {
-			s.StartedAt = &now
-		}
+		// Times and result describe the current attempt (spec 009, FR-022).
+		s.Status, s.ExitCode, s.Error, s.FinishedAt, s.StartedAt = api.StepRunning, nil, "", nil, &now
 	})
 	f.m.mu.Lock()
 	delete(f.rec.waiting, id)
@@ -545,7 +543,9 @@ func (f *follower) StepStarted(id string) {
 // StepRetrying keeps the step running while it waits for its next attempt.
 func (f *follower) StepRetrying(id string, attempt, attempts int, delay time.Duration) {
 	f.log.StepRetrying(id, attempt, attempts, delay)
-	f.step(id, func(s *api.Step) { s.Status, s.Attempts, s.FinishedAt = api.StepRunning, attempt, nil })
+	f.step(id, func(s *api.Step) {
+		s.Status, s.Attempts, s.FinishedAt, s.ExitCode, s.Error = api.StepRunning, attempt, nil, nil, ""
+	})
 	f.m.mu.Lock()
 	f.rec.waiting[id] = true
 	f.m.mu.Unlock()

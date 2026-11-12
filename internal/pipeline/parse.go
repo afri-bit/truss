@@ -171,9 +171,6 @@ func parseStep(p *Pipeline, item *yaml.Node, pos int, job string) Step {
 	if step.RetryDelay > 0 && step.Retries == 0 {
 		p.issue("step %s retry_delay needs retries of at least 1", name)
 	}
-	if step.RetryDelay > 0 && step.Retries == 0 {
-		p.issue("step %s retry_delay needs retries of at least 1", name)
-	}
 	if unknown != "" {
 		p.noteUnknown(unknown, "in step "+name)
 	}
