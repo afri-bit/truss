@@ -8,7 +8,7 @@ $ truss daemon start
 $ truss desktop
 ```
 
-`truss desktop` opens your browser on the daemon's address. `truss desktop --no-open` prints
+The daemon must already be running: Desktop is a client and never starts or stops it. `truss desktop` opens your browser on the daemon's address. `truss desktop --no-open` prints
 the address instead.
 
 ![Dashboard](images/desktop-dashboard.png)

@@ -28,7 +28,12 @@ schedules that respect a laptop's life, and concurrency.
    scheduler saw the clock, which is saved to disk.
 7. **Three concurrency controls**: runs at once (daemon), overlap per pipeline (`queue`, `skip`,
    `parallel`), and steps at once (`pipeline.concurrency`).
-8. **`truss run` stays independent** of the daemon and ignores schedules.
+8. **`truss run` stays independent** of the daemon and ignores schedules. It is not handed to
+   the daemon even when one runs, because the run would then use the daemon's environment
+   instead of the caller's. Tracked runs go through `register` and `trigger`.
+   *Decided with the maintainer, 2026-11-12.*
+10. **The daemon is the server, started separately.** Clients (CLI, Desktop) never start or stop
+   it, and Desktop is unusable without it. *Decided with the maintainer, 2026-11-12.*
 9. **Clients poll.** Run logs are fetched by byte offset. Server-sent events can be added later
    without changing existing endpoints.
 

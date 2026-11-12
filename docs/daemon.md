@@ -18,6 +18,11 @@ flowchart LR
     daemon --- home[("~/.truss")]
 ```
 
+The daemon is the server and is started separately, like Jenkins or Docker's engine. The CLI
+and [TRUSS Desktop](desktop.md) are clients. Desktop cannot start or stop the daemon, and
+without one it has nothing to show. `truss run` does not use the daemon at all, so its runs are
+not part of the daemon's history; to track a run, register the file and `truss trigger` it.
+
 ## A first session
 
 ```console

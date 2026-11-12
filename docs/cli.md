@@ -18,7 +18,7 @@ that starts with `error:`. An unknown command or wrong arguments print the usage
 | `truss validate [<path>]` | Checks a file and prints its schedules and steps. Runs nothing. |
 | `truss help`, `truss version` | Usage and version. |
 
-`truss run` prints the run log as it happens and keeps the last one in `.truss/run.log`.
+`truss run` never talks to the daemon, so the run does not appear in `truss runs` or in Desktop. It prints the run log as it happens and keeps the last one in `.truss/run.log`.
 Interrupting it (Ctrl-C) ends every running step. Schedules in the file are ignored: `run`
 means now.
 

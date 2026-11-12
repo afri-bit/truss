@@ -15,6 +15,7 @@
 - [Why TRUSS](#why-truss)
 - [What you get](#what-you-get)
 - [Quick start](#quick-start)
+- [Three ways to use TRUSS](#three-ways-to-use-truss)
 - [A pipeline file](#a-pipeline-file)
 - [Commands](#commands)
 - [How it fits together](#how-it-fits-together)
@@ -146,6 +147,24 @@ hello  ready  2026-11-13 09:00:00  succeeded 2026-11-12 09:01:10  /home/me/proje
 ```console
 $ truss desktop
 ```
+
+## Three ways to use TRUSS
+
+| | You start | You use | Tracked by the daemon? |
+|---|---|---|---|
+| **1. Alone** | nothing | `truss run`, `truss validate` | No. The log is `.truss/run.log` in the project. |
+| **2. With the daemon** | `truss daemon start` | the CLI: `register`, `trigger`, `runs`, `logs`, `cancel`, ... | Yes: schedules, queue, history. |
+| **3. With the daemon and Desktop** | `truss daemon start`, then `truss desktop` | the same runs, seen and controlled in the browser | Yes, same state as path 2. |
+
+The daemon is the server, like Jenkins or Docker's engine. It is always started on its own
+and stays in the background. Desktop and the CLI are clients: without a daemon Desktop shows
+nothing, and neither client starts or stops it.
+
+Path 1 is deliberately separate. `truss run` executes in your shell with your environment, needs
+no server, and behaves the same in CI. If you want a run to appear in the history and in Desktop,
+register the file and use `truss trigger`.
+
+Pipelines are written in files, with your editor. Desktop watches and controls them; it does not edit them.
 
 ## A pipeline file
 
