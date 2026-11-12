@@ -1,6 +1,6 @@
 # 0006. Start at login is per user, marker-owned and run without a shell
 
-- Status: Accepted
+- Status: Proposed
 - Date: 2026-11-12
 
 ## Context
