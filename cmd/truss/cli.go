@@ -34,7 +34,9 @@ Registered pipelines (these need the daemon):
   runs [<name>]                       list runs, newest first
   logs <run-id> [--follow]            show a run log
   cancel <run-id>                     end a queued or running run
-  cache clear <name>                  empty a pipeline's cache folder (no daemon needed)
+
+Files only (no daemon needed):
+  cache clear <name>                  remove a pipeline's cache folder; the next run recreates it
 
   help | version
 `

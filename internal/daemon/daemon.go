@@ -328,7 +328,11 @@ func (d *Daemon) submit(name, trigger string, scheduledFor time.Time) (api.Run, 
 	}
 	data, cache := d.opts.Home.PipelineData(name), d.opts.Home.PipelineCache(name)
 	if err := os.MkdirAll(cache, 0o700); err != nil {
-		return api.Run{}, fmt.Errorf("prepare the data folder of pipeline %s: %w", name, err)
+		err = fmt.Errorf("prepare the data folder of pipeline %s: %w", name, err)
+		if trigger != api.TriggerManual {
+			_, _ = d.runs.Record(name, trigger, scheduledFor, api.RunFailed, err.Error())
+		}
+		return api.Run{}, err
 	}
 	return d.runs.Submit(runs.Request{
 		Pipeline:     name,

@@ -6,8 +6,8 @@ import "fmt"
 //
 // Jobs are flattened: each step of a job becomes a step named "job/step" that
 // needs the step before it, and the first step of a job needs the last step
-// of every job that job needs. Environment and working directory (step, job, then pipeline workdir) are resolved
-// here, so the engine only sees steps.
+// of every job that job needs. Environment and working directory (step, job,
+// then pipeline workdir) are resolved here, so the engine only sees steps.
 //
 // In Steps a step is placed only after every step it needs. When several
 // steps could be placed next, the one written earliest in the definition goes

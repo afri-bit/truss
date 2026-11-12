@@ -52,7 +52,7 @@ two callers of the same engine, so a pipeline behaves the same in both.
 | `internal/engine` | Run a plan: start ready steps, respect concurrency, stop on failure, report events. | Print, read flags, or know about the daemon. |
 | `internal/executor` | Run one command in the host shell inside a stoppable process tree. | Decide ordering. |
 | `internal/runlog` | Format and write the run log. | Execute steps. |
-| `internal/home` | Locate the TRUSS home directory and read and write its JSON files safely. | Hold state. |
+| `internal/home` | Locate the TRUSS home directory and its per-pipeline data folders, and read and write its JSON files safely. | Hold state. |
 | `internal/registry` | Remember registered pipeline files by name. | Read pipeline content. |
 | `internal/scheduler` | Decide, for a given time, which schedules fire, catch up, or were missed. | Own a timer or start runs. |
 | `internal/runs` | Queue, execute and remember runs; enforce the parallel limit and overlap policy. | Know about HTTP or schedules. |

@@ -50,7 +50,8 @@ Tier 2 (pipeline schema, process environment, a CLI command). The user-facing te
   TRUSS's own `run.log`, and the rule "cache is `$TRUSS_DATA_DIR/cache`" holds in both modes.
   The folders are per project and per current directory, not per pipeline name. If they cannot
   be created `truss run` exits 1 with `error: prepare data folder: ...` before any step runs.
-- **FR-008** `truss cache clear <name>` removes `<home>/pipelines/<name>/cache`, prints
+- **FR-008** `truss cache clear <name>` empties the cache by removing `<home>/pipelines/<name>/cache`
+  (the next daemon run creates it again), prints
   `cleared the cache of <name>` (or `no cache for <name>` when there is none) and exits 0. It
   does not contact the daemon, works for unregistered names, and leaves the rest of the data
   folder alone. An invalid name or any other arguments are a usage or `error:` exit 1.
@@ -65,7 +66,7 @@ version bump. Two process-environment changes are visible to steps: `TRUSS_DATA_
 environment now sees TRUSS's value unless the file sets it in `env`. The Windows refusal in
 FR-003 applies to `workdir` and also, because they share the resolver, to a step or job `dir`
 written as `C:work`, which was never meaningful. `truss run` writes a new `.truss/data`
-folder next to `run.log`. No daemon API or run-log change.
+folder next to `run.log`. No daemon API or run-log change. `.truss` keeps mode 0755 as before; the new `data` folder is 0700.
 
 ## Known limitations
 

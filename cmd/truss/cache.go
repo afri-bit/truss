@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/afri-bit/truss/internal/home"
 	"github.com/afri-bit/truss/internal/registry"
@@ -23,13 +22,13 @@ func (in invocation) cache() int {
 	if err != nil {
 		return in.fail(err)
 	}
-	dir := h.PipelineCache(name)
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
+	existed, err := h.ClearPipelineCache(name)
+	if err != nil {
+		return in.fail(err)
+	}
+	if !existed {
 		fmt.Fprintf(in.stdout, "no cache for %s\n", name)
 		return 0
-	}
-	if err := os.RemoveAll(dir); err != nil {
-		return in.fail(fmt.Errorf("clear the cache of %s: %w", name, err))
 	}
 	fmt.Fprintf(in.stdout, "cleared the cache of %s\n", name)
 	return 0

@@ -111,3 +111,25 @@ func TestCacheClear_EmptiesOnlyTheCacheFolder(t *testing.T) {
 		}
 	}
 }
+
+func TestRun_FailsBeforeAnyStepWhenTheDataFolderCannotBeCreated(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".truss"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	// A file where the data folder should be.
+	if err := os.WriteFile(filepath.Join(dir, ".truss", "data"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	body := validPipeline("echo ran> marker.txt")
+	if err := os.WriteFile(filepath.Join(dir, "truss.yaml"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errOut := invoke(t, dir, []string{"run"})
+	if code != 1 || !strings.Contains(errOut, "error: prepare data folder:") || strings.Contains(out, "started") {
+		t.Fatalf("exit = %d, stdout = %q, stderr = %q", code, out, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "marker.txt")); err == nil {
+		t.Fatal("a step ran")
+	}
+}

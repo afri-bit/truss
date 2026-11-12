@@ -352,3 +352,29 @@ func TestHistory_KeepsCreationOrderWhenTheClockDoesNotMove(t *testing.T) {
 		}
 	}
 }
+
+func TestSubmit_StepsSeeTheDataFoldersAndEnvCanOverrideThem(t *testing.T) {
+	m := open(t, Options{})
+	data := t.TempDir()
+	cache := filepath.Join(data, "cache") // created by the run, as after a cache clear
+	show := "echo $TRUSS_DATA_DIR && echo $TRUSS_CACHE_DIR"
+	if runtime.GOOS == "windows" {
+		show = "echo %TRUSS_DATA_DIR% && echo %TRUSS_CACHE_DIR%"
+	}
+	d := def("dirs", "", pipeline.Step{ID: "show", Run: show})
+	d.Env = map[string]string{"TRUSS_CACHE_DIR": "overridden"}
+	run, err := m.Submit(Request{Pipeline: "dirs", Definition: d, Dir: t.TempDir(), DataDir: data, CacheDir: cache, Trigger: api.TriggerManual})
+	if err != nil {
+		t.Fatal(err)
+	}
+	await(t, m, run.ID, api.RunSucceeded)
+	log, _, _, _ := m.Log(run.ID, 0)
+	for _, want := range []string{"step show | " + data, "step show | overridden"} {
+		if !strings.Contains(string(log), want) {
+			t.Errorf("log lacks %q:\n%s", want, log)
+		}
+	}
+	if info, err := os.Stat(cache); err != nil || !info.IsDir() {
+		t.Fatalf("cache folder not recreated: %v", err)
+	}
+}
