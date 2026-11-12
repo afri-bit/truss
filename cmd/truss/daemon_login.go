@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/afri-bit/truss/internal/api"
 	"github.com/afri-bit/truss/internal/daemon"
@@ -23,7 +24,7 @@ func loginHost(h home.Dir) (loginstart.Host, error) {
 	}
 	return loginstart.Host{
 		OS: runtime.GOOS, UserHome: userHome, UID: os.Getuid(), Scratch: string(h),
-		Run: loginstart.ExecRunner{}, Files: loginstart.OSFiles{},
+		Wait: 300 * time.Millisecond, Run: loginstart.ExecRunner{}, Files: loginstart.OSFiles{},
 	}, nil
 }
 

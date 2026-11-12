@@ -174,10 +174,13 @@ Things to know:
   then leaves the login item for the next login. `truss daemon stop` stops the daemon for now;
   on Linux and macOS the service manager does not restart it after a clean stop.
 - `uninstall` removes only what `install` created, recognised by the text "Managed by truss
-  daemon install" in the file or task. A unit or plist with that name that you wrote yourself is
+  daemon install" in the file or task. A unit, plist or task with that name that you wrote yourself is
   left alone and reported. It stops the daemon that the login item started, not one you started by hand.
 - If `TRUSS_HOME` is set when you install, the login item uses it (Linux and macOS). On Windows
   `install` refuses it; unset it, or set it for your user with `setx`.
+- On Windows the daemon runs in a console window that stays open, and its output is not saved.
+  Some Windows setups only let administrators create a task that runs at logon; if `install`
+  reports "access denied", TRUSS does not work around it.
 - Linux runs the daemon only while you have a session. To have schedules fire without logging
   in, run `loginctl enable-linger` once.
 

@@ -61,8 +61,8 @@ state). Written alongside the implementation (constitution 2.0.0, principle I).
   `/var/tmp`, `/var/folders` and Windows `AppData\Local\Temp` or `Windows\Temp`. Symbolic links
   are resolved first.
 - **FR-011** Everything install creates carries the text `Managed by truss daemon install`.
-  Install and uninstall leave alone, and report, a unit or plist at the same path without that
-  text. Uninstall never removes anything else, and a task without the text is treated as not ours.
+  Install and uninstall leave alone, and report as an error, a unit, plist or task of the same
+  name without that text. Uninstall never removes anything else.
 - **FR-012** A failed install does not leave a half-installed unit or agent behind: a file that
   install created is removed again. A failing `systemctl disable` during uninstall is reported
   as a warning and the unit file is removed anyway.
@@ -78,6 +78,14 @@ state). Written alongside the implementation (constitution 2.0.0, principle I).
 A daemon started at login has the login environment, not the environment of an interactive
 shell profile. Steps see that environment plus the pipeline's `env`. The docs show, per
 platform, how to give the daemon more: preferably `env` in the pipeline file.
+
+## Known limits
+
+- Windows: the daemon runs in a console window that stays open and its output is not saved.
+  Creating a logon task may need elevation on some setups; install then reports the error and
+  nothing is changed. Neither is verified on a real machine.
+- A reload of a running macOS agent retries `launchctl bootstrap` up to five times, because it
+  can fail briefly right after `bootout`.
 
 ## Out of scope
 

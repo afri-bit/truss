@@ -455,8 +455,10 @@ fi
 # USERPROFILE point at an empty directory, so even a regression cannot touch a
 # real login item.
 mkdir -p "$work/copy" "$work/fakehome"
-cp "$truss" "$work/copy/truss-copy"
-(cd "$work/project" && HOME="$work/fakehome" USERPROFILE="$work/fakehome" "$work/copy/truss-copy" daemon install >"$work/.stdout" 2>"$work/.stderr")
+ext=""
+$windows && ext=".exe"
+cp "$truss" "$work/copy/truss-copy$ext"
+(cd "$work/project" && HOME="$work/fakehome" USERPROFILE="$work/fakehome" "$work/copy/truss-copy$ext" daemon install >"$work/.stdout" 2>"$work/.stderr")
 code=$?
 out="$(cat "$work/.stdout")"
 err="$(cat "$work/.stderr")"

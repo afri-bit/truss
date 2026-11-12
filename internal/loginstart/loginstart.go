@@ -17,6 +17,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -99,8 +100,10 @@ type Host struct {
 	UserHome string // the user's home directory
 	UID      int    // numeric user id (macOS launchd domain)
 	Scratch  string // a private directory for short-lived files (Windows task XML)
-	Run      Runner
-	Files    Files
+	// Wait is the pause between attempts to reload a launchd agent; zero means none.
+	Wait  time.Duration
+	Run   Runner
+	Files Files
 }
 
 // Result describes what Install or Uninstall did, one line per message.
@@ -127,7 +130,13 @@ func Installed(ctx context.Context, h Host) (bool, error) {
 		return h.hasMarker(h.plistPath())
 	case "windows":
 		out, err := h.Run.Run(ctx, "schtasks.exe", SchtasksQueryArgs()...)
-		return err == nil && strings.Contains(string(out), Marker), nil
+		switch {
+		case err != nil: // no such task (or no schtasks: install will say so)
+			return false, nil
+		case !strings.Contains(string(out), Marker):
+			return false, fmt.Errorf("a scheduled task named %q exists but was not created by truss daemon install; leaving it alone", TaskName)
+		}
+		return true, nil
 	}
 	return false, ErrUnsupported
 }

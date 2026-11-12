@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (h Host) plistPath() string {
@@ -67,7 +68,7 @@ func (h Host) installLaunchd(ctx context.Context, s Spec, startNow bool) (Result
 		_ = h.run(ctx, "launchctl", "bootout", target)
 	}
 	if startNow || loaded {
-		if err := h.run(ctx, "launchctl", "bootstrap", h.domain(), path); err != nil {
+		if err := h.bootstrap(ctx, path, loaded); err != nil {
 			if !existed {
 				_ = h.Files.Remove(path)
 			}
@@ -104,4 +105,26 @@ func (h Host) uninstallLaunchd(ctx context.Context) (Result, error) {
 	}
 	res.add("login start removed: %s", path)
 	return res, nil
+}
+
+// bootstrap loads the agent. Right after a bootout, launchd may still be
+// unloading the old one and bootstrap fails with an I/O error, so a reload
+// retries a few times.
+func (h Host) bootstrap(ctx context.Context, path string, reload bool) error {
+	attempts := 1
+	if reload {
+		attempts = 5
+	}
+	var err error
+	for i := 0; i < attempts; i++ {
+		if err = h.run(ctx, "launchctl", "bootstrap", h.domain(), path); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(h.Wait):
+		}
+	}
+	return err
 }

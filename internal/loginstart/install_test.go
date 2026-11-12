@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -68,9 +69,11 @@ func (f *fake) wantCalls(t *testing.T, want ...string) {
 	}
 }
 
-const (
-	unitFile  = "/home/me/.config/systemd/user/truss.service"
-	plistFile = "/home/me/Library/LaunchAgents/io.github.afri-bit.truss.plist"
+// The code joins paths with the build host's separator, so the tests do too.
+var (
+	unitFile   = filepath.Join("/home/me", ".config", "systemd", "user", "truss.service")
+	plistFile  = filepath.Join("/home/me", "Library", "LaunchAgents", "io.github.afri-bit.truss.plist")
+	xmlScratch = filepath.Join("/home/me/.truss", "login-task.xml")
 )
 
 var spec = Spec{Binary: "/usr/local/bin/truss", LogPath: "/home/me/.truss/daemon.log", User: `PC\me`}
@@ -159,12 +162,13 @@ func TestInstall_SystemdRollsBackWhenSystemctlFails(t *testing.T) {
 func TestUninstall_Systemd(t *testing.T) {
 	f := newFake("linux")
 	f.files[unitFile] = SystemdUnit(spec)
-	f.files["/home/me/.config/systemd/user/other.service"] = "keep"
+	otherUnit := filepath.Join("/home/me", ".config", "systemd", "user", "other.service")
+	f.files[otherUnit] = "keep"
 	if _, err := Uninstall(t.Context(), f.host()); err != nil {
 		t.Fatal(err)
 	}
 	f.wantCalls(t, "systemctl --user disable --now truss.service", "systemctl --user daemon-reload")
-	if len(f.files) != 1 || f.files["/home/me/.config/systemd/user/other.service"] != "keep" {
+	if len(f.files) != 1 || f.files[otherUnit] != "keep" {
 		t.Errorf("only the truss unit may go: %v", f.files)
 	}
 }
@@ -277,8 +281,6 @@ func TestUninstall_Launchd(t *testing.T) {
 	}
 }
 
-const xmlScratch = "/home/me/.truss/login-task.xml"
-
 func TestInstall_Task(t *testing.T) {
 	f := newFake("windows")
 	var xmlAtCreate string
@@ -366,20 +368,19 @@ func TestUninstall_Task(t *testing.T) {
 	)
 }
 
-func TestUninstall_TaskNotCreatedByTrussIsLeftAlone(t *testing.T) {
+func TestTask_NotCreatedByTrussIsLeftAlone(t *testing.T) {
 	f := newFake("windows")
 	f.out["schtasks.exe /Query /TN truss-daemon /XML"] = "<Task><Description>mine</Description></Task>"
-	res, err := Uninstall(t.Context(), f.host())
-	if err != nil {
-		t.Fatal(err)
+	if _, err := Uninstall(t.Context(), f.host()); err == nil || !strings.Contains(err.Error(), "not created by truss") {
+		t.Errorf("Uninstall err = %v", err)
+	}
+	if _, err := Install(t.Context(), f.host(), spec, true); err == nil || !strings.Contains(err.Error(), "not created by truss") {
+		t.Errorf("Install err = %v", err)
 	}
 	for _, c := range f.calls {
-		if strings.Contains(c, "/Delete") || strings.Contains(c, "/End") {
+		if strings.Contains(c, "/Delete") || strings.Contains(c, "/End") || strings.Contains(c, "/Create") {
 			t.Errorf("must not touch a foreign task: %s", c)
 		}
-	}
-	if !strings.Contains(strings.Join(res.Messages, ""), "not installed") {
-		t.Errorf("messages = %v", res.Messages)
 	}
 }
 
@@ -417,5 +418,28 @@ func TestUnsupportedOS(t *testing.T) {
 	}
 	if _, err := Uninstall(t.Context(), h); !errors.Is(err, ErrUnsupported) {
 		t.Errorf("Uninstall err = %v", err)
+	}
+}
+
+func TestInstall_LaunchdRetriesBootstrapAfterBootout(t *testing.T) {
+	f := newFake("darwin")
+	f.files[plistFile] = LaunchdPlist(Spec{Binary: "/old"})
+	f.out["launchctl print gui/501/io.github.afri-bit.truss"] = "loaded"
+	h := f.host()
+	attempts := 0
+	h.Run = runnerFunc(func(line string) ([]byte, error) {
+		fields := strings.Fields(line)
+		if strings.Contains(line, "bootstrap") {
+			if attempts++; attempts < 3 {
+				return []byte("Bootstrap failed: 5: Input/output error"), errors.New("exit status 5")
+			}
+		}
+		return f.Run(t.Context(), fields[0], fields[1:]...)
+	})
+	if _, err := Install(t.Context(), h, spec, false); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 3 {
+		t.Errorf("bootstrap attempts = %d, want 3", attempts)
 	}
 }

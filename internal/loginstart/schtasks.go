@@ -99,7 +99,7 @@ func (h Host) installTask(ctx context.Context, s Spec, startNow bool) (Result, e
 	}
 	defer func() { _ = h.Files.Remove(xmlPath) }()
 	if err := h.run(ctx, "schtasks.exe", SchtasksCreateArgs(xmlPath)...); err != nil {
-		return res, err
+		return res, fmt.Errorf("%w (some Windows setups only let administrators create a task that runs at logon; see docs/daemon.md)", err)
 	}
 	verb := "installed"
 	if existed {
