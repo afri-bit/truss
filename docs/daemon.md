@@ -84,7 +84,10 @@ Three limits work together:
 | Overlap | `pipeline.overlap` in the file | `queue` | Whether two runs of the *same* pipeline may overlap, wait, or the second is skipped. |
 | Steps at once | `pipeline.concurrency` in the file | 1 | How many steps of one run execute in parallel. |
 
-Runs that cannot start yet are `queued` and start in the order they were requested.
+Runs that cannot start yet are `queued` and start in the order they were requested. The queue
+survives a restart: stop the daemon and start it again, and the queued runs start, still in
+order. A queued run whose pipeline was unregistered or no longer loads in the meantime is closed
+as `failed` with the reason.
 
 ## Run states
 
@@ -94,8 +97,11 @@ Runs that cannot start yet are `queued` and start in the order they were request
 | `running` | Steps are executing. |
 | `succeeded` | Every step succeeded. |
 | `failed` | A step failed; the note names it. |
-| `cancelled` | You cancelled it, or the daemon stopped. |
+| `cancelled` | You cancelled it, or the daemon stopped while it was running. |
 | `skipped` | Requested but never started: a missed schedule, or `overlap: skip`. |
+
+The trigger says why a run exists: `manual`, `schedule`, `catch-up`, or `local` (started in your
+shell with `truss run --track`, only recorded by the daemon).
 
 Steps are `pending`, `running`, `succeeded`, `failed`, `stopped` (ended because another step
 failed), `cancelled`, or `skipped` (the run ended before they started).
@@ -121,8 +127,8 @@ directory is private to your user.
 | `runs/<run-id>/run.log` | Its run log, the same format `truss run` prints. |
 | `daemon.log` | The daemon's own log when started with `daemon start`. |
 
-The newest 200 runs are kept. A run that was active when the daemon died is closed as `failed`
-on the next start.
+The newest 200 runs are kept. A run that was *running* when the daemon died is closed as
+`failed` on the next start. Runs that were only *queued* are kept and start again.
 
 ## Security
 
@@ -168,7 +174,26 @@ The CLI and TRUSS Desktop use this API; you can too. Base path `/api/v1`, JSON b
 | `GET /runs?pipeline=&limit=` | Runs, newest first. |
 | `GET /runs/{id}` | One run with its steps. |
 | `POST /runs/{id}/cancel` | Cancels it. |
+| `POST /runs` | Opens a *tracked local run* (see below): `{"pipeline": "name", "steps": [{"id": "a", "needs": []}]}`. Answers `201` with the run in state `running`. |
+| `POST /runs/{id}/steps` | Reports a step of a local run: `{"id", "status", "exit_code", "error"}`. |
+| `POST /runs/{id}/log?offset=` | Appends text to a local run's log at its current end; answers `204` with the headers below. Max 256 KiB. |
+| `POST /runs/{id}/finish` | Closes a local run: `{"status": "succeeded" \| "failed" \| "cancelled", "reason"}`. |
 | `GET /runs/{id}/log?offset=` | Log text from a byte offset. `X-Truss-Log-Offset` is the next offset, `X-Truss-Run-Status` the run status; an empty body for a finished run means the log is complete. |
+
+### Tracked local runs
+
+`truss run --track` runs a pipeline in your shell, as `truss run` does, and reports it through
+the four `POST /runs...` endpoints above, so it appears in `truss runs` and Desktop with the
+trigger `local`. The daemon never starts it and it does not use a slot of `--max-runs` or block
+the overlap policy of a pipeline of the same name. Only a `local` run that is `running` accepts
+reports; anything else answers `409`. Bodies over the limits answer `413`; a log append must start
+where the log ends (`409`), and repeating one the log already holds is harmless.
+
+Cancelling a local run (Desktop, `truss cancel`, `POST /runs/{id}/cancel`) closes its record at
+once and asks the CLI to stop: it notices within a fraction of a second and ends the run's
+processes like an interrupt. If the daemon stops while a local run is `running`, the run is
+closed as `failed`; the process in your shell carries on and stops reporting. See
+[ADR 0007](decisions/0007-tracked-local-runs.md).
 
 ```console
 $ TOKEN=$(jq -r .token ~/.truss/daemon.json)

@@ -28,6 +28,8 @@ import (
 	"github.com/afri-bit/truss/internal/runlog"
 )
 
+var zeroTime time.Time
+
 // ErrNotFound means no run has the given id.
 var ErrNotFound = errors.New("run not found")
 
@@ -40,6 +42,11 @@ const (
 	DefaultKeep        = 200
 	logChunk           = 256 << 10
 )
+
+// Resolver reads the definition of a registered pipeline and the directory its
+// runs start in. The manager calls it for queued runs found in the history, so
+// they start from the file as it is now, as every other run does.
+type Resolver func(pipeline string) (def pipeline.Pipeline, dir string, err error)
 
 // Options configures a Manager.
 type Options struct {
@@ -56,6 +63,9 @@ type Options struct {
 	Secrets func() (map[string]string, error)
 	// Now is the clock. Nil means time.Now.
 	Now func() time.Time
+	// Resolve brings queued runs back after a restart. Without it, they are
+	// closed as failed.
+	Resolve Resolver
 }
 
 // Request asks for one run of a registered pipeline.
@@ -95,7 +105,9 @@ type Manager struct {
 }
 
 // Open returns a Manager with the history found in opts.Dir. Runs that were
-// active when the previous daemon stopped are closed as failed.
+// running when the previous daemon stopped are closed as failed. Runs that
+// were still queued stay queued, in request order, and start once Resume is
+// called.
 func Open(opts Options) (*Manager, error) {
 	if opts.MaxParallel < 1 {
 		opts.MaxParallel = DefaultMaxParallel
@@ -119,10 +131,16 @@ func Open(opts Options) (*Manager, error) {
 		if !d.IsDir() || home.ReadJSON(filepath.Join(opts.Dir, d.Name(), "run.json"), &run) != nil || run.ID != d.Name() {
 			continue
 		}
-		rec := &record{run: run}
-		if run.Active() {
+		rec := &record{run: run, stopped: map[string]bool{}}
+		switch run.Status {
+		case api.RunRunning:
 			m.finish(rec, api.RunFailed, "the daemon stopped while this run was active")
 			_ = m.save(rec)
+		case api.RunQueued:
+			if err := m.restore(rec); err != nil {
+				m.finish(rec, api.RunFailed, "the daemon stopped while this run was queued and it could not be restored: "+err.Error())
+				_ = m.save(rec)
+			}
 		}
 		m.records[run.ID] = rec
 		m.order = append(m.order, run.ID)
@@ -137,8 +155,50 @@ func Open(opts Options) (*Manager, error) {
 		}
 		return a.CreatedAt.Before(b.CreatedAt)
 	})
+	for _, id := range m.order {
+		if m.records[id].run.Status == api.RunQueued {
+			m.queue = append(m.queue, id)
+		}
+	}
 	m.prune()
 	return m, nil
+}
+
+// restore reads the definition of a run that was queued when the previous
+// daemon stopped.
+func (m *Manager) restore(rec *record) error {
+	if tracked(rec) {
+		return errors.New("a local run is never queued")
+	}
+	if m.opts.Resolve == nil {
+		return errors.New("no way to read its pipeline")
+	}
+	def, dir, err := m.opts.Resolve(rec.run.Pipeline)
+	if err != nil {
+		return err
+	}
+	plan, err := pipeline.Plan(def)
+	if err != nil {
+		return err
+	}
+	// The run executes the file as it is now, so it shows that file's steps.
+	rec.run.Steps = []api.Step{}
+	for _, s := range plan.Graph {
+		rec.run.Steps = append(rec.run.Steps, api.Step{ID: s.ID, Needs: s.Needs, Status: api.StepPending})
+	}
+	rec.req = Request{Pipeline: rec.run.Pipeline, Definition: def, Dir: dir, Trigger: rec.run.Trigger}
+	if rec.run.ScheduledFor != nil {
+		rec.req.ScheduledFor = *rec.run.ScheduledFor
+	}
+	return nil
+}
+
+// Resume starts the runs restored by Open, as far as the limits allow. Call
+// it once the daemon is ready to serve.
+func (m *Manager) Resume() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.dispatch()
 }
 
 // Submit requests a run. Depending on the pipeline's overlap policy the
@@ -197,6 +257,14 @@ func (m *Manager) Cancel(id string) (api.Run, error) {
 		m.finish(rec, api.RunCancelled, "cancelled before it started")
 		_ = m.save(rec)
 	case api.RunRunning:
+		if tracked(rec) {
+			// The daemon cannot end a process that runs in someone's shell. It
+			// closes the record; the run learns of it on its next report and
+			// stops itself.
+			m.finish(rec, api.RunCancelled, "cancelled from the daemon; the local run is asked to stop")
+			_ = m.save(rec)
+			break
+		}
 		rec.cancelled = true
 		rec.cancel() // the run's goroutine records the outcome
 	}
@@ -296,18 +364,18 @@ func (m *Manager) Log(id string, offset int64) ([]byte, int64, string, error) {
 	return buf[:n], offset + int64(n), run.Status, nil
 }
 
-// Close cancels every active run and waits for them to end.
+// Close cancels every running run and waits for them to end. Queued runs stay
+// queued on disk; the next daemon starts them.
 func (m *Manager) Close() {
 	m.mu.Lock()
 	m.closed = true
-	for _, id := range m.queue {
-		rec := m.records[id]
-		m.finish(rec, api.RunCancelled, "the daemon stopped")
-		_ = m.save(rec)
-	}
-	m.queue = nil
 	for _, rec := range m.records {
-		if rec.run.Status == api.RunRunning {
+		switch {
+		case rec.run.Status != api.RunRunning:
+		case tracked(rec):
+			m.finish(rec, api.RunFailed, "the daemon stopped while this run was active")
+			_ = m.save(rec)
+		default:
 			rec.cancelled = true
 			rec.cancel()
 		}
@@ -380,11 +448,11 @@ func (m *Manager) logPath(id string) string {
 	return filepath.Join(m.opts.Dir, id, "run.log")
 }
 
-// activeFor counts queued and running runs of a pipeline. The caller holds m.mu.
+// activeFor counts the daemon's queued and running runs of a pipeline. The caller holds m.mu.
 func (m *Manager) activeFor(name string) int {
 	n := 0
 	for _, rec := range m.records {
-		if rec.run.Pipeline == name && rec.run.Active() {
+		if rec.run.Pipeline == name && rec.run.Active() && !tracked(rec) {
 			n++
 		}
 	}
@@ -407,7 +475,7 @@ func (m *Manager) dispatch() {
 	running := map[string]int{}
 	total := 0
 	for _, rec := range m.records {
-		if rec.run.Status == api.RunRunning {
+		if rec.run.Status == api.RunRunning && !tracked(rec) {
 			running[rec.run.Pipeline]++
 			total++
 		}

@@ -16,7 +16,8 @@ const usageText = `TRUSS runs pipelines on your machine.
 usage: truss <command> [arguments]
 
 Run here, without the daemon:
-  run [<path>]                        run a pipeline definition (default: truss.yaml)
+  run [<path>] [--track]              run a pipeline definition (default: truss.yaml);
+                                      --track also reports it to the daemon (needs it)
   validate [<path>]                   check a definition without running it
 
 The daemon:
@@ -86,10 +87,21 @@ func RunWithInput(ctx context.Context, args []string, cwd string, env []string, 
 	in.args = args[1:]
 	switch args[0] {
 	case "run":
-		if !isRun(args) {
+		// --track is the only option of run; any other argument is the path,
+		// so a file named like a flag still runs (spec 001).
+		var pos []string
+		track := false
+		for _, a := range in.args {
+			if a == "--track" {
+				track = true
+			} else {
+				pos = append(pos, a)
+			}
+		}
+		if len(pos) > 1 {
 			return in.usage()
 		}
-		return runLocal(ctx, args, cwd, env, stdout, stderr)
+		return runLocal(ctx, pos, track, cwd, env, stdout, stderr)
 	case "secret":
 		return in.secret(ctx)
 	case "validate":
@@ -129,7 +141,7 @@ func isVersion(args []string) bool {
 }
 
 func isRun(args []string) bool {
-	return len(args) >= 1 && len(args) <= 2 && args[0] == "run"
+	return len(args) >= 1 && args[0] == "run"
 }
 
 // definitionPath returns the definition a command works on: the first

@@ -11,6 +11,7 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 ### Changed
 
+- Queued runs survive a daemon restart. They stay `queued` when the daemon stops and start in request order when it starts again, instead of being cancelled. A queued run whose pipeline can no longer be loaded is closed as `failed`. Runs that were running are cancelled on a graceful stop, or closed as `failed` after a crash, as before.
 - `truss help` and usage errors print the full command list. The first usage line is now `usage: truss <command> [arguments]`.
 - Project process: constitution 2.0.0. A specification travels with the code instead of gating it, and tests ship with the behavior (see `docs/decisions/0005-specs-record-they-do-not-gate.md`).
 - Require Go 1.27.3. Go 1.22.5's standard library is affected by GO-2025-3956 (`os/exec` LookPath) and GO-2025-3750 (`os` and `syscall`), which the vulnerability scan reports through the host executor and CLI.
@@ -21,6 +22,7 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 ### Added
 
+- **Tracked local runs.** `truss run --track` still executes in your shell with your environment, and also reports the run to the daemon: it shows up in `truss runs` and TRUSS Desktop with the trigger `local`, its steps and its log. It needs a running daemon and fails with the usual hint before running anything if there is none; if the daemon goes away mid-run, the run finishes normally with one warning. Cancelling a tracked run in the daemon or Desktop stops the local run. Desktop shows a `local` badge. New API v1 endpoints, additive: `POST /runs`, `POST /runs/{id}/steps`, `POST /runs/{id}/log?offset=`, `POST /runs/{id}/finish` (see `docs/decisions/0007-tracked-local-runs.md`).
 - **Secrets.** `truss secret set|list|remove` keeps credentials in `secrets.json` in the TRUSS home (private file, not encrypted; `set` reads standard input or a hidden prompt, never an argument). A pipeline, job or step lists `secrets: [NAME]` and receives them as environment variables. A missing secret fails the run before any step starts. Stored values in step output are replaced by `***` in the run log, saved logs, API and Desktop; encoded or transformed values are not caught (specs/012-secrets, ADR 0006).
 - **The daemon.** `truss daemon start`, `stop`, `status` and `run` manage a background service that listens on `127.0.0.1:7878`. It keeps its state under `~/.truss` (or `TRUSS_HOME`) and protects its HTTP API (`/api/v1`) with a token only your user can read.
 - **Registered pipelines.** `truss register [<path>] [--name <name>]`, `unregister`, `pipelines`, `pause` and `resume`. The daemon stores the file's path, reads it again before every run, and notices edits.
