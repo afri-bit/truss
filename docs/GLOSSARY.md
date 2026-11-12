@@ -220,7 +220,49 @@ The CLI delegates execution logic to the engine.
 
 ### Daemon
 
-A long-running TRUSS process responsible for capabilities such as run management, APIs, concurrency, and event streaming.
+The long-running TRUSS process on your machine. It keeps the registry, fires schedules, queues
+and executes runs, stores their history, and serves the HTTP API that the CLI and TRUSS Desktop
+use. Started with `truss daemon start`.
+
+### Job
+
+A named, ordered list of steps inside a pipeline. The steps of a job run one after another;
+jobs wait for the jobs they need. In logs a step of a job is named `job/step`.
+
+### Trigger
+
+What causes a pipeline run: `manual` (someone asked), `schedule` (a cron time was reached), or
+`catch-up` (a missed cron time that the schedule asked to make up for).
+
+### Schedule
+
+A cron expression in `on.schedule`, with an optional timezone and a missed-run policy. Only the
+daemon acts on schedules.
+
+### Missed Run
+
+A scheduled time that passed while nothing was watching the clock: the machine was off or
+asleep, or the daemon was stopped. By default it is skipped and recorded; `missed: run` turns
+it into one catch-up run.
+
+### Registration
+
+A name and the path of a pipeline file, stored by the daemon. The file stays where it is and
+stays the source of truth.
+
+### Overlap
+
+What happens when a run is requested while another run of the same pipeline is active:
+`queue`, `skip`, or `parallel`.
+
+### TRUSS Home
+
+The directory where the daemon keeps its state: `~/.truss`, or `TRUSS_HOME`.
+
+### TRUSS Desktop
+
+The graphical interface: a web application served by the daemon and opened with
+`truss desktop`.
 
 ### Worker
 
