@@ -313,7 +313,7 @@ views.runs = {
 };
 
 // The run view keeps its log between refreshes so the text is not re-fetched.
-const logState = { id: "", offset: 0, text: "", step: "", follow: true, timer: 0, done: false };
+const logState = { id: "", offset: 0, text: "", step: "", follow: true, timer: 0, done: false, decoder: null };
 
 function paintLog() {
   const pre = document.getElementById("log");
@@ -340,9 +340,11 @@ async function pumpLog(id) {
   try {
     for (;;) {
       const res = await api("GET", `/runs/${encodeURIComponent(id)}/log?offset=${logState.offset}`);
-      const chunk = await res.text();
+      const bytes = await res.arrayBuffer();
       if (logState.id !== id) return;
-      logState.offset = Number(res.headers.get("X-Truss-Log-Offset")) || logState.offset + chunk.length;
+      // One streaming decoder, so a character split across two reads stays whole.
+      const chunk = logState.decoder.decode(bytes, { stream: true });
+      logState.offset = Number(res.headers.get("X-Truss-Log-Offset")) || logState.offset + bytes.byteLength;
       const status = res.headers.get("X-Truss-Run-Status");
       if (chunk) { logState.text += chunk; paintLog(); continue; }
       logState.done = status !== "queued" && status !== "running";
@@ -358,7 +360,7 @@ views.run = {
   render(run) {
     if (logState.id !== run.id) {
       clearTimeout(logState.timer);
-      Object.assign(logState, { id: run.id, offset: 0, text: "", step: "", follow: true, done: false });
+      Object.assign(logState, { id: run.id, offset: 0, text: "", step: "", follow: true, done: false, decoder: new TextDecoder("utf-8") });
       pumpLog(run.id);
     }
     const select = (id) => { logState.step = logState.step === id ? "" : id; route(); };
@@ -399,7 +401,7 @@ views.run = {
 // ---------- routing and refresh ----------
 
 function parseRoute() {
-  const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean).map(decodeURIComponent);
+  const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean).map((p) => { try { return decodeURIComponent(p); } catch { return p; } });
   if (parts[0] === "pipelines") return parts[1] ? { view: views.pipeline, arg: parts[1] } : { view: views.pipelines };
   if (parts[0] === "runs") return parts[1] ? { view: views.run, arg: parts[1] } : { view: views.runs };
   return { view: views.dashboard };
