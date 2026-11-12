@@ -244,7 +244,7 @@ rm -rf "$work"
 # Any other invocation is a usage error that executes nothing.
 new_dir
 run_truss "$work/project" build
-if [ "$code" -ne 1 ] || [[ "$err" != *"usage: truss run [<path>]"* ]]; then
+if [ "$code" -ne 1 ] || [[ "$err" != *"usage: truss <command> [arguments]"* ]]; then
 	fail "usage error" "want exit 1 and the usage line"
 else
 	pass "usage error"
@@ -360,6 +360,96 @@ elif ! cmp -s "$work/before.log" "$work/project/.truss/run.log"; then
 else
 	pass "unknown field"
 fi
+rm -rf "$work"
+
+# Jobs: the steps of a job run in order and a job waits for the jobs it needs.
+new_dir
+cat >"$work/project/truss.yaml" <<EOF
+version: "1"
+
+pipeline:
+  name: jobs
+  concurrency: 2
+
+env:
+  STAGE: e2e
+
+jobs:
+  build:
+    steps:
+      - id: compile
+        run: echo compiling
+      - id: package
+        run: echo packaging
+  ship:
+    needs: [build]
+    steps:
+      - id: publish
+        run: echo publishing
+EOF
+run_truss "$work/project" run
+if [ "$code" -ne 0 ]; then
+	fail "jobs" "want exit 0"
+elif ! has_line "step build/package | packaging" || ! has_line "step ship/publish | publishing"; then
+	fail "jobs" "missing job step output"
+elif ! has_line "summary succeeded steps 3 duration *"; then
+	fail "jobs" "missing summary"
+else
+	pass "jobs"
+fi
+run_truss "$work/project" validate
+if [ "$code" -ne 0 ] || [[ "$out" != *"step ship/publish needs build/package"* ]]; then
+	fail "validate" "want exit 0 and the flattened steps"
+else
+	pass "validate"
+fi
+
+# The daemon: start it, register the pipeline, run it, read the history, stop it.
+export TRUSS_HOME="$work/home"
+run_truss "$work/project" daemon start --address 127.0.0.1:0
+if [ "$code" -ne 0 ] || [[ "$out" != "daemon started"* ]]; then
+	fail "daemon start" "want exit 0 and the started line"
+else
+	pass "daemon start"
+	run_truss "$work/project" register
+	if [ "$code" -ne 0 ] || [[ "$out" != "registered jobs "* ]]; then
+		fail "register" "want exit 0 and the registered line"
+	else
+		pass "register"
+	fi
+	run_truss "$work/project" trigger jobs --follow
+	if [ "$code" -ne 0 ] || ! has_line "step ship/publish | publishing" || ! has_line "summary succeeded steps 3 duration *"; then
+		fail "trigger" "want exit 0 and the run log"
+	else
+		pass "trigger"
+	fi
+	run_truss "$work/project" runs jobs
+	if [ "$code" -ne 0 ] || [[ "$out" != *"succeeded"*"manual"* ]]; then
+		fail "runs" "want the finished run in the history"
+	else
+		pass "runs"
+	fi
+	run_truss "$work/project" unregister jobs
+	run_truss "$work/project" pipelines
+	if [ "$code" -ne 0 ] || [[ "$out" != "no pipelines registered"* ]]; then
+		fail "unregister" "want an empty registry"
+	else
+		pass "unregister"
+	fi
+	run_truss "$work/project" daemon stop
+	if [ "$code" -ne 0 ] || [ "$out" != "daemon stopped" ]; then
+		fail "daemon stop" "want exit 0 and the stopped line"
+	else
+		pass "daemon stop"
+	fi
+fi
+run_truss "$work/project" daemon status
+if [ "$code" -ne 1 ]; then
+	fail "daemon status" "want exit 1 when no daemon runs"
+else
+	pass "daemon status"
+fi
+unset TRUSS_HOME
 rm -rf "$work"
 
 if [ "$failures" -gt 0 ]; then
