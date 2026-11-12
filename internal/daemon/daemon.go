@@ -384,6 +384,10 @@ func (d *Daemon) logf(format string, args ...any) {
 
 func stamp(t time.Time) string { return t.Format("2006-01-02 15:04:05") }
 
+// CheckAddress reports why address cannot be a daemon address: it is not
+// host:port, or not on the loopback interface.
+func CheckAddress(address string) error { return checkLoopback(address) }
+
 // checkLoopback refuses addresses that would expose the API to the network.
 func checkLoopback(address string) error {
 	host, _, err := net.SplitHostPort(address)

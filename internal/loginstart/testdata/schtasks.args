@@ -1,0 +1,5 @@
+create: /Create /TN truss-daemon /XML C:\Users\me\.truss\login-task.xml /F
+query:  /Query /TN truss-daemon /XML
+run:    /Run /TN truss-daemon
+end:    /End /TN truss-daemon
+delete: /Delete /TN truss-daemon /F
