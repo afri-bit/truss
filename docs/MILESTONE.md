@@ -24,6 +24,8 @@ that matches it. `go.mod` already says `// version: 0.1.0`. The changelog stays 
 | Step concurrency | `pipeline.concurrency`, strict fields, stoppable process trees | `004-step-concurrency` | Implemented |
 | Jobs, schedules, step settings | `jobs`, `on.schedule`, `env`, `dir`, `timeout`, `overlap`, `truss validate` | `005-jobs-schedules-and-step-settings` | Implemented |
 | Daemon | Background service, registry, cron scheduling with missed-run policy, run queue and history, HTTP API, CLI commands | `006-daemon-registry-and-scheduling` | Implemented |
+| Run tracking and queue | Queued runs survive a daemon restart; `truss run --track` reports a local run to the daemon (`local` trigger) | `010-run-tracking-and-queue` | Implemented |
+| Secrets | `truss secret`, `secrets` in the pipeline file, redaction of values in step output | `012-secrets` | Implemented |
 | TRUSS Desktop | Dashboard, pipeline control, run view with graph and live log | `007-truss-desktop` | First version |
 | Retries and conditions | `retries`, `retry_delay`, `continue-on-error`, `if` on steps, `if` on jobs | `009-retries-and-conditions` | Implemented |
 
@@ -36,13 +38,14 @@ These are known gaps inside the release scope:
 
 - Daemon and Desktop are verified on Linux only. macOS and Windows build; their first proof is CI.
 - TRUSS Desktop has no automated UI test.
-- Start at login is documented, not automated.
+- Start at login is automated by `truss daemon install` ([spec 011](../specs/011-daemon-start-at-login/spec.md)) but verified by generation and fakes only; its first real run on each OS is a maintainer try-out.
 - `docs/agents.md` and the `/feature` skill still describe the pre-2.0.0 process.
 
 ### Not in v0.1.0
 
 - Container execution and remote workers
-- Matrix builds, caches, artifacts, a secret store, step outputs in conditions
+- Matrix builds, caches, artifacts, step outputs in conditions
+- Encrypted or OS-keychain secret storage, per-pipeline secret scope
 - Triggers other than cron and manual (file changes, webhooks)
 - A packaged desktop window, tray icon and notifications
 - SDKs and CI-provider plugins

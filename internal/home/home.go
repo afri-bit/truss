@@ -49,6 +49,9 @@ func (d Dir) Registry() string { return d.Path("registry.json") }
 // Clock is the file that remembers when the scheduler last looked at the time.
 func (d Dir) Clock() string { return d.Path("clock.json") }
 
+// Secrets is the file that holds stored secrets (see internal/secrets).
+func (d Dir) Secrets() string { return d.Path("secrets.json") }
+
 // Runs is the directory that holds one folder per run.
 func (d Dir) Runs() string { return d.Path("runs") }
 

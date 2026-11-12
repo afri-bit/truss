@@ -43,6 +43,9 @@ const (
 	TriggerSchedule = "schedule"
 	// TriggerCatchUp is a scheduled run started late, for a `missed: run` schedule.
 	TriggerCatchUp = "catch-up"
+	// TriggerLocal marks a run that executes in a caller's shell and only
+	// reports to the daemon (`truss run --track`). The daemon never starts it.
+	TriggerLocal = "local"
 )
 
 // Run is one execution of a registered pipeline, or the record of one that
@@ -151,6 +154,55 @@ type Endpoint struct {
 	PID       int       `json:"pid"`
 	StartedAt time.Time `json:"started_at"`
 	Version   string    `json:"version"`
+}
+
+// Limits of the tracking endpoints.
+const (
+	// MaxLogChunk is the most bytes one log append may carry.
+	MaxLogChunk = 256 << 10
+	// MaxTrackedSteps is the most steps a tracked run may declare.
+	MaxTrackedSteps = 1000
+	// MaxTrackedName is the longest pipeline name of a tracked run, in bytes.
+	MaxTrackedName = 128
+	// MaxOpenTracked is the most tracked runs that may be running at once.
+	MaxOpenTracked = 100
+	// MaxTrackedLog is the most bytes a tracked run's log may hold.
+	MaxTrackedLog = 64 << 20
+	// MaxReason is the longest reason a client may set, in bytes.
+	MaxReason = 2000
+)
+
+// CreateRunRequest opens a tracked run: one that executes outside the daemon
+// and reports its progress to it.
+type CreateRunRequest struct {
+	// Pipeline is the name shown for the run (pipeline.name of the file).
+	Pipeline string `json:"pipeline"`
+	// Steps is the step graph; every step starts as pending.
+	Steps []PlanStep `json:"steps"`
+}
+
+// StepUpdate reports the state of one step of a tracked run. The daemon
+// stamps the times. Status is running, succeeded, failed, stopped, cancelled or
+// skipped. A failed step may be reported running again (a retry), and a
+// failed step may be reported failed once more with ContinuedOnError set.
+type StepUpdate struct {
+	ID       string `json:"id"`
+	Status   string `json:"status"`
+	ExitCode *int   `json:"exit_code,omitempty"`
+	Error    string `json:"error,omitempty"`
+	// Attempts is the number of the attempt that is starting, when above 1.
+	Attempts int `json:"attempts,omitempty"`
+	// ContinuedOnError marks a failed step whose continue-on-error let the run go on.
+	ContinuedOnError bool `json:"continued_on_error,omitempty"`
+	// Reason says why a step was skipped.
+	Reason string `json:"reason,omitempty"`
+}
+
+// FinishRequest closes a tracked run. Status is succeeded, failed or
+// cancelled. Steps that are still open are closed with it.
+type FinishRequest struct {
+	Status string `json:"status"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // Log response headers.

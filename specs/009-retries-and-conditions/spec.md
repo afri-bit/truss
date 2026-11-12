@@ -7,7 +7,7 @@
 This spec extends pipeline schema `"1"` with three optional step fields and one optional job
 field. It changes the meaning of "a failure fails the whole run" only for definitions that use
 them. The user-facing reference is [`docs/pipeline-reference.md`](../../docs/pipeline-reference.md).
-Decision record: [ADR 0006](../../docs/decisions/0006-retries-conditions-and-continue-on-error.md).
+Decision record: [ADR 0009](../../docs/decisions/0009-retries-conditions-and-continue-on-error.md).
 Tier 2 (pipeline schema, run-log format, daemon API, execution semantics).
 
 ## User stories
@@ -132,7 +132,7 @@ Pipeline schema `"1"` is extended, not changed: every new key is optional, and a
 does not use them runs exactly as before. The reverse does not hold. Before this release the
 keys `retries`, `retry_delay`, `continue-on-error` and `if` were rejected as unknown fields, so a
 file that uses them fails to validate on an older TRUSS with `unknown field`, which is the safe
-failure. No version bump is needed (ADR 0006).
+failure. No version bump is needed (ADR 0009).
 
 Run log: three line shapes are new (FR-020) and appear only when the new fields are used.
 Parsers that read `started`, `finished`, `summary` and `error` lines keep working; a parser that
