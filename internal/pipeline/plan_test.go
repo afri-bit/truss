@@ -187,3 +187,69 @@ func TestPlan_Concurrency(t *testing.T) {
 		})
 	}
 }
+
+func TestPlan_DirPrecedenceIsStepThenJobThenWorkdir(t *testing.T) {
+	p, err := Parse([]byte(`
+version: "1"
+pipeline:
+  name: dirs
+  workdir: base
+jobs:
+  a:
+    dir: jobdir
+    steps:
+      - id: own
+        run: x
+        dir: stepdir
+      - id: inherit
+        run: x
+  b:
+    steps:
+      - id: plain
+        run: x
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(p); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := Plan(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, s := range plan.Graph {
+		got[s.ID] = s.Dir
+	}
+	want := map[string]string{"a/own": "stepdir", "a/inherit": "jobdir", "b/plain": "base"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("dirs = %v, want %v", got, want)
+	}
+}
+
+func TestPlan_WorkdirAppliesToFlatSteps(t *testing.T) {
+	p, err := Parse([]byte("version: \"1\"\npipeline:\n  name: n\n  workdir: base\nsteps:\n  - id: a\n    run: x\n  - id: b\n    run: x\n    dir: other\n"))
+	if err != nil || Validate(p) != nil {
+		t.Fatalf("parse/validate: %v %v", err, Validate(p))
+	}
+	plan, err := Plan(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Graph[0].Dir != "base" || plan.Graph[1].Dir != "other" {
+		t.Fatalf("dirs = %q, %q", plan.Graph[0].Dir, plan.Graph[1].Dir)
+	}
+}
+
+func TestValidate_WorkdirMustBeANonEmptyString(t *testing.T) {
+	for _, value := range []string{`""`, "[a]", "5"} {
+		p, err := Parse([]byte("version: \"1\"\npipeline:\n  name: n\n  workdir: " + value + "\nsteps:\n  - id: a\n    run: x\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := Validate(p); err == nil || !strings.Contains(err.Error(), "pipeline workdir must be a non-empty string") {
+			t.Errorf("workdir %s: err = %v", value, err)
+		}
+	}
+}

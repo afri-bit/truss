@@ -100,6 +100,8 @@ func parsePipelineBlock(p *Pipeline, val *yaml.Node) {
 			}
 		case "concurrency":
 			parseConcurrency(p, v)
+		case "workdir":
+			p.Workdir = parseString(p, v, "pipeline workdir")
 		case "overlap":
 			p.Overlap = Overlap(oneOf(p, v, "pipeline overlap", string(OverlapQueue), string(OverlapSkip), string(OverlapParallel)))
 		default:
