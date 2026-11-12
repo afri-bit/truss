@@ -18,7 +18,7 @@ the address instead.
 | Page | Shows | You can |
 |---|---|---|
 | **Dashboard** | Counters for today, active runs, the next scheduled runs, recent runs. | Jump to any run or pipeline. |
-| **Pipelines** | Every registered file with its state, schedules, next and last run. | Register a file, run it now, pause or resume its schedules, unregister it. |
+| **Pipelines** | Every registered file with its state, schedules, next and last run. | Register a file (type its path or press **Browse…**), run it now, pause or resume its schedules, unregister it. |
 | **Pipeline** | Its settings, its step graph colored by the last run, its run history. | The same actions. |
 | **Runs** | Every run the daemon started or skipped, newest first. | Open one. |
 | **Run** | The step graph, each step's result and duration, and the run log, live while it runs. | Cancel the run, run it again, click a step to see only its log lines. |
@@ -26,6 +26,21 @@ the address instead.
 ![A failed run](images/desktop-run.png)
 
 The pages refresh on their own about every second and a half.
+
+## Registering with the file picker
+
+Browsers cannot show a file's full path, so **Browse…** asks the daemon to list folders for
+you. It starts in your home directory (or the folder of the path you typed), shows folders and
+`.yaml`/`.yml` files by name, and fills the path field when you pick one. Use **Show hidden**
+for dot-folders. Escape closes it. The daemon never reads the files it lists.
+
+If the daemon stops, Desktop shows **Daemon unreachable** and reconnects when it is back.
+
+## Tests
+
+`tests/ui/` holds browser tests (Node and Playwright) that start a real daemon and drive this
+page. Run them with `go build -o bin/truss ./cmd/truss`, then `cd tests/ui && npm ci && npx
+playwright install chromium && npm test`. CI runs them on Linux.
 
 ## How it is built
 

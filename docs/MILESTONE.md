@@ -24,7 +24,7 @@ that matches it. `go.mod` already says `// version: 0.1.0`. The changelog stays 
 | Step concurrency | `pipeline.concurrency`, strict fields, stoppable process trees | `004-step-concurrency` | Implemented |
 | Jobs, schedules, step settings | `jobs`, `on.schedule`, `env`, `dir`, `timeout`, `overlap`, `truss validate` | `005-jobs-schedules-and-step-settings` | Implemented |
 | Daemon | Background service, registry, cron scheduling with missed-run policy, run queue and history, HTTP API, CLI commands | `006-daemon-registry-and-scheduling` | Implemented |
-| TRUSS Desktop | Dashboard, pipeline control, run view with graph and live log | `007-truss-desktop` | First version |
+| TRUSS Desktop | Dashboard, pipeline control, run view with graph and live log, file picker, browser tests | `007-truss-desktop`, `013-desktop-polish` | Implemented |
 
 **Operating systems.** Linux, macOS and Windows. A `run` string is a command for that host's
 shell; v0.1.0 does not promise that one file runs unchanged on every shell.
@@ -34,7 +34,7 @@ shell; v0.1.0 does not promise that one file runs unchanged on every shell.
 These are known gaps inside the release scope:
 
 - Daemon and Desktop are verified on Linux only. macOS and Windows build; their first proof is CI.
-- TRUSS Desktop has no automated UI test.
+- TRUSS Desktop browser tests run on Linux in CI only.
 - Start at login is documented, not automated.
 - `docs/agents.md` and the `/feature` skill still describe the pre-2.0.0 process.
 
