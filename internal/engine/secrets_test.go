@@ -57,12 +57,12 @@ func TestRun_SecretReachesOnlyDeclaringStep(t *testing.T) {
 	if err != nil || run.Status != pipeline.StatusSucceeded {
 		t.Fatalf("run = %+v, err = %v", run, err)
 	}
-	// Both values are redacted, which proves the step received TRUSS_TOKEN:
-	// an unset variable would print an empty line instead of ***.
+	// The value is redacted, which proves the step received TRUSS_TOKEN: an
+	// unset variable would print nothing (or, under cmd.exe, "%NAME%").
 	if got := strings.Fields(ev.out["uses"]); len(got) == 0 || got[0] != "***" {
 		t.Errorf("uses output = %q, want *** first", ev.out["uses"])
 	}
-	if strings.Contains(ev.out["plain"], "***") {
+	if strings.Contains(ev.out["plain"], "***") || strings.Contains(ev.out["plain"], canary) {
 		t.Errorf("an undeclared step received the secret: %q", ev.out["plain"])
 	}
 }

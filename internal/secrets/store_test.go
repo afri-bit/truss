@@ -78,16 +78,21 @@ func TestStore_FileIsPrivate(t *testing.T) {
 	if dir.Mode().Perm() != 0o700 {
 		t.Errorf("directory mode = %v, want 0700", dir.Mode().Perm())
 	}
-	// A stale temporary file with loose permissions must not leak the new value.
-	stale := s.Path() + ".tmp"
-	if err := os.WriteFile(stale, []byte("old"), 0o644); err != nil {
-		t.Fatal(err)
+}
+
+func TestStore_ReplacingLeavesNoTemporaryFile(t *testing.T) {
+	s := newStore(t)
+	for i := 0; i < 3; i++ {
+		if err := s.Set("TOKEN", canary+string(rune('a'+i))); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := s.Set("TOKEN", canary+"2"); err != nil {
-		t.Fatal(err)
+	entries, err := os.ReadDir(filepath.Dir(s.Path()))
+	if err != nil || len(entries) != 1 || entries[0].Name() != "secrets.json" {
+		t.Fatalf("directory = %v, %v", entries, err)
 	}
-	if _, err := os.Stat(stale); err == nil {
-		t.Error("temporary file left behind")
+	if all, _ := s.Load(); all["TOKEN"] != canary+"c" {
+		t.Errorf("TOKEN = %q", all["TOKEN"])
 	}
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -26,7 +27,7 @@ func secretLoader(env []string) func() (map[string]string, error) {
 }
 
 // secret runs `truss secret set|list|remove`. It never prints a value.
-func (in invocation) secret() int {
+func (in invocation) secret(ctx context.Context) int {
 	if len(in.args) == 0 {
 		return in.usage()
 	}
@@ -60,7 +61,7 @@ func (in invocation) secret() int {
 		if !secrets.ValidName(name) {
 			return in.fail(fmt.Errorf("%q is not a valid secret name: use letters, digits and '_', not starting with a digit", name))
 		}
-		value, err := in.readSecretValue(name)
+		value, err := in.readSecretValue(ctx, name)
 		if err != nil {
 			return in.fail(err)
 		}
@@ -74,13 +75,13 @@ func (in invocation) secret() int {
 
 // readSecretValue reads a value from a terminal without echo, asking twice,
 // or from a pipe or file as the whole input minus one trailing newline.
-func (in invocation) readSecretValue(name string) (string, error) {
+func (in invocation) readSecretValue(ctx context.Context, name string) (string, error) {
 	if f, ok := in.stdin.(*os.File); ok && isTerminal(f) {
-		first, err := readHidden(f, in.stderr, "Value for "+name+" (input is hidden): ")
+		first, err := readHidden(ctx, f, in.stderr, "Value for "+name+" (input is hidden): ")
 		if err != nil {
 			return "", err
 		}
-		again, err := readHidden(f, in.stderr, "Repeat the value: ")
+		again, err := readHidden(ctx, f, in.stderr, "Repeat the value: ")
 		if err != nil {
 			return "", err
 		}
@@ -103,18 +104,34 @@ func (in invocation) readSecretValue(name string) (string, error) {
 	return value, nil
 }
 
-// readHidden prompts on w and reads one line from the terminal f with echo off.
-func readHidden(f *os.File, w io.Writer, prompt string) (string, error) {
+// readHidden prompts on w and reads one line from the terminal f with echo
+// off. The terminal still delivers Ctrl-C as a signal that cancels ctx, so the
+// read runs in a goroutine and ctx ends the wait; echo is restored either way.
+func readHidden(ctx context.Context, f *os.File, w io.Writer, prompt string) (string, error) {
 	restore, err := disableEcho(f)
 	if err != nil {
 		return "", fmt.Errorf("cannot hide the input on this terminal; pipe the value instead: %w", err)
 	}
 	defer restore()
 	fmt.Fprint(w, prompt)
-	line, err := bufio.NewReader(f).ReadString('\n')
-	fmt.Fprintln(w)
-	if err != nil && (!errors.Is(err, io.EOF) || line == "") {
-		return "", fmt.Errorf("read the value: %w", err)
+	type result struct {
+		line string
+		err  error
 	}
-	return strings.TrimRight(line, "\r\n"), nil
+	done := make(chan result, 1)
+	go func() {
+		line, err := bufio.NewReader(f).ReadString('\n')
+		done <- result{line, err}
+	}()
+	select {
+	case <-ctx.Done():
+		fmt.Fprintln(w)
+		return "", ctx.Err()
+	case r := <-done:
+		fmt.Fprintln(w)
+		if r.err != nil && (!errors.Is(r.err, io.EOF) || r.line == "") {
+			return "", fmt.Errorf("read the value: %w", r.err)
+		}
+		return strings.TrimRight(r.line, "\r\n"), nil
+	}
 }

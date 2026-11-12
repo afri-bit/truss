@@ -51,7 +51,9 @@ secret NPM_TOKEN saved
 Secrets live in `secrets.json` in the [TRUSS home](daemon.md#where-state-lives). They are **not
 encrypted**. On Linux and macOS the file is `0600` and TRUSS refuses to read it if others can.
 On Windows there are no mode bits: the file relies on the permissions it inherits from your user
-profile, and TRUSS does not change them. The daemon has no API for secrets. Pipelines use them
+profile, and TRUSS does not change them; if you point `TRUSS_HOME` at a shared folder, nothing
+checks it. On systems other than Linux, macOS and Windows, and when standard input is not a console
+(some Windows terminals such as Git Bash), `set` reads the value from standard input with no prompt. The daemon has no API for secrets. Pipelines use them
 through [`secrets`](pipeline-reference.md#secrets).
 
 ## The daemon

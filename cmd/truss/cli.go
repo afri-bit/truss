@@ -91,7 +91,7 @@ func RunWithInput(ctx context.Context, args []string, cwd string, env []string, 
 		}
 		return runLocal(ctx, args, cwd, env, stdout, stderr)
 	case "secret":
-		return in.secret()
+		return in.secret(ctx)
 	case "validate":
 		return in.validate(ctx)
 	case "daemon":

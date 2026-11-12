@@ -118,12 +118,13 @@ func (s *Store) save(all map[string]string) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return fmt.Errorf("prepare secrets directory: %w", err)
 	}
-	tmp := s.path + ".tmp"
-	_ = os.Remove(tmp)                                                   // a stale file could have looser permissions
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- inside the TRUSS home
+	// CreateTemp makes a uniquely named file, private to the user on Unix, so
+	// concurrent writers never share or inherit a temporary file.
+	f, err := os.CreateTemp(filepath.Dir(s.path), "secrets-*.tmp")
 	if err != nil {
 		return fmt.Errorf("write secrets: %w", err)
 	}
+	tmp := f.Name()
 	_, werr := f.Write(append(data, '\n'))
 	if werr == nil {
 		werr = f.Sync()
@@ -135,12 +136,11 @@ func (s *Store) save(all map[string]string) error {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("write secrets: %w", werr)
 	}
+	// Rename replaces the file on every supported OS. The live store is never
+	// deleted first: a failed replace leaves the old secrets intact.
 	if err := os.Rename(tmp, s.path); err != nil {
-		_ = os.Remove(s.path) // Windows cannot always rename over a file
-		if err = os.Rename(tmp, s.path); err != nil {
-			_ = os.Remove(tmp)
-			return fmt.Errorf("replace secrets: %w", err)
-		}
+		_ = os.Remove(tmp)
+		return fmt.Errorf("replace secrets: %w", err)
 	}
 	return nil
 }
