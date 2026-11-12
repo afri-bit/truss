@@ -2,11 +2,14 @@ package secrets
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // canary is a made-up value, never a real credential.
@@ -147,5 +150,68 @@ func TestStore_RefusesSymbolicLink(t *testing.T) {
 	}
 	if _, err := s.Load(); err == nil {
 		t.Fatal("Load followed a symbolic link")
+	}
+}
+
+func TestStore_ConcurrentSetsKeepEveryUpdate(t *testing.T) {
+	s := newStore(t)
+	const n = 20
+	var wg sync.WaitGroup
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			// Separate Store values stand in for separate processes.
+			errs <- Open(s.Path()).Set(fmt.Sprintf("TOKEN_%02d", i), canary)
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if names, err := s.Names(); err != nil || len(names) != n {
+		t.Fatalf("names = %v, %v; want %d", names, err, n)
+	}
+}
+
+func TestStore_RemovesAStaleLock(t *testing.T) {
+	s := newStore(t)
+	if err := os.MkdirAll(filepath.Dir(s.Path()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	lock := s.Path() + ".lock"
+	if err := os.WriteFile(lock, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(lock, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set("TOKEN", canary); err != nil {
+		t.Fatalf("Set with a stale lock: %v", err)
+	}
+}
+
+func TestStore_RefusesADirectoryOthersCanWrite(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits do not exist on Windows")
+	}
+	s := newStore(t)
+	if err := s.Set("TOKEN", canary); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Dir(s.Path())
+	if err := os.Chmod(dir, 0o777); err != nil { // #nosec G302 -- the test needs a permissive directory
+		t.Fatal(err)
+	}
+	if _, err := s.Load(); err == nil || !strings.Contains(err.Error(), "chmod 700") {
+		t.Errorf("Load = %v", err)
+	}
+	if s.Set("OTHER", canary) == nil {
+		t.Error("Set wrote into a directory others can write to")
 	}
 }

@@ -35,6 +35,6 @@ value out of every log.
 - Good: no new module; one store for `truss run` and the daemon; missing secrets fail before any
   step; nothing in the API can leak a value.
 - Bad: values are plaintext on disk. On Windows file permissions rely on the profile's ACL.
-  Redaction is exact-match only (see the spec). Two simultaneous `secret set` calls can lose one
-  update.
-- Follow-ups: keychain backend; per-pipeline scope; a lock around store updates.
+  Redaction is exact-match only (see the spec). Updates are serialized by a lock file; a
+  crashed writer's lock is ignored after 30 seconds.
+- Follow-ups: keychain backend; per-pipeline scope.

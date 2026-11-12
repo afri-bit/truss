@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"time"
 )
 
 // ErrNotFound means the store has no secret with the given name.
@@ -48,6 +49,9 @@ func (s *Store) Load() (map[string]string, error) {
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
 		return nil, fmt.Errorf("secrets file %s is a symbolic link; TRUSS keeps secrets in a regular file", s.path)
+	}
+	if err := checkDir(filepath.Dir(s.path)); err != nil {
+		return nil, err
 	}
 	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		return nil, fmt.Errorf("secrets file %s is accessible to other users (mode %04o); run: chmod 600 %s",
@@ -90,6 +94,11 @@ func (s *Store) Set(name, value string) error {
 	if value == "" {
 		return errors.New("a secret value must not be empty")
 	}
+	unlock, err := s.lock()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	all, err := s.Load()
 	if err != nil {
 		return err
@@ -100,6 +109,11 @@ func (s *Store) Set(name, value string) error {
 
 // Remove deletes the secret called name. A missing name is ErrNotFound.
 func (s *Store) Remove(name string) error {
+	unlock, err := s.lock()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	all, err := s.Load()
 	if err != nil {
 		return err
@@ -109,6 +123,60 @@ func (s *Store) Remove(name string) error {
 	}
 	delete(all, name)
 	return s.save(all)
+}
+
+// checkDir refuses a directory that group or others can write to on Linux and
+// macOS: they could swap the secrets file for their own.
+func checkDir(dir string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("read secrets directory: %w", err)
+	}
+	if info.Mode().Perm()&0o022 != 0 {
+		return fmt.Errorf("directory %s is writable by other users (mode %04o); run: chmod 700 %s",
+			dir, info.Mode().Perm(), dir)
+	}
+	return nil
+}
+
+const (
+	lockWait  = 10 * time.Second
+	lockStale = 30 * time.Second
+)
+
+// lock makes read-modify-write updates exclusive across processes with a lock
+// file created exclusively next to the store. A lock older than lockStale is
+// taken to belong to a crashed process and is removed.
+func (s *Store) lock() (func(), error) {
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
+		return nil, fmt.Errorf("prepare secrets directory: %w", err)
+	}
+	if err := checkDir(filepath.Dir(s.path)); err != nil {
+		return nil, err
+	}
+	path := s.path + ".lock"
+	deadline := time.Now().Add(lockWait)
+	for {
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- inside the TRUSS home
+		if err == nil {
+			_ = f.Close()
+			return func() { _ = os.Remove(path) }, nil
+		}
+		if !errors.Is(err, os.ErrExist) && !errors.Is(err, os.ErrPermission) {
+			return nil, fmt.Errorf("lock secrets: %w", err)
+		}
+		if info, statErr := os.Stat(path); statErr == nil && time.Since(info.ModTime()) > lockStale {
+			_ = os.Remove(path)
+			continue
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("another truss process is updating the secrets (lock file %s); try again", path)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // save replaces the file in one step. The temporary file is created private

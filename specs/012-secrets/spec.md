@@ -27,7 +27,7 @@ Tier 2 (secrets handling, pipeline schema, CLI output). Decision record:
 
 - **FR-001** Secrets are kept in `secrets.json` in the TRUSS home (`~/.truss` or `TRUSS_HOME`),
   a JSON file (`{"version": 1, "secrets": {name: value}}`). On Linux and macOS the file is created with mode `0600`, is
-  replaced atomically, and the home directory is `0700` when TRUSS creates it (an existing directory is left as it is). A file readable by group or others
+  replaced atomically, and the home directory is `0700` when TRUSS creates it. A directory that group or others can write to is refused (they could swap the file), with an error that says to `chmod 700` it. Updates take a lock file next to the store, so two `truss secret` commands at once keep both changes. A file readable by group or others
   is refused with an error that names the file and says to `chmod 600` it; values are not read.
 - **FR-002** On Windows, Unix mode bits do not exist. The file lives in the user's profile and
   relies on the ACL it inherits there. TRUSS does not change ACLs. This is documented, not hidden.
