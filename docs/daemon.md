@@ -100,6 +100,9 @@ as `failed` with the reason.
 | `cancelled` | You cancelled it, or the daemon stopped while it was running. |
 | `skipped` | Requested but never started: a missed schedule, or `overlap: skip`. |
 
+The trigger says why a run exists: `manual`, `schedule`, `catch-up`, or `local` (started in your
+shell with `truss run --track`, only recorded by the daemon).
+
 Steps are `pending`, `running`, `succeeded`, `failed`, `stopped` (ended because another step
 failed), `cancelled`, or `skipped` (the run ended before they started).
 
@@ -170,7 +173,26 @@ The CLI and TRUSS Desktop use this API; you can too. Base path `/api/v1`, JSON b
 | `GET /runs?pipeline=&limit=` | Runs, newest first. |
 | `GET /runs/{id}` | One run with its steps. |
 | `POST /runs/{id}/cancel` | Cancels it. |
+| `POST /runs` | Opens a *tracked local run* (see below): `{"pipeline": "name", "steps": [{"id": "a", "needs": []}]}`. Answers `201` with the run in state `running`. |
+| `POST /runs/{id}/steps` | Reports a step of a local run: `{"id", "status", "exit_code", "error"}`. |
+| `POST /runs/{id}/log?offset=` | Appends text to a local run's log at its current end; answers `204` with the headers below. Max 256 KiB. |
+| `POST /runs/{id}/finish` | Closes a local run: `{"status": "succeeded" \| "failed" \| "cancelled", "reason"}`. |
 | `GET /runs/{id}/log?offset=` | Log text from a byte offset. `X-Truss-Log-Offset` is the next offset, `X-Truss-Run-Status` the run status; an empty body for a finished run means the log is complete. |
+
+### Tracked local runs
+
+`truss run --track` runs a pipeline in your shell, as `truss run` does, and reports it through
+the four `POST /runs...` endpoints above, so it appears in `truss runs` and Desktop with the
+trigger `local`. The daemon never starts it and it does not use a slot of `--max-runs` or block
+the overlap policy of a pipeline of the same name. Only a `local` run that is `running` accepts
+reports; anything else answers `409`. Bodies over the limits answer `413`; a log append must start
+where the log ends (`409`), and repeating one the log already holds is harmless.
+
+Cancelling a local run (Desktop, `truss cancel`, `POST /runs/{id}/cancel`) closes its record at
+once and asks the CLI to stop: it notices within a fraction of a second and ends the run's
+processes like an interrupt. If the daemon stops while a local run is `running`, the run is
+closed as `failed`; the process in your shell carries on and stops reporting. See
+[ADR 0006](decisions/0006-tracked-local-runs.md).
 
 ```console
 $ TOKEN=$(jq -r .token ~/.truss/daemon.json)

@@ -231,8 +231,21 @@ jobs wait for the jobs they need. In logs a step of a job is named `job/step`.
 
 ### Trigger
 
-What causes a pipeline run: `manual` (someone asked), `schedule` (a cron time was reached), or
-`catch-up` (a missed cron time that the schedule asked to make up for).
+What causes a pipeline run: `manual` (someone asked), `schedule` (a cron time was reached),
+`catch-up` (a missed cron time that the schedule asked to make up for), or `local` (a run started
+in a shell with `truss run --track`; see Tracked Run).
+
+### Tracked Run
+
+A run that executes in the caller's shell and environment (`truss run --track`) and reports its
+steps and log to the daemon, so it appears in the run history with the trigger `local`. The
+daemon records it but never starts, queues or restarts it, and it takes no run slot. Cancelling
+it in the daemon asks the CLI to stop; the daemon cannot end the process itself.
+
+### Queued Run
+
+A run waiting for a free slot or for an earlier run of the same pipeline. It survives a daemon
+restart and starts afterwards, in the order it was requested.
 
 ### Schedule
 

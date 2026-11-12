@@ -431,6 +431,26 @@ else
 	else
 		pass "runs"
 	fi
+	# A tracked run executes here, in this shell, and is recorded by the daemon (spec 010).
+	run_truss "$work/project" run --track
+	tracked_id="$(printf '%s' "$err" | sed -n 's/^tracking as run \([^ ]*\) .*/\1/p')"
+	if [ "$code" -ne 0 ] || [ -z "$tracked_id" ] || ! has_line "summary succeeded steps 3 duration *"; then
+		fail "run --track" "want exit 0, the run log on stdout and the run id on stderr"
+	else
+		pass "run --track"
+		run_truss "$work/project" runs jobs
+		if [ "$code" -ne 0 ] || [[ "$out" != *"$tracked_id"*"succeeded"*"local"* ]]; then
+			fail "run --track history" "want the local run in the history"
+		else
+			pass "run --track history"
+		fi
+		run_truss "$work/project" logs "$tracked_id"
+		if [ "$code" -ne 0 ] || ! has_line "step ship/publish | publishing" || ! has_line "summary succeeded steps 3 duration *"; then
+			fail "run --track log" "want the run log in the daemon"
+		else
+			pass "run --track log"
+		fi
+	fi
 	run_truss "$work/project" unregister jobs
 	run_truss "$work/project" pipelines
 	if [ "$code" -ne 0 ] || [[ "$out" != "no pipelines registered"* ]]; then
@@ -450,6 +470,12 @@ if [ "$code" -ne 1 ]; then
 	fail "daemon status" "want exit 1 when no daemon runs"
 else
 	pass "daemon status"
+fi
+run_truss "$work/project" run --track
+if [ "$code" -ne 1 ] || [ -n "$out" ] || [[ "$err" != *"truss daemon start"* ]]; then
+	fail "run --track without a daemon" "want exit 1, no output and the start hint"
+else
+	pass "run --track without a daemon"
 fi
 unset TRUSS_HOME
 rm -rf "$work"

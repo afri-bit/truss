@@ -28,6 +28,8 @@ import (
 	"github.com/afri-bit/truss/internal/runlog"
 )
 
+var zeroTime time.Time
+
 // ErrNotFound means no run has the given id.
 var ErrNotFound = errors.New("run not found")
 
@@ -243,6 +245,14 @@ func (m *Manager) Cancel(id string) (api.Run, error) {
 		m.finish(rec, api.RunCancelled, "cancelled before it started")
 		_ = m.save(rec)
 	case api.RunRunning:
+		if tracked(rec) {
+			// The daemon cannot end a process that runs in someone's shell. It
+			// closes the record; the run learns of it on its next report and
+			// stops itself.
+			m.finish(rec, api.RunCancelled, "cancelled from the daemon; the local run is asked to stop")
+			_ = m.save(rec)
+			break
+		}
 		rec.cancelled = true
 		rec.cancel() // the run's goroutine records the outcome
 	}
@@ -348,7 +358,12 @@ func (m *Manager) Close() {
 	m.mu.Lock()
 	m.closed = true
 	for _, rec := range m.records {
-		if rec.run.Status == api.RunRunning {
+		switch {
+		case rec.run.Status != api.RunRunning:
+		case tracked(rec):
+			m.finish(rec, api.RunFailed, "the daemon stopped while this run was active")
+			_ = m.save(rec)
+		default:
 			rec.cancelled = true
 			rec.cancel()
 		}
@@ -421,11 +436,11 @@ func (m *Manager) logPath(id string) string {
 	return filepath.Join(m.opts.Dir, id, "run.log")
 }
 
-// activeFor counts queued and running runs of a pipeline. The caller holds m.mu.
+// activeFor counts the daemon's queued and running runs of a pipeline. The caller holds m.mu.
 func (m *Manager) activeFor(name string) int {
 	n := 0
 	for _, rec := range m.records {
-		if rec.run.Pipeline == name && rec.run.Active() {
+		if rec.run.Pipeline == name && rec.run.Active() && !tracked(rec) {
 			n++
 		}
 	}
@@ -448,7 +463,7 @@ func (m *Manager) dispatch() {
 	running := map[string]int{}
 	total := 0
 	for _, rec := range m.records {
-		if rec.run.Status == api.RunRunning {
+		if rec.run.Status == api.RunRunning && !tracked(rec) {
 			running[rec.run.Pipeline]++
 			total++
 		}

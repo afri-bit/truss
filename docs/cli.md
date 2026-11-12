@@ -15,10 +15,11 @@ that starts with `error:`. An unknown command or wrong arguments print the usage
 | Command | What it does |
 |---|---|
 | `truss run [<path>]` | Runs a pipeline right here and waits for it. Default file: `truss.yaml`. |
+| `truss run [<path>] --track` | The same, and also reports the run to the daemon, which must be running. |
 | `truss validate [<path>]` | Checks a file and prints its schedules and steps. Runs nothing. |
 | `truss help`, `truss version` | Usage and version. |
 
-`truss run` never talks to the daemon, so the run does not appear in `truss runs` or in Desktop. It prints the run log as it happens and keeps the last one in `.truss/run.log`.
+`truss run` does not talk to the daemon, so the run does not appear in `truss runs` or in Desktop (add `--track`, below). It prints the run log as it happens and keeps the last one in `.truss/run.log`.
 Interrupting it (Ctrl-C) ends every running step. Schedules in the file are ignored: `run`
 means now.
 
@@ -48,6 +49,30 @@ Options of `daemon start` and `daemon run`:
 |---|---|---|
 | `--address <host:port>` | `127.0.0.1:7878` | Where to listen. Loopback only. Port `0` picks a free port. |
 | `--max-runs <n>` | `4` | How many runs may execute at the same time. |
+
+### Tracking a local run
+
+`truss run --track` still runs in your shell, with your environment and working directory, and
+prints the same run log. It also reports to the daemon, so the run shows up in `truss runs` and
+Desktop with the trigger `local`, its steps, and its log:
+
+```console
+$ truss run --track
+tracking as run 20261112-090000-a1b2c3 (truss logs 20261112-090000-a1b2c3)
+2026-11-12 09:00:00 setup environment ready
+...
+$ truss runs
+RUN                     PIPELINE     STATUS     TRIGGER  CREATED              DURATION  NOTE
+20261112-090000-a1b2c3  hello-world  succeeded  local    2026-11-12 09:00:00  0.1s
+```
+
+- `--track` needs the daemon. Without one it exits `1` with `start it with: truss daemon start`
+  and runs nothing. The CLI never starts the daemon.
+- The pipeline's output and exit code do not depend on tracking. If the daemon goes away while the
+  run executes, you get one `warning:` on stderr and the run finishes normally.
+- Cancelling the run in Desktop or with `truss cancel <run-id>` stops it: it exits `1` with
+  `error: cancelled from the daemon`.
+- The id is printed on stderr, so stdout stays the run log.
 
 ## Registered pipelines
 

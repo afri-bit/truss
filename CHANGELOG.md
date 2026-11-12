@@ -22,6 +22,7 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 ### Added
 
+- **Tracked local runs.** `truss run --track` still executes in your shell with your environment, and also reports the run to the daemon: it shows up in `truss runs` and TRUSS Desktop with the trigger `local`, its steps and its log. It needs a running daemon and fails with the usual hint before running anything if there is none; if the daemon goes away mid-run, the run finishes normally with one warning. Cancelling a tracked run in the daemon or Desktop stops the local run. Desktop shows a `local` badge. New API v1 endpoints, additive: `POST /runs`, `POST /runs/{id}/steps`, `POST /runs/{id}/log?offset=`, `POST /runs/{id}/finish` (see `docs/decisions/0006-tracked-local-runs.md`).
 - **The daemon.** `truss daemon start`, `stop`, `status` and `run` manage a background service that listens on `127.0.0.1:7878`. It keeps its state under `~/.truss` (or `TRUSS_HOME`) and protects its HTTP API (`/api/v1`) with a token only your user can read.
 - **Registered pipelines.** `truss register [<path>] [--name <name>]`, `unregister`, `pipelines`, `pause` and `resume`. The daemon stores the file's path, reads it again before every run, and notices edits.
 - **Daemon runs.** `truss trigger <name> [--follow]`, `runs`, `logs <run-id> [--follow]` and `cancel`. Runs queue up; `--max-runs` limits how many execute at once (default 4). The newest 200 runs and their logs are kept.
