@@ -444,12 +444,18 @@ func (m *Manager) start(rec *record) {
 // execute runs one pipeline through the engine and records the outcome.
 func (m *Manager) execute(ctx context.Context, rec *record) {
 	id, req := rec.run.ID, rec.req
-	out := io.Discard
 	f, logErr := os.OpenFile(m.logPath(id), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) // #nosec G304 -- path is built from the run id
-	if logErr == nil {
-		out = f
-		defer func() { _ = f.Close() }()
+	if logErr != nil {
+		// A run nobody can read the output of is not run silently.
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		m.finish(rec, api.RunFailed, fmt.Sprintf("open the run log: %v", logErr))
+		_ = m.save(rec)
+		m.dispatch()
+		return
 	}
+	defer func() { _ = f.Close() }()
+	out := io.Writer(f)
 	log := runlog.New(out, m.opts.Now)
 	log.Setup(runlog.OSName(runtime.GOOS), runtime.GOARCH, executor.Shell(), req.Dir)
 
