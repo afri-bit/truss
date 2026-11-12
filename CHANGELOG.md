@@ -21,6 +21,10 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 ### Added
 
+- **Retries.** A step may set `retries` (0 to 100) and `retry_delay`. A failed attempt is run again; each attempt is logged with its own `started` and `finished` lines, and a `step <id> retry <n> of <total> in <delay>` line comes between them. The step's result is its last attempt (specs/009-retries-and-conditions).
+- **`continue-on-error: true`** on a step. Its failure is logged and shown but does not fail the run or stop other steps. Steps that need it are skipped unless their `if` says otherwise.
+- **Conditions.** `if` on a step or a job takes a small expression: `always()`, `success()`, `failure()`, `==`, `!=`, `&&`, `||`, `!`, parentheses, quoted text and `env.NAME`. A skipped step is logged as `step <id> skipped because <reason>` and shown as skipped. After a failure only steps whose condition calls `always()` or `failure()` start. Definitions without these fields behave exactly as before; an older TRUSS rejects them as unknown fields.
+- The daemon API reports `attempts`, `continued_on_error` and `reason` on a step, only where they apply. TRUSS Desktop shows attempts, skip reasons and tolerated failures.
 - **The daemon.** `truss daemon start`, `stop`, `status` and `run` manage a background service that listens on `127.0.0.1:7878`. It keeps its state under `~/.truss` (or `TRUSS_HOME`) and protects its HTTP API (`/api/v1`) with a token only your user can read.
 - **Registered pipelines.** `truss register [<path>] [--name <name>]`, `unregister`, `pipelines`, `pause` and `resume`. The daemon stores the file's path, reads it again before every run, and notices edits.
 - **Daemon runs.** `truss trigger <name> [--follow]`, `runs`, `logs <run-id> [--follow]` and `cancel`. Runs queue up; `--max-runs` limits how many execute at once (default 4). The newest 200 runs and their logs are kept.

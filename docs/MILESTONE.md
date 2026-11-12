@@ -25,6 +25,7 @@ that matches it. `go.mod` already says `// version: 0.1.0`. The changelog stays 
 | Jobs, schedules, step settings | `jobs`, `on.schedule`, `env`, `dir`, `timeout`, `overlap`, `truss validate` | `005-jobs-schedules-and-step-settings` | Implemented |
 | Daemon | Background service, registry, cron scheduling with missed-run policy, run queue and history, HTTP API, CLI commands | `006-daemon-registry-and-scheduling` | Implemented |
 | TRUSS Desktop | Dashboard, pipeline control, run view with graph and live log | `007-truss-desktop` | First version |
+| Retries and conditions | `retries`, `retry_delay`, `continue-on-error`, `if` on steps, `if` on jobs | `009-retries-and-conditions` | Implemented |
 
 **Operating systems.** Linux, macOS and Windows. A `run` string is a command for that host's
 shell; v0.1.0 does not promise that one file runs unchanged on every shell.
@@ -41,7 +42,7 @@ These are known gaps inside the release scope:
 ### Not in v0.1.0
 
 - Container execution and remote workers
-- Matrix builds, conditions, retries, caches, artifacts, a secret store
+- Matrix builds, caches, artifacts, a secret store, step outputs in conditions
 - Triggers other than cron and manual (file changes, webhooks)
 - A packaged desktop window, tray icon and notifications
 - SDKs and CI-provider plugins
