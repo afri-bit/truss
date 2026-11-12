@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"time"
 )
 
 // EnvVar names the environment variable that overrides the home directory.
@@ -55,32 +57,66 @@ func (d Dir) Runs() string { return d.Path("runs") }
 // DaemonLog is the daemon's own log file.
 func (d Dir) DaemonLog() string { return d.Path("daemon.log") }
 
-// Ensure creates the home directory, private to the user.
+// Ensure creates the home directory, private to the user. A directory that
+// already exists is tightened to 0700 on systems that honor file modes; one
+// that cannot be tightened (for example it belongs to someone else) is an
+// error, because the endpoint file with the token lives in it.
 func (d Dir) Ensure() error {
 	if err := os.MkdirAll(d.Runs(), 0o700); err != nil {
 		return fmt.Errorf("prepare TRUSS home: %w", err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(string(d), 0o700); err != nil {
+			return fmt.Errorf("make the TRUSS home private (%s): %w", d, err)
+		}
 	}
 	return nil
 }
 
 // WriteJSON stores v at path, replacing the file in one step so a reader
-// never sees half a file. The file is private to the user.
+// never sees half a file. The file is private to the user: it is written to a
+// new, uniquely named temporary file (mode 0600) in the same directory, so a
+// leftover or planted file at a predictable name is never reused or followed.
 func WriteJSON(path string, v any) error {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode %s: %w", filepath.Base(path), err)
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
 		return fmt.Errorf("write %s: %w", filepath.Base(path), err)
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(path) // Windows cannot always rename over a file
-		if err = os.Rename(tmp, path); err != nil {
-			return fmt.Errorf("replace %s: %w", filepath.Base(path), err)
-		}
+	tmp := f.Name()
+	_, werr := f.Write(append(data, '\n'))
+	if werr == nil {
+		werr = f.Sync()
+	}
+	if cerr := f.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("write %s: %w", filepath.Base(path), werr)
+	}
+	if err := rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("replace %s: %w", filepath.Base(path), err)
 	}
 	return nil
+}
+
+// rename replaces newpath with oldpath. On Windows a reader that holds the
+// destination open can make this fail for a moment, so it is retried briefly.
+// The destination is never removed first: a failed replace leaves the old file.
+func rename(oldpath, newpath string) error {
+	var err error
+	for attempt := 0; attempt < 50; attempt++ {
+		if err = os.Rename(oldpath, newpath); err == nil || runtime.GOOS != "windows" {
+			return err
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return err
 }
 
 // ReadJSON loads path into v. A missing file is reported by os.IsNotExist.
