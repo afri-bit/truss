@@ -221,3 +221,41 @@ func getRun(t *testing.T, s *session, id string) api.Run {
 	}
 	return run
 }
+
+func TestRunTrack_InterruptClosesTheRunAsCancelled(t *testing.T) {
+	s := newSession(t, true)
+	pidfile := filepath.Join(s.dir, "pid")
+	s.write("truss.yaml", definition("stuck", "", stepDef{id: "block", run: helperCmd("block", pidfile)}))
+	ctx, interrupt := context.WithCancel(context.Background())
+	defer interrupt()
+	done := make(chan result, 1)
+	go func() {
+		var stdout, stderr bytes.Buffer
+		code := Run(ctx, []string{"run", "--track"}, s.dir, s.env, &stdout, &stderr)
+		done <- result{code, stdout.String(), stderr.String()}
+	}()
+	if !pollFile(pidfile, 30*time.Second) {
+		t.Fatal("the step never started")
+	}
+	id := runID.FindString(s.ok("runs", "stuck"))
+	if id == "" {
+		t.Fatal("the tracked run is not listed")
+	}
+	interrupt() // Ctrl-C
+	var r result
+	select {
+	case r = <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("the run did not end after the interrupt")
+	}
+	if r.code != 1 || strings.Contains(r.stderr, "cancelled from the daemon") {
+		t.Fatalf("exit %d, stderr %q", r.code, r.stderr)
+	}
+	run := getRun(t, s, id)
+	if run.Status != "cancelled" || run.Reason != "interrupted" || run.Steps[0].Status != "cancelled" {
+		t.Fatalf("run = %+v", run)
+	}
+	if _, err := os.Stat(filepath.Join(s.dir, ".truss", "run.log")); !os.IsNotExist(err) {
+		t.Fatalf("run log exists: %v", err)
+	}
+}

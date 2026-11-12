@@ -1,9 +1,11 @@
 package runs
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 
@@ -44,15 +46,37 @@ func (m *Manager) Track(name string, steps []api.PlanStep) (api.Run, error) {
 	}
 	seen := make(map[string]bool, len(steps))
 	for _, s := range steps {
-		if s.ID == "" || len(s.ID) > api.MaxTrackedName || hasControl(s.ID) || seen[s.ID] {
+		if s.ID == "" || len(s.ID) > api.MaxTrackedName || !utf8.ValidString(s.ID) || hasControl(s.ID) || seen[s.ID] {
 			return api.Run{}, invalid("step id %q is empty, too long or repeated", s.ID)
 		}
 		seen[s.ID] = true
+	}
+	for _, s := range steps {
+		if len(s.Needs) > len(steps) {
+			return api.Run{}, invalid("step %q needs more steps than the run has", s.ID)
+		}
+		for _, n := range s.Needs {
+			if !seen[n] {
+				return api.Run{}, invalid("step %q needs %q, which the run does not declare", s.ID, n)
+			}
+		}
+	}
+	if hasCycle(steps) {
+		return api.Run{}, invalid("the steps need each other in a cycle")
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
 		return api.Run{}, ErrClosed
+	}
+	open := 0
+	for _, r := range m.records {
+		if tracked(r) && r.run.Status == api.RunRunning {
+			open++
+		}
+	}
+	if open >= api.MaxOpenTracked {
+		return api.Run{}, conflict("%d tracked runs are already running", open)
 	}
 	rec := m.newRecord(name, api.TriggerLocal, zeroTime)
 	for _, s := range steps {
@@ -93,7 +117,7 @@ func (m *Manager) TrackStep(id string, u api.StepUpdate) (api.Run, error) {
 			step.StartedAt = &now
 		}
 		if u.Status != api.StepRunning {
-			step.FinishedAt, step.ExitCode, step.Error = &now, u.ExitCode, u.Error
+			step.FinishedAt, step.ExitCode, step.Error = &now, u.ExitCode, plain(u.Error)
 		}
 		if err := m.save(rec); err != nil {
 			return api.Run{}, err
@@ -129,12 +153,19 @@ func (m *Manager) TrackLog(id string, offset int64, data []byte) (int64, string,
 	size := info.Size()
 	switch {
 	case offset == size:
+		if size+int64(len(data)) > api.MaxTrackedLog {
+			return 0, "", ErrTooLarge
+		}
 		if _, err := f.WriteAt(data, size); err != nil {
 			return 0, "", fmt.Errorf("write run log: %w", err)
 		}
 		size += int64(len(data))
 	case offset >= 0 && offset+int64(len(data)) <= size:
-		// Already stored: an earlier answer was lost.
+		// A repeat of what the log holds is accepted: an earlier answer was lost.
+		held := make([]byte, len(data))
+		if _, err := f.ReadAt(held, offset); err != nil || !bytes.Equal(held, data) {
+			return 0, "", conflict("the log already holds different text at offset %d", offset)
+		}
 	default:
 		return 0, "", conflict("the log is %d bytes long; an append must start at its end", size)
 	}
@@ -158,7 +189,7 @@ func (m *Manager) TrackFinish(id, status, reason string) (api.Run, error) {
 	if err != nil {
 		return api.Run{}, err
 	}
-	m.finish(rec, status, reason)
+	m.finish(rec, status, plain(reason))
 	if err := m.save(rec); err != nil {
 		return api.Run{}, err
 	}
@@ -187,4 +218,46 @@ func hasControl(s string) bool {
 		}
 	}
 	return false
+}
+
+// plain replaces control characters, which a terminal would act on, with
+// spaces. Reasons and errors are text for people.
+func plain(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, s)
+}
+
+// hasCycle reports whether the needs of steps (all of which name declared
+// steps) form a cycle, including a step that needs itself.
+func hasCycle(steps []api.PlanStep) bool {
+	left := make(map[string]int, len(steps))
+	users := map[string][]string{}
+	for _, s := range steps {
+		left[s.ID] = len(s.Needs)
+		for _, n := range s.Needs {
+			users[n] = append(users[n], s.ID)
+		}
+	}
+	var ready []string
+	for id, n := range left {
+		if n == 0 {
+			ready = append(ready, id)
+		}
+	}
+	done := 0
+	for len(ready) > 0 {
+		id := ready[len(ready)-1]
+		ready = ready[:len(ready)-1]
+		done++
+		for _, u := range users[id] {
+			if left[u]--; left[u] == 0 {
+				ready = append(ready, u)
+			}
+		}
+	}
+	return done != len(steps)
 }

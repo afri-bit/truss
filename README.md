@@ -173,7 +173,7 @@ $ truss desktop
 
 | | You start | You use | Tracked by the daemon? |
 |---|---|---|---|
-| **1. Alone** | nothing | `truss run`, `truss validate` | No. The log is `.truss/run.log` in the project. |
+| **1. Alone** | nothing | `truss run`, `truss validate` | No. The log is `.truss/run.log` in the project. Add `--track` (needs the daemon) to also record the run. |
 | **2. With the daemon** | `truss daemon start` | the CLI: `register`, `trigger`, `runs`, `logs`, `cancel`, ... | Yes: schedules, queue, history. |
 | **3. With the daemon and Desktop** | `truss daemon start`, then `truss desktop` | the same runs, seen and controlled in the browser | Yes, same state as path 2. |
 
@@ -183,7 +183,9 @@ nothing, and neither client starts or stops it.
 
 Path 1 is deliberately separate. `truss run` executes in your shell with your environment, needs
 no server, and behaves the same in CI. If you want a run to appear in the history and in Desktop,
-register the file and use `truss trigger`.
+either register the file and use `truss trigger` (the daemon runs it, with the daemon's environment),
+or keep running in your shell and add `--track`: `truss run --track` still uses your environment and
+only reports to the daemon, which shows it as a `local` run.
 
 Pipelines are written in files, with your editor. Desktop watches and controls them; it does not edit them.
 
@@ -234,7 +236,7 @@ fails the run and stops the rest. Every field is described in the
 
 | | Command | |
 |---|---|---|
-| **Run here** | `truss run [<path>]` | Run a file now, without the daemon |
+| **Run here** | `truss run [<path>] [--track]` | Run a file now; `--track` also reports it to the daemon |
 | | `truss validate [<path>]` | Check a file and show its steps |
 | **Daemon** | `truss daemon start` \| `stop` \| `status` | Manage the background service |
 | | `truss desktop` | Open TRUSS Desktop |

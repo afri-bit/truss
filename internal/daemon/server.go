@@ -113,12 +113,6 @@ func statusFor(err error) int {
 		return http.StatusBadRequest
 	case errors.Is(err, runs.ErrTooLarge), errors.As(err, &tooBig):
 		return http.StatusRequestEntityTooLarge
-	case errors.Is(err, runs.ErrConflict):
-		return http.StatusConflict
-	case errors.Is(err, runs.ErrInvalid):
-		return http.StatusBadRequest
-	case errors.Is(err, runs.ErrTooLarge), errors.As(err, &tooBig):
-		return http.StatusRequestEntityTooLarge
 	case errors.As(err, &invalid):
 		return http.StatusUnprocessableEntity
 	case errors.As(err, &bad):

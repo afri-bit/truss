@@ -20,6 +20,14 @@ const trackEvery = 250 * time.Millisecond
 // back for longer; the run itself is not affected by a slow or dead daemon.
 const callTimeout = 5 * time.Second
 
+// finalTimeout bounds each report after the caller interrupted the run, so a
+// second Ctrl-C is not needed to get the prompt back.
+const finalTimeout = time.Second
+
+// maxBuffered is the most unsent log text the tracker keeps. A daemon that
+// cannot keep up loses the run's tracking, not the run.
+const maxBuffered = 8 << 20
+
 // tracker reports a run that executes in this process to the daemon
 // (`truss run --track`). It is a best-effort observer: the run's output and
 // exit code never depend on it. When the daemon cannot be reached, or has
@@ -33,6 +41,7 @@ type tracker struct {
 	id        string
 	stderr    io.Writer
 	cancelRun context.CancelFunc
+	parent    context.Context
 	base      context.Context // carries no cancellation: a final report outlives an interrupt
 
 	mu        sync.Mutex // guards the fields below
@@ -58,7 +67,7 @@ func newTracker(ctx context.Context, c *api.Client, req api.CreateRunRequest, st
 	if err != nil {
 		return nil, err
 	}
-	t := &tracker{c: c, id: run.ID, stderr: stderr, cancelRun: cancelRun, base: base, quit: make(chan struct{}), done: make(chan struct{})}
+	t := &tracker{c: c, id: run.ID, stderr: stderr, cancelRun: cancelRun, parent: ctx, base: base, quit: make(chan struct{}), done: make(chan struct{})}
 	go t.loop()
 	return t, nil
 }
@@ -68,9 +77,15 @@ func newTracker(ctx context.Context, c *api.Client, req api.CreateRunRequest, st
 func (t *tracker) Write(p []byte) (int, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if !t.dead {
-		t.buf = append(t.buf, p...)
+	if t.dead {
+		return len(p), nil
 	}
+	if len(t.buf)+len(p) > maxBuffered {
+		t.dead, t.buf, t.steps = true, nil, nil
+		fmt.Fprintf(t.stderr, "warning: tracking stopped: the daemon is not keeping up with the output; the run continues\n")
+		return len(p), nil
+	}
+	t.buf = append(t.buf, p...)
 	return len(p), nil
 }
 
@@ -80,6 +95,13 @@ func (t *tracker) step(u api.StepUpdate) {
 	if !t.dead {
 		t.steps = append(t.steps, u)
 	}
+}
+
+func (t *tracker) timeout() time.Duration {
+	if t.parent.Err() != nil {
+		return finalTimeout
+	}
+	return callTimeout
 }
 
 // daemonCancelled reports whether the daemon ended the run.
@@ -118,7 +140,7 @@ func (t *tracker) flush() {
 	t.steps, t.buf = nil, nil
 	t.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(t.base, callTimeout)
+	ctx, cancel := context.WithTimeout(t.base, t.timeout())
 	defer cancel()
 	for _, u := range steps {
 		run, err := t.c.ReportStep(ctx, t.id, u)
@@ -157,7 +179,7 @@ func (t *tracker) finish(status, reason string) {
 	if dead {
 		return
 	}
-	ctx, cancel := context.WithTimeout(t.base, callTimeout)
+	ctx, cancel := context.WithTimeout(t.base, t.timeout())
 	defer cancel()
 	if _, err := t.c.FinishRun(ctx, t.id, api.FinishRequest{Status: status, Reason: reason}); err != nil {
 		t.fail(ctx, err)
@@ -171,7 +193,6 @@ func (t *tracker) lost(status string) {
 	t.cancelled = status == api.RunCancelled
 	t.mu.Unlock()
 	if status == api.RunCancelled {
-		fmt.Fprintf(t.stderr, "run %s was cancelled from the daemon; stopping\n", t.id)
 		t.cancelRun()
 		return
 	}
@@ -182,7 +203,7 @@ func (t *tracker) lost(status string) {
 func (t *tracker) fail(ctx context.Context, err error) {
 	var se *api.StatusError
 	if errors.As(err, &se) && se.Code == 409 {
-		if run, runErr := t.c.Run(ctx, t.id); runErr == nil {
+		if run, runErr := t.c.Run(ctx, t.id); runErr == nil && run.Status != api.RunRunning {
 			t.lost(run.Status)
 			return
 		}
@@ -193,7 +214,7 @@ func (t *tracker) fail(ctx context.Context, err error) {
 	fmt.Fprintf(t.stderr, "warning: tracking stopped: %s; the run continues\n", err.Error())
 }
 
-// events forwards step events to the run log and reports step states.
+// trackedEvents forwards step events to the run log and reports step states.
 type trackedEvents struct {
 	log     *runlog.Log
 	t       *tracker

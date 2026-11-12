@@ -244,3 +244,127 @@ func TestTrack_KeepsCreationOrderWhenTheClockDoesNotMove(t *testing.T) {
 		}
 	}
 }
+
+func TestTrack_RejectsBrokenStepGraphs(t *testing.T) {
+	m := open(t, Options{})
+	for name, steps := range map[string][]api.PlanStep{
+		"unknown need": {{ID: "a", Needs: []string{"zzz"}}},
+		"self need":    {{ID: "a", Needs: []string{"a"}}},
+		"cycle":        {{ID: "a", Needs: []string{"b"}}, {ID: "b", Needs: []string{"a"}}},
+		"bad utf-8":    {{ID: "a\xff"}},
+	} {
+		if _, err := m.Track("p", steps); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, err := m.Track("p", []api.PlanStep{{ID: "a"}, {ID: "b", Needs: []string{"a"}}}); err != nil {
+		t.Fatalf("a valid graph was refused: %v", err)
+	}
+}
+
+func TestTrack_ReplacesControlCharactersInReasons(t *testing.T) {
+	m := open(t, Options{})
+	run, _ := m.Track("p", graph("a"))
+	got, err := m.TrackStep(run.ID, api.StepUpdate{ID: "a", Status: api.StepFailed, Error: "bad\x1b[31m\nred"})
+	if err != nil || strings.ContainsAny(got.Steps[0].Error, "\x1b\n") {
+		t.Fatalf("step error = %q, %v", got.Steps[0].Error, err)
+	}
+	done, err := m.TrackFinish(run.ID, api.RunFailed, "oops\x07\x1b]0;x\x07")
+	if err != nil || strings.ContainsAny(done.Reason, "\x07\x1b") {
+		t.Fatalf("reason = %q, %v", done.Reason, err)
+	}
+}
+
+func TestTrack_LimitsOpenRunsAndLogSize(t *testing.T) {
+	m := open(t, Options{Keep: api.MaxOpenTracked + 10})
+	var first api.Run
+	for i := range api.MaxOpenTracked {
+		run, err := m.Track("p", graph("a"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			first = run
+		}
+	}
+	if _, err := m.Track("p", graph("a")); !errors.Is(err, ErrConflict) {
+		t.Fatalf("one run too many: %v", err)
+	}
+	if _, err := m.TrackFinish(first.ID, api.RunSucceeded, ""); err != nil {
+		t.Fatal(err)
+	}
+	next, err := m.Track("p", graph("a"))
+	if err != nil {
+		t.Fatalf("a slot was not freed: %v", err)
+	}
+	// The log may hold at most api.MaxTrackedLog bytes.
+	chunk := make([]byte, api.MaxLogChunk)
+	var offset int64
+	for offset+int64(len(chunk)) <= api.MaxTrackedLog {
+		if offset, _, err = m.TrackLog(next.ID, offset, chunk); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, _, err := m.TrackLog(next.ID, offset, chunk); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("log past the limit: %v", err)
+	}
+}
+
+func TestTrack_RepeatedAppendMustBeIdentical(t *testing.T) {
+	m := open(t, Options{})
+	run, _ := m.Track("p", graph("a"))
+	if _, _, err := m.TrackLog(run.ID, 0, []byte("hello\n")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := m.TrackLog(run.ID, 0, []byte("jello\n")); !errors.Is(err, ErrConflict) {
+		t.Fatalf("different bytes at a held offset: %v", err)
+	}
+}
+
+func TestQueue_RestoredRunShowsTheStepsOfTheFileItWillRun(t *testing.T) {
+	dir := t.TempDir()
+	old := def("p", pipeline.OverlapQueue, pipeline.Step{ID: "test", Run: waitFor(filepath.Join(t.TempDir(), "never"))})
+	m := open(t, Options{Dir: dir})
+	submit(t, m, "p", old)
+	queued := submit(t, m, "p", old)
+	m.Close()
+
+	edited := def("p", pipeline.OverlapQueue,
+		pipeline.Step{ID: "unit", Run: "echo unit"},
+		pipeline.Step{ID: "lint", Run: "echo lint", Needs: []string{"unit"}})
+	again := open(t, Options{Dir: dir, Resolve: resolveTo(t.TempDir(), map[string]pipeline.Pipeline{"p": edited})})
+	got, _ := again.Get(queued.ID)
+	if len(got.Steps) != 2 || got.Steps[0].ID != "unit" || got.Steps[1].ID != "lint" || got.Steps[0].Status != api.StepPending {
+		t.Fatalf("steps before the run = %+v", got.Steps)
+	}
+	again.Resume()
+	done := await(t, again, queued.ID, api.RunSucceeded, api.RunFailed)
+	if done.Status != api.RunSucceeded || done.Steps[0].Status != api.StepSucceeded || done.Steps[1].Status != api.StepSucceeded {
+		t.Fatalf("run = %+v", done)
+	}
+}
+
+func TestTrack_LocalRecordLeftRunningAfterACrashFails(t *testing.T) {
+	dir := t.TempDir()
+	m := open(t, Options{Dir: dir})
+	run, _ := m.Track("p", graph("a"))
+	// No Close: the daemon died. A new manager reads what is on disk.
+	again := open(t, Options{Dir: dir})
+	got, err := again.Get(run.ID)
+	if err != nil || got.Status != api.RunFailed || got.Trigger != api.TriggerLocal || got.Steps[0].Status != api.StepSkipped {
+		t.Fatalf("run = %+v, %v", got, err)
+	}
+	if running, _ := again.Counts(); running != 0 {
+		t.Fatalf("running = %d", running)
+	}
+}
+
+func TestTrack_RunningLocalRunCountsAsRunning(t *testing.T) {
+	m := open(t, Options{})
+	if _, err := m.Track("p", graph("a")); err != nil {
+		t.Fatal(err)
+	}
+	if running, queued := m.Counts(); running != 1 || queued != 0 {
+		t.Fatalf("counts = %d running, %d queued", running, queued)
+	}
+}

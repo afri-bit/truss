@@ -103,8 +103,9 @@ func execute(ctx, runCtx context.Context, def pipeline.Pipeline, cwd string, env
 		discardRunLog(tmp, tmpPath)
 		return interrupted(ctx, tr, err, stderr)
 	}
-	if err := runCtx.Err(); err != nil {
-		// FR-017: an interrupted run never saves a run log.
+	if err := ctx.Err(); err != nil {
+		// A cancel from the daemon that arrives after the run ended does not
+		// change its outcome. FR-017: an interrupted run never saves a run log.
 		discardRunLog(tmp, tmpPath)
 		return interrupted(ctx, tr, err, stderr)
 	}

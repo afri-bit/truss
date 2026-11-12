@@ -164,6 +164,9 @@ func Open(opts Options) (*Manager, error) {
 // restore reads the definition of a run that was queued when the previous
 // daemon stopped.
 func (m *Manager) restore(rec *record) error {
+	if tracked(rec) {
+		return errors.New("a local run is never queued")
+	}
 	if m.opts.Resolve == nil {
 		return errors.New("no way to read its pipeline")
 	}
@@ -171,8 +174,14 @@ func (m *Manager) restore(rec *record) error {
 	if err != nil {
 		return err
 	}
-	if _, err := pipeline.Plan(def); err != nil {
+	plan, err := pipeline.Plan(def)
+	if err != nil {
 		return err
+	}
+	// The run executes the file as it is now, so it shows that file's steps.
+	rec.run.Steps = []api.Step{}
+	for _, s := range plan.Graph {
+		rec.run.Steps = append(rec.run.Steps, api.Step{ID: s.ID, Needs: s.Needs, Status: api.StepPending})
 	}
 	rec.req = Request{Pipeline: rec.run.Pipeline, Definition: def, Dir: dir, Trigger: rec.run.Trigger}
 	if rec.run.ScheduledFor != nil {

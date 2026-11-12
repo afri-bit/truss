@@ -85,7 +85,9 @@ sequenceDiagram
     R->>R: close the run, start the next queued run
 ```
 
-`truss run` is the lower half only: the CLI calls the engine directly and prints the events.
+`truss run` is the lower half only: the CLI calls the engine directly and prints the events. With
+`--track` it also reports the run to the daemon's API (steps, log, outcome), which records it as a
+`local` run; the daemon does not execute it ([ADR 0006](decisions/0006-tracked-local-runs.md)).
 
 ## Design choices worth knowing
 

@@ -154,6 +154,10 @@ const (
 	MaxTrackedSteps = 1000
 	// MaxTrackedName is the longest pipeline name of a tracked run, in bytes.
 	MaxTrackedName = 128
+	// MaxOpenTracked is the most tracked runs that may be running at once.
+	MaxOpenTracked = 100
+	// MaxTrackedLog is the most bytes a tracked run's log may hold.
+	MaxTrackedLog = 64 << 20
 	// MaxReason is the longest reason a client may set, in bytes.
 	MaxReason = 2000
 )

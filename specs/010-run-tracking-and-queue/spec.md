@@ -44,13 +44,16 @@ Written alongside the implementation (constitution 2.0.0, principle I).
   `the daemon stopped while this run was active` (spec 006 FR-017). A graceful stop still cancels
   runs that are executing, with `the daemon stopped`. Only queued runs are kept.
 - **FR-006** A restored queued run can be cancelled like any other queued run.
+- **FR-006a** A restored run shows the steps of the file it will execute, all `pending`, not the
+  steps the file had when the run was requested.
 
 ### Tracking: the CLI
 
 - **FR-007** `truss run [<path>] --track` runs the pipeline exactly as `truss run` does: in the
   caller's process, shell, working directory and environment, with the same run log on stdout, the
   same `.truss/run.log`, the same exit code. `--track` is the only option of `run`; any other
-  argument is the path.
+  argument is the path. (Compatibility: a definition file literally named `--track` must now be
+  written `./--track`.)
 - **FR-008** `--track` needs a daemon. When none runs, `truss run --track` prints the usual
   `error: ... (start it with: truss daemon start)` line on stderr, exits `1`, writes nothing to
   stdout and runs nothing. A definition that does not load fails as it does without `--track`,
@@ -78,17 +81,20 @@ Written alongside the implementation (constitution 2.0.0, principle I).
   ended, answers `409` and is not modified. An unknown id is `404`.
 - **FR-015** Malformed requests are `400`: no name, a name over 128 bytes or with control
   characters, no steps or more than 1000, empty or repeated step ids, an unknown step, an unknown
-  status, a missing or negative offset. Bodies over the limits (256 KiB for a log append, 1 MiB for
+  status, a missing or negative offset, a step that needs an undeclared step or itself or forms a
+  cycle. Reasons and step errors have control characters replaced by spaces. At most 100 tracked
+  runs may be running at once (`409`) and a tracked log holds at most 64 MiB (`413`). Bodies over the limits (256 KiB for a log append, 1 MiB for
   JSON, 2000 bytes for a reason) are `413`.
-- **FR-016** A log append must start at the current end of the log (`409` otherwise). A repeat of
-  an append the log already holds is accepted and changes nothing. A step that has ended cannot
+- **FR-016** A log append must start at the current end of the log (`409` otherwise). A
+  byte-identical repeat of an append the log already holds is accepted and changes nothing. A step that has ended cannot
   change (`409`). Steps still open when the run is closed become `skipped` (never started) or
   `cancelled` (running), as for any run.
 - **FR-017** The daemon stamps step and run times with its own clock.
 - **FR-018** `POST /runs/{id}/cancel` on a running `local` run closes it as `cancelled` at once with
   the reason `cancelled from the daemon; the local run is asked to stop`. The CLI reports about
   four times a second, sees the status in the answer, ends the run's processes as an interrupt
-  does, exits `1` and prints `error: cancelled from the daemon`. Like any interrupted run it saves
+  does, exits `1` and prints `error: cancelled from the daemon`. A cancel that arrives after the
+  pipeline finished does not change its exit code (FR-010). Like any interrupted run it saves
   no `.truss/run.log` (spec 001 FR-017).
 - **FR-019** When the daemon stops (gracefully or not), a `local` run that is `running` is
   closed as `failed` with `the daemon stopped while this run was active`. Finished local runs are
@@ -101,8 +107,6 @@ Written alongside the implementation (constitution 2.0.0, principle I).
 Tracking of `truss validate`, tracking by default or by environment variable, a lease that closes
 local runs whose CLI died, resuming a run that was executing, retry policies, changing the order of
 the queue, and registering a tracked pipeline.
-
-Resuming a run that was executing, retry policies, and changing the order of the queue.
 
 ## Verification
 

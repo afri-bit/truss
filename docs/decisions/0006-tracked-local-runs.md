@@ -1,6 +1,6 @@
 # 0006. Tracked local runs report to the daemon
 
-- Status: Accepted
+- Status: Proposed
 - Date: 2026-11-12
 
 ## Context
@@ -34,8 +34,9 @@ environment, not the caller's. The maintainer wants the run to stay where it is 
    daemon is responsible for.
 5. **Limits.** A log append is at most 256 KiB, JSON bodies at most 1 MiB, a run at most 1000
    steps, names at most 128 bytes without control characters, reasons at most 2000 bytes. Over the
-   limit is `413` or `400`. A log append must start at the end of the log; a repeat that the log
-   already holds is accepted (`204`) so a lost answer can be retried, anything else is `409`.
+   limit is `413` or `400`. A log append must start at the end of the log; a byte-identical repeat
+   of what the log already holds is accepted (`204`) so a lost answer can be retried (the CLI itself
+   does not retry: one failed report ends tracking), anything else is `409`.
 6. **No daemon: `--track` fails.** The user asked for tracking, so `truss run --track` exits `1`
    with the usual "start it with" hint *before* running anything. It never silently degrades.
    `--track` is a statement about where the run is recorded; a pipeline that did not get
