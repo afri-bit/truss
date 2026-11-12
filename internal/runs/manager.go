@@ -84,8 +84,11 @@ type Manager struct {
 	records map[string]*record
 	order   []string // run ids, oldest first
 	queue   []string // queued run ids, oldest first
-	closed  bool
-	wg      sync.WaitGroup
+	// lastCreated is the newest creation time handed out. New runs are always
+	// created after it, so history order never depends on clock resolution.
+	lastCreated time.Time
+	closed      bool
+	wg          sync.WaitGroup
 }
 
 // Open returns a Manager with the history found in opts.Dir. Runs that were
@@ -120,6 +123,9 @@ func Open(opts Options) (*Manager, error) {
 		}
 		m.records[run.ID] = rec
 		m.order = append(m.order, run.ID)
+		if run.CreatedAt.After(m.lastCreated) {
+			m.lastCreated = run.CreatedAt
+		}
 	}
 	sort.Slice(m.order, func(i, j int) bool {
 		a, b := m.records[m.order[i]].run, m.records[m.order[j]].run
@@ -309,7 +315,13 @@ func (m *Manager) Close() {
 
 // newRecord creates a record with a fresh id. The caller holds m.mu.
 func (m *Manager) newRecord(name, trigger string, scheduledFor time.Time) *record {
+	// A coarse clock (Windows) can return the same instant twice; the history
+	// is sorted by creation time, so each run gets a strictly later one.
 	now := m.opts.Now()
+	if !now.After(m.lastCreated) {
+		now = m.lastCreated.Add(time.Nanosecond)
+	}
+	m.lastCreated = now
 	rec := &record{stopped: map[string]bool{}}
 	rec.run = api.Run{Pipeline: name, Trigger: trigger, CreatedAt: now, Steps: []api.Step{}}
 	if !scheduledFor.IsZero() {

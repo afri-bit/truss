@@ -326,3 +326,29 @@ func TestHistory_KeepsOnlyTheNewestRuns(t *testing.T) {
 		t.Fatalf("pruned run still on disk: %v", err)
 	}
 }
+
+// Runs created in the same clock instant (a coarse clock, or a missed schedule
+// recorded in the same tick as a new run) keep their creation order after the
+// daemon restarts.
+func TestHistory_KeepsCreationOrderWhenTheClockDoesNotMove(t *testing.T) {
+	dir := t.TempDir()
+	frozen := time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
+	m := open(t, Options{Dir: dir, Now: func() time.Time { return frozen }})
+	for i := range 8 {
+		if _, err := m.Record("p", api.TriggerSchedule, time.Time{}, api.RunSkipped, fmt.Sprint(i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.Close()
+
+	again := open(t, Options{Dir: dir})
+	list := again.List("", 0)
+	if len(list) != 8 {
+		t.Fatalf("history has %d runs", len(list))
+	}
+	for i, run := range list {
+		if want := fmt.Sprint(7 - i); run.Reason != want {
+			t.Fatalf("position %d is run %s, want run %s (newest first)", i, run.Reason, want)
+		}
+	}
+}
