@@ -1,4 +1,4 @@
-# 0006. The register dialog browses files through a names-only listing endpoint
+# 0009. The register dialog browses files through a names-only listing endpoint
 
 - Status: Proposed
 - Date: 2026-11-12

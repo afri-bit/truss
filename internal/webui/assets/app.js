@@ -125,10 +125,15 @@ function runsTable(runs, withPipeline) {
     h("tbody", null, runs.map((r) => h("tr", { class: "link", onclick: () => { location.hash = "#/runs/" + r.id; } },
       h("td", null, h("a", { class: "rowlink", href: "#/runs/" + encodeURIComponent(r.id), "aria-label": `Run ${r.id}, ${r.status}`, onclick: (e) => e.stopPropagation() }, badge(r.status))),
       withPipeline && h("td", null, h("a", { href: "#/pipelines/" + encodeURIComponent(r.pipeline), onclick: (e) => e.stopPropagation() }, r.pipeline)),
-      h("td", null, r.trigger),
+      h("td", null, triggerLabel(r.trigger)),
       h("td", null, clock(r.created_at)),
       h("td", { class: "num" }, took(r)),
       h("td", { class: "note", title: r.reason || "" }, r.reason || (r.scheduled_for ? "scheduled for " + clock(r.scheduled_for) : "")))))));
+}
+
+// A local run executes in someone's shell (truss run --track); the daemon only records it.
+function triggerLabel(trigger) {
+  return trigger === "local" ? h("span", { class: "tag", title: "ran in a shell outside the daemon (truss run --track)" }, "local") : trigger;
 }
 
 function pipelineActions(p) {
@@ -381,12 +386,12 @@ views.run = {
       h("a", { class: "crumb", href: "#/pipelines/" + encodeURIComponent(run.pipeline) }, "← " + run.pipeline),
       h("div", { class: "head" },
         h("div", null, h("h1", { class: "mono" }, run.id),
-          h("p", { class: "sub" }, `${run.trigger} run of ${run.pipeline} · created ${clock(run.created_at)}`,
+          h("p", { class: "sub" }, triggerLabel(run.trigger), ` run of ${run.pipeline} · created ${clock(run.created_at)}`,
             run.scheduled_for ? ` · scheduled for ${clock(run.scheduled_for)}` : "", run.started_at ? ` · took ${took(run)}` : "")),
         badge(run.status), h("span", { class: "spacer" }),
         h("div", { class: "actions" },
-          isActive(run) && h("button", { class: "danger", onclick: () => act("Cancel requested", () => api("POST", `/runs/${run.id}/cancel`)) }, "Cancel run"),
-          !isActive(run) && h("button", { onclick: () => act("Run requested", async () => {
+          isActive(run) && h("button", { class: "danger", title: run.trigger === "local" ? "Asks the local run to stop; it ends within a second" : null, onclick: () => act("Cancel requested", () => api("POST", `/runs/${run.id}/cancel`)) }, "Cancel run"),
+          !isActive(run) && run.trigger !== "local" && h("button", { onclick: () => act("Run requested", async () => {
             const next = await (await api("POST", `/pipelines/${encodeURIComponent(run.pipeline)}/runs`)).json();
             location.hash = "#/runs/" + next.id;
           }) }, "Run again"))),

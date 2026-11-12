@@ -388,3 +388,83 @@ func TestDaemon_RemovesItsEndpointFileOnStop(t *testing.T) {
 		t.Fatalf("dial a stopped daemon: %v", err)
 	}
 }
+
+func TestCheckAddress(t *testing.T) {
+	for addr, ok := range map[string]bool{
+		"127.0.0.1:7878": true, "127.0.0.1:0": true, "[::1]:9000": true,
+		"0.0.0.0:7878": false, "localhost": false, "127.0.0.1:abc": false,
+		"127.0.0.1:70000": false, `127.0.0.1:1" --max-runs 5 "`: false,
+	} {
+		if err := CheckAddress(addr); (err == nil) != ok {
+			t.Errorf("CheckAddress(%q) = %v, want ok=%v", addr, err, ok)
+		}
+	}
+}
+
+// queuedRecord writes the run.json a daemon leaves behind for a run that was
+// queued when it stopped.
+func queuedRecord(t *testing.T, h home.Dir, id, pipelineName string) {
+	t.Helper()
+	dir := filepath.Join(h.Runs(), id)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	run := api.Run{ID: id, Pipeline: pipelineName, Trigger: api.TriggerManual, Status: api.RunQueued,
+		CreatedAt: time.Date(2026, 11, 11, 9, 0, 0, 0, time.UTC), Steps: []api.Step{{ID: "greet", Status: api.StepPending}}}
+	if err := home.WriteJSON(filepath.Join(dir, "run.json"), run); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDaemon_StartsRunsThatWereQueuedWhenItStopped(t *testing.T) {
+	h := home.Dir(t.TempDir())
+	dir := t.TempDir()
+	path := writeDefinition(t, dir, "hello.yaml", helloDefinition)
+
+	_, c := boot(t, h, nil)
+	if _, err := c.Register(context.Background(), api.RegisterRequest{Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	waitStopped(t, h)
+
+	queuedRecord(t, h, "20261111-090000-aaaaaa", "hello")
+	queuedRecord(t, h, "20261111-090001-bbbbbb", "hello")
+	queuedRecord(t, h, "20261111-090002-cccccc", "gone")
+
+	_, c = boot(t, h, nil)
+	list := awaitRuns(t, c, "hello", 2)
+	for _, r := range list {
+		if r.Status != api.RunSucceeded || r.Trigger != api.TriggerManual {
+			t.Fatalf("restored run = %+v", r)
+		}
+	}
+	if list[0].StartedAt.Before(*list[1].StartedAt) {
+		t.Fatalf("runs started out of request order: %+v", list)
+	}
+	log, _, _, err := c.Log(context.Background(), "20261111-090000-aaaaaa", 0)
+	if err != nil || !strings.Contains(string(log), "step greet | hello from the daemon") {
+		t.Fatalf("log = %q, %v", log, err)
+	}
+	gone, err := c.Run(context.Background(), "20261111-090002-cccccc")
+	if err != nil || gone.Status != api.RunFailed || !strings.Contains(gone.Reason, "could not be restored") {
+		t.Fatalf("run of an unregistered pipeline = %+v, %v", gone, err)
+	}
+}
+
+// waitStopped waits until the daemon of h has removed its endpoint file.
+func waitStopped(t *testing.T, h home.Dir) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if _, err := os.Stat(h.Endpoint()); os.IsNotExist(err) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the daemon did not stop")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}

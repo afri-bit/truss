@@ -67,9 +67,13 @@ func Start(ctx context.Context, req Request) (*Process, error) {
 	p := &Process{cmd: cmd}
 	var outW, errW io.Writer = &p.stdout, &p.stderr
 	if req.Out != nil {
-		live := &lockedWriter{w: req.Out}
+		mu := &sync.Mutex{}
+		live := &lockedWriter{mu: mu, w: req.Out}
 		outW = io.MultiWriter(&p.stdout, live)
 		errW = io.MultiWriter(&p.stderr, live)
+		if req.ErrOut != nil {
+			errW = io.MultiWriter(&p.stderr, &lockedWriter{mu: mu, w: req.ErrOut})
+		}
 	}
 	// Own pipes (not exec's copying) so Wait returns when the shell exits,
 	// even if a leftover process still holds the write ends.
@@ -196,9 +200,10 @@ func Execute(ctx context.Context, req Request) (Result, error) {
 	return p.Wait(ctx), nil
 }
 
-// lockedWriter serializes stdout and stderr onto one live log.
+// lockedWriter serializes stdout and stderr onto one live log. Writers that
+// share mu never write at the same time.
 type lockedWriter struct {
-	mu sync.Mutex
+	mu *sync.Mutex
 	w  io.Writer
 }
 

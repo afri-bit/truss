@@ -26,7 +26,7 @@ func (in invocation) daemon(ctx context.Context) int {
 	if err != nil || len(pos) != 0 {
 		return in.usage()
 	}
-	if (sub == "stop" || sub == "status") && len(flags) != 0 {
+	if (sub == "stop" || sub == "status" || sub == "uninstall") && len(flags) != 0 {
 		return in.usage()
 	}
 	maxRuns := 0
@@ -48,6 +48,10 @@ func (in invocation) daemon(ctx context.Context) int {
 		return in.daemonStop(ctx, h)
 	case "status":
 		return in.daemonStatus(ctx, h)
+	case "install":
+		return in.daemonInstall(ctx, h, flags["address"], maxRuns)
+	case "uninstall":
+		return in.daemonUninstall(ctx, h)
 	}
 	return in.usage()
 }
@@ -148,6 +152,7 @@ func (in invocation) daemonStatus(ctx context.Context, h home.Dir) int {
 	c, err := api.Dial(ctx, h)
 	if errors.Is(err, api.ErrNotRunning) {
 		fmt.Fprintln(in.stdout, "daemon is not running (start it with: truss daemon start)")
+		in.loginLine(ctx, h)
 		return 1
 	}
 	if err != nil {
@@ -165,6 +170,7 @@ func (in invocation) daemonStatus(ctx context.Context, h home.Dir) int {
 	fmt.Fprintf(in.stdout, "  started    %s\n", local(&st.StartedAt))
 	fmt.Fprintf(in.stdout, "  pipelines  %d\n", st.Pipelines)
 	fmt.Fprintf(in.stdout, "  runs       %d running, %d queued (limit %d at once)\n", st.RunningRuns, st.QueuedRuns, st.MaxParallelRuns)
+	in.loginLine(ctx, h)
 	return 0
 }
 

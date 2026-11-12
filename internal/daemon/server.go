@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -56,6 +57,10 @@ func (d *Daemon) handler() http.Handler {
 	route("GET /runs/{id}", d.getRun)
 	route("POST /runs/{id}/cancel", d.cancelRun)
 	route("GET /runs/{id}/log", d.getRunLog)
+	route("POST /runs", d.createTrackedRun)
+	route("POST /runs/{id}/steps", d.reportStep)
+	route("POST /runs/{id}/log", d.appendRunLog)
+	route("POST /runs/{id}/finish", d.finishTrackedRun)
 	mux.HandleFunc(api.Prefix+"/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "no such API endpoint")
 	})
@@ -96,6 +101,7 @@ func statusFor(err error) int {
 	var invalid *invalidError
 	var bad *badRequestError
 	var coded *statusError
+	var tooBig *http.MaxBytesError
 	switch {
 	case errors.Is(err, registry.ErrNotFound), errors.Is(err, runs.ErrNotFound):
 		return http.StatusNotFound
@@ -103,6 +109,12 @@ func statusFor(err error) int {
 		return http.StatusConflict
 	case errors.Is(err, runs.ErrClosed):
 		return http.StatusServiceUnavailable
+	case errors.Is(err, runs.ErrConflict):
+		return http.StatusConflict
+	case errors.Is(err, runs.ErrInvalid):
+		return http.StatusBadRequest
+	case errors.Is(err, runs.ErrTooLarge), errors.As(err, &tooBig):
+		return http.StatusRequestEntityTooLarge
 	case errors.As(err, &invalid):
 		return http.StatusUnprocessableEntity
 	case errors.As(err, &bad):
@@ -294,4 +306,83 @@ func (d *Daemon) getRunLog(w http.ResponseWriter, r *http.Request) error {
 	// The log is served as plain text with nosniff, so a browser never renders it.
 	_, err = w.Write(data) // #nosec G705
 	return err
+}
+
+// maxJSONBody bounds the JSON bodies of the tracking endpoints. A run of the
+// largest allowed size (api.MaxTrackedSteps steps) fits well within it.
+const maxJSONBody = 1 << 20
+
+// readJSON decodes a request body into v. A body over maxJSONBody is a 413
+// and an unreadable one a 400.
+func readJSON(w http.ResponseWriter, r *http.Request, v any) error {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody))
+	if err := dec.Decode(v); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			return err
+		}
+		return badRequest("read request: %s", err.Error())
+	}
+	return nil
+}
+
+func (d *Daemon) createTrackedRun(w http.ResponseWriter, r *http.Request) error {
+	var req api.CreateRunRequest
+	if err := readJSON(w, r, &req); err != nil {
+		return err
+	}
+	run, err := d.runs.Track(req.Pipeline, req.Steps)
+	if err != nil {
+		return err
+	}
+	d.logf("pipeline %s: tracked local run %s started", run.Pipeline, run.ID)
+	return writeJSON(w, http.StatusCreated, run)
+}
+
+func (d *Daemon) reportStep(w http.ResponseWriter, r *http.Request) error {
+	var u api.StepUpdate
+	if err := readJSON(w, r, &u); err != nil {
+		return err
+	}
+	run, err := d.runs.TrackStep(r.PathValue("id"), u)
+	if err != nil {
+		return err
+	}
+	return writeJSON(w, http.StatusOK, run)
+}
+
+func (d *Daemon) appendRunLog(w http.ResponseWriter, r *http.Request) error {
+	offset, err := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 64)
+	if err != nil || offset < 0 {
+		return badRequest("offset must be a whole number of at least 0")
+	}
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, api.MaxLogChunk))
+	if err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			return err
+		}
+		return badRequest("read request: %s", err.Error())
+	}
+	next, status, err := d.runs.TrackLog(r.PathValue("id"), offset, data)
+	if err != nil {
+		return err
+	}
+	w.Header().Set(api.HeaderLogOffset, strconv.FormatInt(next, 10))
+	w.Header().Set(api.HeaderRunStatus, status)
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+func (d *Daemon) finishTrackedRun(w http.ResponseWriter, r *http.Request) error {
+	var req api.FinishRequest
+	if err := readJSON(w, r, &req); err != nil {
+		return err
+	}
+	run, err := d.runs.TrackFinish(r.PathValue("id"), req.Status, req.Reason)
+	if err != nil {
+		return err
+	}
+	d.logf("run %s: tracked local run %s", run.ID, run.Status)
+	return writeJSON(w, http.StatusOK, run)
 }
