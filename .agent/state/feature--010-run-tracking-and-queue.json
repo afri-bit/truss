@@ -1,0 +1,24 @@
+{
+  "work_id": "feature--010-run-tracking-and-queue",
+  "title": "Run tracking and persistent queue (spec 010)",
+  "tier": 2,
+  "branch": "feature/010-run-tracking-and-queue",
+  "status": "done",
+  "step": "merged",
+  "steps_done": [
+    "spec, ADR 0007, queue restore, --track, API endpoints, docs, four independent reviews fixed, develop merged"
+  ],
+  "requirements": [
+    "specs/010-run-tracking-and-queue/spec.md"
+  ],
+  "specs": [],
+  "owner_agent": "claude",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [
+    "run golangci-lint and govulncheck on Go 1.27.3; consider a lease for tracked runs whose CLI died"
+  ],
+  "pr": null,
+  "created": "2026-11-12T22:56:14Z",
+  "updated": "2026-11-12T22:56:20Z"
+}
