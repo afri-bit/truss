@@ -169,8 +169,13 @@ func stepDir(runDir, dir string) (string, error) {
 		return dir, nil
 	case filepath.VolumeName(dir) != "":
 		return "", fmt.Errorf("working directory %q: a path with a drive letter must be absolute", dir)
-	case filepath.VolumeName(runDir) != "" && (dir[0] == '\\' || dir[0] == '/'):
-		return filepath.Join(filepath.VolumeName(runDir)+string(filepath.Separator), dir), nil
+	case dir[0] == '\\' || dir[0] == '/':
+		// Rooted without a drive letter: only reachable on Windows.
+		abs, err := filepath.Abs(runDir)
+		if err != nil {
+			return "", fmt.Errorf("working directory %q: %w", dir, err)
+		}
+		return filepath.Join(filepath.VolumeName(abs)+string(filepath.Separator), dir), nil
 	}
 	return filepath.Join(runDir, dir), nil
 }

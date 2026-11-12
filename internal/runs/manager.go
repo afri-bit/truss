@@ -459,6 +459,10 @@ func (m *Manager) execute(ctx context.Context, rec *record) {
 
 	env := append(append([]string(nil), m.opts.Env...),
 		"TRUSS_RUN_ID="+id, "TRUSS_PIPELINE="+req.Pipeline, "TRUSS_TRIGGER="+req.Trigger)
+	if req.CacheDir != "" {
+		// A cache clear may have run while this run was queued.
+		_ = os.MkdirAll(req.CacheDir, 0o700)
+	}
 	if req.DataDir != "" {
 		env = append(env, "TRUSS_DATA_DIR="+req.DataDir)
 	}

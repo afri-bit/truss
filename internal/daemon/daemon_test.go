@@ -415,18 +415,16 @@ func TestDaemon_RunsStartInWorkdirAndSeeTheDataFolders(t *testing.T) {
 	if err != nil || status != api.RunSucceeded {
 		t.Fatalf("log (%s, %v):\n%s", status, err, data)
 	}
-	work, err := filepath.EvalSymlinks(filepath.Join(dir, "work")) // the shell prints the real path
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{
-		"step show | " + h.PipelineData("spaces"),
-		"step show | " + h.PipelineCache("spaces"),
-		"step show | " + work,
-	} {
-		if !strings.Contains(string(data), want) {
-			t.Errorf("log lacks %q:\n%s", want, data)
+	var lines []string
+	for _, l := range strings.Split(string(data), "\n") {
+		if _, v, ok := strings.Cut(l, " step show | "); ok {
+			lines = append(lines, strings.TrimSpace(v))
 		}
+	}
+	// The shell may print a symlink-resolved or short-named path, so the
+	// working directory is checked by its last element only.
+	if len(lines) != 3 || lines[0] != h.PipelineData("spaces") || lines[1] != h.PipelineCache("spaces") || filepath.Base(lines[2]) != "work" {
+		t.Errorf("step output = %q\nlog:\n%s", lines, data)
 	}
 	if info, err := os.Stat(h.PipelineCache("spaces")); err != nil || !info.IsDir() {
 		t.Fatalf("cache folder: %v", err)

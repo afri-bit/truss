@@ -67,6 +67,16 @@ FR-003 applies to `workdir` and also, because they share the resolver, to a step
 written as `C:work`, which was never meaningful. `truss run` writes a new `.truss/data`
 folder next to `run.log`. No daemon API or run-log change.
 
+## Known limitations
+
+- The folder name is the registered name. On case-insensitive file systems (Windows, default
+  macOS) `Demo` and `demo` share a folder, and Windows reserved device names (`nul`, `con`) and
+  a trailing `.` are not rejected at registration. Use distinct, plain names.
+- `truss cache clear` is for idle pipelines. It does not check for active runs; on Windows it
+  fails on files a running step holds open, on Unix it deletes under a running step, and a
+  read-only tree (mode 0555) in the cache makes it fail with a permission error. A run that is
+  queued when the cache is cleared gets the folder created again when it starts.
+
 ## Out of scope
 
 Restoring or saving cache keys, artifacts, a clean workspace per run, containers, per-run

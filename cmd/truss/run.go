@@ -38,7 +38,7 @@ func runLocal(ctx context.Context, args []string, cwd string, env []string, stdo
 	}
 	dataDir := filepath.Join(abs, ".truss", "data")
 	cacheDir := filepath.Join(dataDir, "cache")
-	if err := os.MkdirAll(cacheDir, 0o750); err != nil {
+	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
 		fmt.Fprintf(stderr, "error: prepare data folder: %s\n", err.Error())
 		return 1
 	}
