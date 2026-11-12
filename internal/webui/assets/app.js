@@ -123,7 +123,7 @@ function runsTable(runs, withPipeline) {
       h("th", null, "Status"), withPipeline && h("th", null, "Pipeline"), h("th", null, "Trigger"),
       h("th", null, "Created"), h("th", { class: "num" }, "Duration"), h("th", null, "Note"))),
     h("tbody", null, runs.map((r) => h("tr", { class: "link", onclick: () => { location.hash = "#/runs/" + r.id; } },
-      h("td", null, badge(r.status)),
+      h("td", null, h("a", { class: "rowlink", href: "#/runs/" + encodeURIComponent(r.id), "aria-label": `Run ${r.id}, ${r.status}`, onclick: (e) => e.stopPropagation() }, badge(r.status))),
       withPipeline && h("td", null, h("a", { href: "#/pipelines/" + encodeURIComponent(r.pipeline), onclick: (e) => e.stopPropagation() }, r.pipeline)),
       h("td", null, r.trigger),
       h("td", null, clock(r.created_at)),
@@ -190,7 +190,7 @@ function graph(steps, statusOf, selected, onSelect) {
     const job = slash > 0 ? st.id.slice(0, slash) : "";
     const name = slash > 0 ? st.id.slice(slash + 1) : st.id;
     const status = statusOf(st);
-    const g = s("g", { class: `node s-${status}` + (selected === st.id ? " selected" : ""), transform: `translate(${p.x},${p.y})`, tabindex: "0" });
+    const g = s("g", { class: `node s-${status}` + (selected === st.id ? " selected" : ""), transform: `translate(${p.x},${p.y})`, tabindex: "0", role: onSelect ? "button" : "img", "aria-label": `${st.id}: ${status}` });
     g.append(s("title", null, `${st.id} – ${status}`));
     g.append(s("rect", { width: W, height: H }));
     g.append(s("circle", { cx: 16, cy: H / 2, r: 4.5 }));
@@ -199,7 +199,8 @@ function graph(steps, statusOf, selected, onSelect) {
     g.append(s("text", { x: 30, y: job ? 33 : 27 }, clip(name)));
     if (onSelect) {
       g.addEventListener("click", () => onSelect(st.id));
-      g.addEventListener("keydown", (e) => { if (e.key === "Enter") onSelect(st.id); });
+      g.setAttribute("aria-pressed", selected === st.id ? "true" : "false");
+      g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(st.id); } });
     }
     svg.append(g);
   }
@@ -209,6 +210,7 @@ function graph(steps, statusOf, selected, onSelect) {
 // ---------- views ----------
 
 const views = {};
+const draft = { path: "", name: "" };
 
 views.dashboard = {
   nav: "dashboard",
@@ -239,7 +241,7 @@ views.dashboard = {
         h("section", null, h("h2", null, "Coming up"), h("div", { class: "panel" },
           upcoming.length
             ? h("table", null, h("tbody", null, upcoming.slice(0, 8).map((p) => h("tr", { class: "link", onclick: () => { location.hash = "#/pipelines/" + encodeURIComponent(p.name); } },
-              h("td", null, p.name), h("td", null, clock(nextOf(p))), h("td", { class: "num" }, until(nextOf(p)))))))
+              h("td", null, h("a", { href: "#/pipelines/" + encodeURIComponent(p.name), onclick: (e) => e.stopPropagation() }, p.name)), h("td", null, clock(nextOf(p))), h("td", { class: "num" }, until(nextOf(p)))))))
             : h("div", { class: "empty" }, "No schedules. Add ", h("code", null, "on.schedule"), " to a pipeline file.")))),
       h("section", null, h("h2", null, "Recent runs"), h("div", { class: "panel" }, runsTable(runs.slice(0, 12), true))),
     ];
@@ -250,15 +252,18 @@ views.pipelines = {
   nav: "pipelines",
   load: () => getJSON("/pipelines"),
   render(pipelines) {
-    const path = h("input", { class: "grow mono", name: "path", placeholder: "/absolute/path/to/truss.yaml", required: true, "aria-label": "Path of the pipeline file" });
-    const name = h("input", { name: "name", placeholder: "name (optional)", "aria-label": "Registration name" });
+    // The draft survives the periodic refresh, so a half-typed form is never lost.
+    const path = h("input", { id: "register-path", class: "grow mono", name: "path", placeholder: "/absolute/path/to/truss.yaml", required: true, autocomplete: "off", "aria-label": "Path of the pipeline file", value: draft.path,
+      oninput: (e) => { draft.path = e.target.value; } });
+    const name = h("input", { id: "register-name", name: "name", placeholder: "name (optional)", autocomplete: "off", "aria-label": "Registration name", value: draft.name,
+      oninput: (e) => { draft.name = e.target.value; } });
     const form = h("form", { class: "register panel", onsubmit: (e) => {
       e.preventDefault();
       act("Pipeline registered", async () => {
         await api("POST", "/pipelines", { path: path.value.trim(), name: name.value.trim() });
-        path.value = name.value = "";
+        draft.path = draft.name = "";
       });
-    } }, path, name, h("button", { class: "primary", type: "submit" }, "Register"));
+    } }, path, h("button", { type: "button", id: "browse", onclick: () => openPicker(path) }, "Browse…"), name, h("button", { class: "primary", type: "submit" }, "Register"));
     return [
       h("div", { class: "head" }, h("div", null, h("h1", null, "Pipelines"),
         h("p", { class: "sub" }, "Pipeline files this daemon knows. The file stays where it is and is read again before every run."))),
@@ -330,6 +335,10 @@ function paintLog() {
     else if (!cls && !rest.includes(" | ")) cls = "meta";
     frag.append(h("span", { class: "ts" }, line.slice(0, 20)), cls ? h("span", { class: cls }, rest) : rest, "\n");
   }
+  if (!frag.childNodes.length) {
+    const what = logState.step ? `step ${logState.step}` : "this run";
+    frag.append(h("span", { class: "ts" }, logState.done ? `No log lines for ${what}.` : `Waiting for log lines from ${what}…`));
+  }
   pre.replaceChildren(frag);
   if (logState.follow) pre.scrollTop = pre.scrollHeight;
 }
@@ -384,7 +393,8 @@ views.run = {
       run.steps.length > 0 && h("section", null, h("h2", null, "Steps"), graph(run.steps, (st) => st.status, logState.step, select)),
       run.steps.length > 0 && h("div", { class: "runlayout" },
         h("section", null, h("h2", null, "Step results"), h("div", { class: "panel" }, h("ul", { class: "steps" },
-          run.steps.map((st) => h("li", { class: logState.step === st.id ? "selected" : "", title: st.error || "", onclick: () => select(st.id) },
+          run.steps.map((st) => h("li", { class: logState.step === st.id ? "selected" : "", title: st.error || "", tabindex: "0", role: "button", "aria-pressed": logState.step === st.id ? "true" : "false",
+            onclick: () => select(st.id), onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(st.id); } } },
             badge(st.status), h("span", { class: "id" }, st.id),
             h("span", { class: "dur" }, st.exit_code != null && st.exit_code !== 0 ? `exit ${st.exit_code} · ` : "", took(st))))))),
         h("section", null, h("h2", null, "Run log"), h("div", { class: "log" },
@@ -396,6 +406,74 @@ views.run = {
   },
 };
 
+// ---------- file picker for the register form ----------
+
+// The browser cannot reveal absolute paths, so the daemon lists directories
+// (names only, GET /fs) and the dialog builds the path from them.
+const picker = { open: false, hidden: false, listing: null, error: "" };
+
+function joinPath(dir, name) {
+  const sep = dir.includes("\\") && !dir.includes("/") ? "\\" : "/";
+  return dir.endsWith(sep) ? dir + name : dir + sep + name;
+}
+
+async function pickerLoad(path) {
+  const query = `?path=${encodeURIComponent(path)}&hidden=${picker.hidden}`;
+  try {
+    picker.listing = await getJSON("/fs" + query);
+    picker.error = "";
+  } catch (e) {
+    picker.error = e.message;
+  }
+  pickerPaint();
+}
+
+function pickerPaint() {
+  const dlg = document.getElementById("picker");
+  const l = picker.listing;
+  const choose = (name) => {
+    const input = document.getElementById("register-path");
+    input.value = draft.path = joinPath(l.path, name);
+    dlg.close();
+  };
+  dlg.replaceChildren(
+    h("h2", { id: "picker-title" }, "Choose a pipeline file"),
+    picker.error && h("p", { class: "error", role: "alert", id: "picker-error" }, picker.error),
+    l && h("div", { class: "picker-bar" },
+      h("button", { type: "button", id: "picker-up", disabled: !l.parent, onclick: () => pickerLoad(l.parent) }, "Up"),
+      h("button", { type: "button", id: "picker-home", onclick: () => pickerLoad("") }, "Home"),
+      l.roots.length > 1 && l.roots.map((r) => h("button", { type: "button", class: "root", onclick: () => pickerLoad(r) }, r)),
+      h("label", { class: "check" }, h("input", { type: "checkbox", id: "picker-hidden", checked: picker.hidden, onchange: (e) => { picker.hidden = e.target.checked; pickerLoad(l.path); } }), "Show hidden")),
+    l && h("div", { class: "picker-path mono", id: "picker-path" }, l.path),
+    l && (l.entries.length
+      ? h("ul", { class: "picker-list", id: "picker-list" }, l.entries.map((en) => h("li", null,
+        h("button", { type: "button", class: "entry " + en.kind, onclick: () => (en.kind === "dir" ? pickerLoad(joinPath(l.path, en.name)) : choose(en.name)) },
+          h("span", { class: "kind", "aria-hidden": "true" }, en.kind === "dir" ? "📁" : "📄"), en.name + (en.link ? " →" : ""), en.kind === "dir" && h("span", { class: "sr" }, " (folder)")))))
+      : h("div", { class: "empty" }, "No folders or .yaml files here.")),
+    l && l.truncated && h("p", { class: "sub" }, "Only the first entries are shown. Type the path instead."),
+    h("div", { class: "picker-foot" }, h("button", { type: "button", id: "picker-cancel", onclick: () => dlg.close() }, "Cancel")));
+}
+
+async function openPicker(input) {
+  const dlg = document.getElementById("picker");
+  picker.open = true;
+  picker.listing = null;
+  picker.error = "";
+  const typed = input.value.trim();
+  const cut = Math.max(typed.lastIndexOf("/"), typed.lastIndexOf("\\"));
+  pickerPaint();
+  dlg.showModal();
+  await pickerLoad(cut >= 0 ? typed.slice(0, cut + 1) : "");
+  if (picker.error && cut >= 0) await pickerLoad(""); // the typed folder is gone: start at home
+  document.getElementById("picker-up")?.focus();
+}
+
+document.getElementById("picker").addEventListener("close", () => {
+  picker.open = false;
+  const input = document.getElementById("register-path");
+  if (input) input.focus();
+});
+
 // ---------- routing and refresh ----------
 
 function parseRoute() {
@@ -403,6 +481,14 @@ function parseRoute() {
   if (parts[0] === "pipelines") return parts[1] ? { view: views.pipeline, arg: parts[1] } : { view: views.pipelines };
   if (parts[0] === "runs") return parts[1] ? { view: views.run, arg: parts[1] } : { view: views.runs };
   return { view: views.dashboard };
+}
+
+const FOCUSABLE = "a[href], button:not(:disabled), input, select, textarea, summary, [tabindex]:not([tabindex='-1'])";
+// focusIndex says which focusable element of the view has focus, so a refresh can give it back.
+function focusIndex(main) {
+  const el = document.activeElement;
+  if (!el || el === main || !main.contains(el)) return -1;
+  return [...main.querySelectorAll(FOCUSABLE)].indexOf(el);
 }
 
 let generation = 0;
@@ -418,12 +504,19 @@ async function route() {
   try {
     const data = await view.load(arg);
     if (mine !== generation) return;
-    // Do not replace a form the user is typing in.
-    if (typing && lastHash === location.hash) return;
+    // Do not replace a form the user is typing in, or a dialog that is open.
+    if (picker.open || (typing && lastHash === location.hash)) return;
+    const kept = lastHash === location.hash ? focusIndex(main) : -1;
     const scroll = document.getElementById("log") ? document.getElementById("log").scrollTop : null;
     main.replaceChildren(...view.render(data).flat().filter(Boolean));
     if (scroll != null && document.getElementById("log") && !logState.follow) {
       queueMicrotask(() => { document.getElementById("log").scrollTop = scroll; });
+    }
+    if (kept >= 0) {
+      const target = main.querySelectorAll(FOCUSABLE)[kept];
+      if (target) target.focus({ preventScroll: true });
+    } else if (lastHash !== location.hash) {
+      main.focus({ preventScroll: true });
     }
     lastHash = location.hash;
     paintDaemon(true);
@@ -433,10 +526,19 @@ async function route() {
       main.replaceChildren(h("div", { class: "gate" }, h("h1", null, "Open TRUSS Desktop from your terminal"),
         h("p", { class: "sub" }, "This page needs the daemon's access token. Run this command and it opens with the token:"),
         h("code", null, "truss desktop")));
-    } else if (e instanceof ApiError) {
+    } else if (e instanceof ApiError && e.status === 404) {
       main.replaceChildren(h("div", { class: "gate" }, h("h1", null, "Not found"), h("p", { class: "sub" }, e.message), h("a", { href: "#/" }, "Back to the dashboard")));
+    } else if (e instanceof ApiError) {
+      main.replaceChildren(h("div", { class: "gate", role: "alert" }, h("h1", null, "Something went wrong"), h("p", { class: "sub" }, e.message),
+        h("button", { onclick: () => route() }, "Try again")));
     } else {
       paintDaemon(false);
+      lastHash = null;
+      if (!main.querySelector(".gate.unreachable")) {
+        main.replaceChildren(h("div", { class: "gate unreachable", role: "alert" }, h("h1", null, "Daemon unreachable"),
+          h("p", { class: "sub" }, "TRUSS Desktop cannot reach the daemon. Start it and this page reconnects by itself:"),
+          h("code", null, "truss daemon start")));
+      }
     }
   }
 }
