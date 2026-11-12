@@ -44,3 +44,5 @@ bin/
 # Python bytecode from the agent tooling scripts
 __pycache__/
 *.pyc
+
+node_modules/
