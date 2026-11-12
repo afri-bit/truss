@@ -121,6 +121,7 @@ directory is private to your user.
 |---|---|
 | `daemon.json` | Address, process id and access token of the running daemon. Removed on stop. |
 | `registry.json` | Registered pipelines. |
+| `secrets.json` | Stored secrets, plain text, `0600` (see [`truss secret`](cli.md#secrets)). Read at the start of each run that declares secrets. |
 | `clock.json` | When the scheduler last looked at the clock. |
 | `runs/<run-id>/run.json` | One run: status, times, steps. |
 | `runs/<run-id>/run.log` | Its run log, the same format `truss run` prints. |
@@ -192,7 +193,7 @@ Cancelling a local run (Desktop, `truss cancel`, `POST /runs/{id}/cancel`) close
 once and asks the CLI to stop: it notices within a fraction of a second and ends the run's
 processes like an interrupt. If the daemon stops while a local run is `running`, the run is
 closed as `failed`; the process in your shell carries on and stops reporting. See
-[ADR 0006](decisions/0006-tracked-local-runs.md).
+[ADR 0007](decisions/0007-tracked-local-runs.md).
 
 ```console
 $ TOKEN=$(jq -r .token ~/.truss/daemon.json)

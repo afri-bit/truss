@@ -32,7 +32,7 @@ schedules that respect a laptop's life, and concurrency.
    the daemon even when one runs, because the run would then use the daemon's environment
    instead of the caller's. Tracked runs go through `register` and `trigger`.
    *Decided with the maintainer, 2026-11-12.* `truss run --track` later added opt-in reporting
-   to the daemon without handing the run over ([ADR 0006](0006-tracked-local-runs.md)).
+   to the daemon without handing the run over ([ADR 0007](0007-tracked-local-runs.md)).
 9. **The daemon is the server, started separately.** Clients (CLI, Desktop) never start or stop
    it, and Desktop is unusable without it. *Decided with the maintainer, 2026-11-12.*
 10. **Clients poll.** Run logs are fetched by byte offset. Server-sent events can be added later

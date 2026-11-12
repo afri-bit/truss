@@ -1,4 +1,4 @@
-# 0006. Tracked local runs report to the daemon
+# 0007. Tracked local runs report to the daemon
 
 - Status: Accepted
 - Date: 2026-11-12

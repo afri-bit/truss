@@ -58,6 +58,9 @@ type Options struct {
 	Keep int
 	// Env is the environment every step starts from ("KEY=value" entries).
 	Env []string
+	// Secrets returns the stored secrets, name to value. It is called at the
+	// start of each run that declares secrets. Nil means there is no store.
+	Secrets func() (map[string]string, error)
 	// Now is the clock. Nil means time.Now.
 	Now func() time.Time
 	// Resolve brings queued runs back after a restart. Without it, they are
@@ -523,7 +526,8 @@ func (m *Manager) execute(ctx context.Context, rec *record) {
 
 	env := append(append([]string(nil), m.opts.Env...),
 		"TRUSS_RUN_ID="+id, "TRUSS_PIPELINE="+req.Pipeline, "TRUSS_TRIGGER="+req.Trigger)
-	result, err := engine.Run(ctx, req.Definition, req.Dir, env, &follower{m: m, rec: rec, log: log})
+	result, err := engine.Run(ctx, req.Definition, req.Dir, env, &follower{m: m, rec: rec, log: log},
+		engine.WithSecrets(m.opts.Secrets))
 
 	m.mu.Lock()
 	defer m.mu.Unlock()

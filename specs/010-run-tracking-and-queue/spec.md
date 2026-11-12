@@ -9,7 +9,7 @@ Builds on [spec 006](../006-daemon-registry-and-scheduling/spec.md) and
 [ADR 0003](../../docs/decisions/0003-daemon-local-api-and-file-state.md) (decisions 8 and 9: the
 daemon is started separately, and `truss run` is never handed to it).
 User-facing documentation: [`docs/daemon.md`](../../docs/daemon.md), [`docs/cli.md`](../../docs/cli.md).
-Decisions: [ADR 0006](../../docs/decisions/0006-tracked-local-runs.md).
+Decisions: [ADR 0007](../../docs/decisions/0007-tracked-local-runs.md).
 Written alongside the implementation (constitution 2.0.0, principle I).
 
 ## User stories
@@ -72,7 +72,7 @@ Written alongside the implementation (constitution 2.0.0, principle I).
   `pending`, appears in `GET /runs`, `GET /runs/{id}` and `GET /runs/{id}/log` like any run, and
   counts in `running_runs`, but takes no slot of `--max-runs` and does not count for
   `overlap: skip` or `queue` of its pipeline.
-- **FR-013** The endpoints of [ADR 0006](../../docs/decisions/0006-tracked-local-runs.md) open a
+- **FR-013** The endpoints of [ADR 0007](../../docs/decisions/0007-tracked-local-runs.md) open a
   run (`POST /runs`), report a step (`POST /runs/{id}/steps`), append to the log
   (`POST /runs/{id}/log?offset=`) and close it (`POST /runs/{id}/finish`). They need the token like
   every endpoint (`401` otherwise). They are additive: nothing in the v1 contract changed.

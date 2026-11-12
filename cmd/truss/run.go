@@ -98,7 +98,7 @@ func execute(ctx, runCtx context.Context, def pipeline.Pipeline, cwd string, env
 	if tr != nil {
 		events = newTrackedEvents(log, tr, runCtx)
 	}
-	run, err := engine.Run(runCtx, def, cwd, env, events)
+	run, err := engine.Run(runCtx, def, cwd, env, events, engine.WithSecrets(secretLoader(env)))
 	if err != nil {
 		discardRunLog(tmp, tmpPath)
 		return interrupted(ctx, tr, err, stderr)

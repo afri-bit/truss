@@ -206,6 +206,10 @@ non-0  failure
 
 The variables and execution context available to a step.
 
+### Secret
+
+A named value stored in the TRUSS home with `truss secret set` and handed to the steps that declare it in `secrets`, as an environment variable. Its value is replaced by `***` in step output. Stored unencrypted; see ADR 0006.
+
 ## Platform
 
 ### CLI

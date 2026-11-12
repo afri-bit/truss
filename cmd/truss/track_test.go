@@ -259,3 +259,22 @@ func TestRunTrack_InterruptClosesTheRunAsCancelled(t *testing.T) {
 		t.Fatalf("run log exists: %v", err)
 	}
 }
+
+func TestRunTrack_TheDaemonLogIsRedactedToo(t *testing.T) {
+	s := newSession(t, true)
+	s.setSecret("TRUSS_TEST_TOKEN", canary)
+	s.write("truss.yaml", secretPipelineText())
+	code, out, errOut := s.truss("run", "--track")
+	if code != 0 || strings.Contains(out, canary) {
+		t.Fatalf("exit %d\nstdout: %s\nstderr: %s", code, out, errOut)
+	}
+	id := runID.FindString(errOut)
+	logs := s.ok("logs", id)
+	if strings.Contains(logs, canary) || !strings.Contains(logs, "***") {
+		t.Fatalf("the tracked log leaks the secret or lacks the mask:\n%s", logs)
+	}
+	run := getRun(t, s, id)
+	if strings.Contains(run.Reason, canary) {
+		t.Fatalf("reason leaks: %q", run.Reason)
+	}
+}

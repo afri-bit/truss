@@ -238,6 +238,7 @@ fails the run and stops the rest. Every field is described in the
 |---|---|---|
 | **Run here** | `truss run [<path>] [--track]` | Run a file now; `--track` also reports it to the daemon |
 | | `truss validate [<path>]` | Check a file and show its steps |
+| **Secrets** | `truss secret set <name>` \| `list` \| `remove <name>` | Store credentials for `secrets:` in a file (value from stdin) |
 | **Daemon** | `truss daemon start` \| `stop` \| `status` | Manage the background service |
 | | `truss desktop` | Open TRUSS Desktop |
 | **Pipelines** | `truss register [<path>] [--name <name>]` | Make a file known to the daemon |
@@ -297,7 +298,7 @@ The full map is in [docs/architecture.md](docs/architecture.md).
 After v0.1.0, roughly in this order. Scope and order may change.
 
 - **Desktop:** a packaged window with tray icon, notifications and start at login
-- **Pipelines:** conditions, retries, matrix builds, artifacts, a secret store
+- **Pipelines:** conditions, retries, matrix builds, artifacts
 - **Triggers:** file changes and webhooks
 - **Execution:** containers, then remote workers
 - **Ecosystem:** SDKs and CI-provider bridges, so the same file runs in CI
