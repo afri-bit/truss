@@ -34,7 +34,8 @@ Tier 2 (pipeline schema, run-log format, daemon API, execution semantics).
 - **FR-003** Any failed attempt is retried: a non-zero exit code, a command that cannot start,
   an end by signal, or a `timeout` (which applies to each attempt on its own).
 - **FR-004** A step is not retried when the run was interrupted, or when TRUSS stopped it
-  because another step failed the run. A step that is waiting for a retry when another step
+  because another step failed the run. A step that may start after a failure (FR-016) and then
+  fails on its own is retried like any other. A step that is waiting for a retry when another step
   fails the run is stopped and not run again.
 - **FR-005** The result of a step is its last attempt: its exit code, error, output and times.
   The step holds its concurrency slot while it waits to retry.
@@ -83,7 +84,10 @@ Tier 2 (pipeline schema, run-log format, daemon API, execution semantics).
   put the steps it follows in `needs`.
 - **FR-017** A job's `if` is evaluated once, when its first step is ready, against the jobs it
   `needs` (the steps they end with). When false every step of the job is skipped, whatever the
-  step's own `if`. When true the job's condition replaces the default for its first step, and
+  step's own `if`. A job whose first step is skipped because a step it needs did not succeed, or
+  because the run had failed, is skipped as a whole in the same way; the later steps are reported
+  as `job "<job>" did not start` (silently in the run log after a failure, as FR-018 says).
+  A first step skipped by its own `if` does not skip the job. When true the job's condition replaces the default for its first step, and
   the later steps of the job follow their own condition or the default (the step before them
   succeeded).
 - **FR-018** A step skipped by a condition, or because a step it needs did not succeed, is
@@ -117,7 +121,9 @@ Tier 2 (pipeline schema, run-log format, daemon API, execution semantics).
   empty: `attempts` (the number of the current or last attempt, present only once a step was
   run again), `continued_on_error` (true for a tolerated failure) and `reason` (why a step was
   skipped). `status` values are unchanged; a skipped step has status `skipped`. The exit code,
-  error and times describe the last attempt. A step that waits to retry has status `running`.
+  error and times describe the last attempt (`started_at` is when it began); while a step waits
+  for a retry, or when it is stopped or cancelled then, it keeps the exit code and error of the
+  last attempt that ran, and `attempts` counts attempts that started. A step that waits to retry has status `running`.
 - **FR-023** A definition without the new fields produces the same API and log as before.
 
 ## Compatibility

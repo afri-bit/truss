@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -142,12 +143,18 @@ func TestRun_TimeoutFailsTheAttemptAndIsRetried(t *testing.T) {
 }
 
 func TestRun_RetryWaitIsEndedWhenAnotherStepFailsTheRun(t *testing.T) {
-	marker := filepath.Join(t.TempDir(), "a-ran")
+	// b fails only once a is waiting to retry, so a's wait is what ends.
+	marker := filepath.Join(t.TempDir(), "a-waiting")
+	rec := &touchOnRetry{eventLog: &eventLog{}, path: marker}
 	begin := time.Now()
-	run, rec := runSteps(t, 2, nil,
-		pipeline.Step{ID: "a", Run: helperCmd("touch-exit", marker, "1"), Retries: 3, RetryDelay: time.Hour},
-		pipeline.Step{ID: "b", Run: helperCmd("exit-after", marker, "1")},
-	)
+	p := pipeline.Pipeline{Version: "1", Name: "t", Concurrency: 2, Steps: []pipeline.Step{
+		{ID: "a", Run: helperCmd("exit", "1"), Retries: 3, RetryDelay: time.Hour},
+		{ID: "b", Run: helperCmd("exit-after", marker, "1")},
+	}}
+	run, err := Run(context.Background(), p, t.TempDir(), nil, rec)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if time.Since(begin) > 30*time.Second {
 		t.Fatal("the retry wait was not ended")
 	}
@@ -155,11 +162,81 @@ func TestRun_RetryWaitIsEndedWhenAnotherStepFailsTheRun(t *testing.T) {
 		t.Fatalf("run = %+v", run)
 	}
 	a := find(t, run, "a")
-	if a.StoppedBy != "b" || a.Attempts != 1 {
+	if a.StoppedBy != "b" || a.Attempts != 1 || a.ExitCode == nil || *a.ExitCode != 1 {
 		t.Fatalf("a = %+v", a)
 	}
 	if !rec.has("stopped", "a") {
 		t.Fatalf("no stopped event for a: %q", rec.phases())
+	}
+}
+
+// touchOnRetry creates a file when a step is about to retry.
+type touchOnRetry struct {
+	*eventLog
+	path string
+}
+
+func (c *touchOnRetry) StepRetrying(id string, attempt, attempts int, delay time.Duration) {
+	c.eventLog.StepRetrying(id, attempt, attempts, delay)
+	_ = os.WriteFile(c.path, nil, 0o600)
+}
+
+func TestRun_StoppedStepWithRetriesIsNotRunAgain(t *testing.T) {
+	run, rec := runSteps(t, 2, nil,
+		pipeline.Step{ID: "a", Run: helperCmd("block", filepath.Join(t.TempDir(), "pid")), Retries: 2},
+		pipeline.Step{ID: "b", Run: helperCmd("exit", "1")},
+	)
+	a := find(t, run, "a")
+	if run.FailedStep != "b" || a.StoppedBy != "b" || a.Attempts != 1 || rec.has("retrying", "a") {
+		t.Fatalf("a = %+v, events %q", a, rec.phases())
+	}
+}
+
+func TestRun_ContinueOnErrorAfterTheRunFailedIsNotLoggedAsContinued(t *testing.T) {
+	run, rec := runSteps(t, 1, nil,
+		pipeline.Step{ID: "build", Run: helperCmd("exit", "1")},
+		pipeline.Step{ID: "late", Run: helperCmd("exit", "1"), Needs: []string{"build"}, ContinueOnError: true, If: cond(t, "always()")},
+	)
+	if run.Status != pipeline.StatusFailed || run.FailedStep != "build" || find(t, run, "late").ContinuedOnError || rec.has("continued", "late") {
+		t.Fatalf("run = %+v, events %q", run, rec.phases())
+	}
+}
+
+func TestRun_JobThatDidNotStartSkipsAllItsSteps(t *testing.T) {
+	rec := &eventLog{}
+	p := jobPlan(t,
+		pipeline.Job{ID: "build", Steps: []pipeline.Step{{ID: "compile", Run: helperCmd("exit", "1")}}},
+		pipeline.Job{ID: "deploy", Needs: []string{"build"}, Steps: []pipeline.Step{
+			{ID: "push", Run: helperCmd("exit", "0")},
+			{ID: "logout", Run: helperCmd("exit", "0"), If: cond(t, "always()")},
+		}},
+	)
+	run, err := Run(context.Background(), p, t.TempDir(), nil, rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(run.Steps) != 1 || run.FailedStep != "build/compile" {
+		t.Fatalf("a step of a job that did not start ran: %+v", run.Steps)
+	}
+	if rec.has("skipped", "deploy/push") || rec.has("skipped", "deploy/logout") {
+		t.Fatalf("fail-fast skips are silent: %q", rec.phases())
+	}
+
+	// Without a failure the job is skipped because a job it needs was.
+	p = jobPlan(t,
+		pipeline.Job{ID: "build", If: cond(t, "env.NOPE == 'x'"), Steps: []pipeline.Step{{ID: "compile", Run: helperCmd("exit", "0")}}},
+		pipeline.Job{ID: "deploy", Needs: []string{"build"}, Steps: []pipeline.Step{
+			{ID: "push", Run: helperCmd("exit", "0")},
+			{ID: "logout", Run: helperCmd("exit", "0"), If: cond(t, "always()")},
+		}},
+	)
+	rec = &eventLog{}
+	run, err = Run(context.Background(), p, t.TempDir(), nil, rec)
+	if err != nil || len(run.Steps) != 0 || run.Status != pipeline.StatusSucceeded {
+		t.Fatalf("run = %+v, err = %v", run, err)
+	}
+	if rec.reason("deploy/push") != "step build/compile did not succeed" || rec.reason("deploy/logout") != `job "deploy" did not start` {
+		t.Fatalf("events %q", rec.phases())
 	}
 }
 

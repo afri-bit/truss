@@ -63,6 +63,9 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 		res     executor.Result
 		due     bool // the retry delay elapsed; res is the previous attempt
 		aborted bool // the wait was cut short; res is the previous attempt
+		// afterFailure is true when the run had already failed as the retry
+		// was scheduled, so a later failure is not a reason to drop it.
+		afterFailure bool
 	}
 	done := make(chan outcome)
 	byID := make(map[string]pipeline.Step, len(plan.Graph))
@@ -71,7 +74,13 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 	}
 	started := make(map[string]bool, len(plan.Graph))
 	settled := make(map[string]pipeline.Status, len(plan.Graph))
-	jobSkipped := map[string]bool{}
+	// jobSkipped holds the jobs that will not run, with the reason the rest of
+	// their steps are skipped for.
+	type skip struct {
+		reason string
+		silent bool
+	}
+	jobSkipped := map[string]skip{}
 	running := 0 // steps with a process or a pending retry
 	failed := false
 
@@ -95,17 +104,25 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 	// not, reason says why and silent is set for a step that only never
 	// started because the run had already failed, as before conditions existed.
 	decide := func(step pipeline.Step) (runIt bool, reason string, silent bool) {
-		if step.Job != "" && jobSkipped[step.Job] {
-			return false, fmt.Sprintf("the if condition of job %q is false", step.Job), false
+		if js, ok := jobSkipped[step.Job]; ok && step.Job != "" {
+			return false, js.reason, js.silent
+		}
+		// skipFirst records that a job never started, so that none of its
+		// steps run, whatever their own conditions say.
+		skipFirst := func(reason string, silent bool) (bool, string, bool) {
+			if step.JobFirst {
+				jobSkipped[step.Job] = skip{reason: fmt.Sprintf("job %q did not start", step.Job), silent: silent}
+			}
+			return false, reason, silent
 		}
 		if failed && !bypass(step) {
-			return false, "", true
+			return skipFirst("", true)
 		}
 		gate := true
 		if step.JobFirst && step.JobIf != nil {
 			if !holds(step.JobIf, step) {
-				jobSkipped[step.Job] = true
-				return false, fmt.Sprintf("the if condition of job %q is false", step.Job), false
+				jobSkipped[step.Job] = skip{reason: fmt.Sprintf("the if condition of job %q is false", step.Job)}
+				return false, jobSkipped[step.Job].reason, false
 			}
 			gate = false // the job's condition replaces the default for its first step
 		}
@@ -118,7 +135,7 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 		if gate {
 			for _, need := range step.Needs {
 				if settled[need] != pipeline.StatusSucceeded {
-					return false, fmt.Sprintf("step %s did not succeed", need), false
+					return skipFirst(fmt.Sprintf("step %s did not succeed", need), false)
 				}
 			}
 		}
@@ -152,11 +169,12 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 				events.StepRetrying(o.id, next, step.Retries+1, step.RetryDelay)
 			}
 			waitCtx := runCtx
+			scheduledAfterFailure := failed
 			if failed {
 				waitCtx = ctx
 			}
 			go func() {
-				r := outcome{slot: o.slot, attempt: next, id: o.id, res: o.res, due: true}
+				r := outcome{slot: o.slot, attempt: next, id: o.id, res: o.res, due: true, afterFailure: scheduledAfterFailure}
 				if step.RetryDelay > 0 {
 					timer := time.NewTimer(step.RetryDelay)
 					select {
@@ -176,7 +194,7 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 			return false
 		}
 		settled[o.id] = pipeline.StatusFailed
-		if step.ContinueOnError && stepRun.StoppedBy == "" {
+		if step.ContinueOnError && stepRun.StoppedBy == "" && !failed {
 			stepRun.ContinuedOnError = true
 			run.Steps[o.slot] = stepRun
 			if events != nil {
@@ -293,7 +311,7 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 			}
 		case ctx.Err() != nil:
 			running-- // interrupted while waiting to retry
-		case o.aborted || (failed && !bypass(byID[o.id])):
+		case o.aborted || (failed && !o.afterFailure):
 			abandon(o)
 			running--
 		default:

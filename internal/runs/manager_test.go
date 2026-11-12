@@ -425,12 +425,12 @@ func TestCancel_DuringRetryWaitEndsTheRun(t *testing.T) {
 	awaitStep(t, m, run.ID, "a", api.StepRunning)
 	deadline := time.Now().Add(30 * time.Second)
 	for {
-		got, _ := m.Get(run.ID)
-		if got.Steps[0].Attempts == 2 {
+		data, _, _, _ := m.Log(run.ID, 0)
+		if strings.Contains(string(data), "step a retry 2 of 3") {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("never waiting to retry: %+v", got.Steps)
+			t.Fatalf("never waiting to retry:\n%s", data)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -450,4 +450,55 @@ func cond(t *testing.T, text string) *pipeline.Condition {
 		t.Fatal(err)
 	}
 	return c
+}
+
+func TestSubmit_StepStoppedWhileWaitingToRetryKeepsItsLastAttempt(t *testing.T) {
+	m := open(t, Options{})
+	gate := filepath.Join(t.TempDir(), "gate")
+	d := def("wait", "",
+		pipeline.Step{ID: "a", Run: "exit 1", Retries: 2, RetryDelay: time.Hour},
+		pipeline.Step{ID: "b", Run: waitFor(gate) + " && exit 1"},
+	)
+	d.Concurrency = 2
+	run := submit(t, m, "wait", d)
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		data, _, _, _ := m.Log(run.ID, 0)
+		if strings.Contains(string(data), "step a retry 2 of 3") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("a never waited to retry:\n%s", data)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	release(t, gate)
+	done := await(t, m, run.ID, api.RunFailed)
+	a := done.Steps[0]
+	if a.Status != api.StepStopped || a.Attempts != 0 || a.ExitCode == nil || *a.ExitCode != 1 || a.FinishedAt == nil {
+		t.Fatalf("a = %+v", a)
+	}
+}
+
+func TestSubmit_ConditionValuesNeverReachTheLogOrTheAPI(t *testing.T) {
+	m := open(t, Options{})
+	const secret = "s3cr3t-value-9f2"
+	d := def("quiet", "",
+		pipeline.Step{ID: "gated", Run: "echo never", Env: map[string]string{"TOKEN": secret}, If: cond(t, "env.TOKEN == 'other'")},
+		pipeline.Step{ID: "open", Run: "echo ok", Env: map[string]string{"TOKEN": secret}, If: cond(t, "env.TOKEN == '"+secret+"'")},
+	)
+	run := submit(t, m, "quiet", d)
+	done := await(t, m, run.ID, api.RunSucceeded, api.RunFailed)
+	data, _, _, _ := m.Log(run.ID, 0)
+	if strings.Contains(string(data), secret) || strings.Contains(done.Reason, secret) {
+		t.Fatalf("an environment value leaked:\n%s", data)
+	}
+	for _, st := range done.Steps {
+		if strings.Contains(st.Reason, secret) || strings.Contains(st.Error, secret) {
+			t.Fatalf("step = %+v", st)
+		}
+	}
+	if done.Steps[0].Status != api.StepSkipped || done.Steps[1].Status != api.StepSucceeded {
+		t.Fatalf("steps = %+v", done.Steps)
+	}
 }

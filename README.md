@@ -227,7 +227,8 @@ jobs:
 ```
 
 `lint` and `test` run side by side; `release` starts when both succeeded. The first failed step
-fails the run and stops the rest. Every field is described in the
+fails the run and stops the rest, unless you opt into retries, `continue-on-error` or `if`
+conditions. Every field is described in the
 [pipeline file reference](docs/pipeline-reference.md).
 
 ## Commands

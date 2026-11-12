@@ -207,8 +207,9 @@ step fetch started
 step fetch finished duration 0.180s exit 0
 ```
 
-A step is not retried when the run is interrupted or when another step has already failed the
-run: it is stopped instead.
+A step is not retried when the run is interrupted, or when TRUSS stopped it because another step
+failed the run. A step that is waiting to retry at that moment is stopped. A step whose `if`
+calls `always()` or `failure()` and that starts after the run failed is retried normally.
 
 ### continue-on-error
 
@@ -265,7 +266,10 @@ A skipped step is logged as `step deploy skipped because its if condition is fal
 step build did not succeed`) and shown as skipped in TRUSS Desktop. The log never prints the
 values an expression compared. A step with `always()` and no `needs` starts at once, so use
 `needs` to run it last. After a failure only steps whose condition calls `always()` or
-`failure()` start; `success()` and plain comparisons do not.
+`failure()` start; `success()` and plain comparisons do not. The check is on the text of the expression: any
+expression that calls `always()` or `failure()` counts, even inside `!`. A job's `if` with such a
+call lets every step of that job start after a failure. A job whose first step is skipped
+because of the jobs it needs (or an earlier failure) is skipped as a whole.
 
 ## Recipes
 
