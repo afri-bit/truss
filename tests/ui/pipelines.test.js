@@ -25,6 +25,7 @@ test("register through the file picker, then run, pause, resume and unregister",
   await page.locator("#picker-hidden").check();
   await page.locator("#picker-list").getByText(".secret-dir").waitFor();
   await page.locator("#picker-hidden").uncheck();
+  await page.locator("#picker-list").getByText(".secret-dir").waitFor({ state: "detached" });
 
   await page.locator("#picker-list button.entry", { hasText: "pipelines" }).click();
   await page.locator("#picker-path", { hasText: "pipelines" }).waitFor();
@@ -92,7 +93,7 @@ test("register form follows a sensible keyboard order", async () => {
   assert.equal(order[3], "Register");
 });
 
-test("the picker closes on Escape, shows errors, and handles an unlistable start", async () => {
+test("the picker closes on Escape and falls back to home when the typed folder is gone", async () => {
   await page.evaluate(() => { location.hash = "#/pipelines"; });
   await page.locator("#register-path").fill(require("node:path").join(d.homeDir, "gone", "x.yaml")); // folder does not exist: falls back to home
   await page.locator("#browse").click();
@@ -101,4 +102,30 @@ test("the picker closes on Escape, shows errors, and handles an unlistable start
   await page.keyboard.press("Escape");
   assert.equal(await page.locator("#picker").evaluate((el) => el.open), false);
   assert.ok(await page.locator("#register-path").evaluate((el) => el === document.activeElement), "focus returns to the path field");
+});
+
+test("the picker walks up and home, and submitting with Enter registers once", async () => {
+  await page.evaluate(() => { location.hash = "#/pipelines"; });
+  await page.locator("#register-path").fill("");
+  await page.locator("#browse").click();
+  await page.locator("#picker-path").waitFor();
+  await page.locator("#picker-list button.entry", { hasText: "pipelines" }).click();
+  await page.locator("#picker-path", { hasText: "pipelines" }).waitFor();
+  await page.locator("#picker-up").click();
+  await page.waitForFunction((home) => document.getElementById("picker-path").textContent === home, d.homeDir);
+  await page.locator("#picker-list button.entry", { hasText: "pipelines" }).click();
+  await page.locator("#picker-home").click();
+  await page.waitForFunction((home) => document.getElementById("picker-path").textContent === home, d.homeDir);
+  await page.locator("#picker-list button.entry", { hasText: "pipelines" }).click();
+  await page.locator("#picker-list button.entry", { hasText: "slow.yaml" }).click();
+
+  const before = (await d.call("GET", "/pipelines")).length;
+  await page.locator("#register-name").fill("slow-enter");
+  await page.locator("#register-path").press("Enter");
+  await card("slow-enter").waitFor();
+  assert.equal(await page.locator("#register-path").inputValue(), "", "the field is cleared after Enter");
+  assert.equal(await page.locator("#register-name").inputValue(), "");
+  await page.locator("#register-path").press("Enter"); // empty and required: nothing is sent
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal((await d.call("GET", "/pipelines")).length, before + 1);
 });

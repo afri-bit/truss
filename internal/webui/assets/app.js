@@ -71,7 +71,7 @@ function toast(message, bad) {
   setTimeout(() => el.remove(), bad ? 7000 : 3500);
 }
 async function act(label, fn) {
-  try { await fn(); toast(label); refresh(); } catch (e) { toast(e.message, true); }
+  try { await fn(); toast(label); refresh(true); } catch (e) { toast(e.message, true); }
 }
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -190,7 +190,7 @@ function graph(steps, statusOf, selected, onSelect) {
     const job = slash > 0 ? st.id.slice(0, slash) : "";
     const name = slash > 0 ? st.id.slice(slash + 1) : st.id;
     const status = statusOf(st);
-    const g = s("g", { class: `node s-${status}` + (selected === st.id ? " selected" : ""), transform: `translate(${p.x},${p.y})`, tabindex: "0", role: onSelect ? "button" : "img", "aria-label": `${st.id}: ${status}` });
+    const g = s("g", { class: `node s-${status}` + (selected === st.id ? " selected" : ""), transform: `translate(${p.x},${p.y})`, role: onSelect ? "button" : "img", "aria-label": `${st.id}: ${status}` });
     g.append(s("title", null, `${st.id} – ${status}`));
     g.append(s("rect", { width: W, height: H }));
     g.append(s("circle", { cx: 16, cy: H / 2, r: 4.5 }));
@@ -199,6 +199,7 @@ function graph(steps, statusOf, selected, onSelect) {
     g.append(s("text", { x: 30, y: job ? 33 : 27 }, clip(name)));
     if (onSelect) {
       g.addEventListener("click", () => onSelect(st.id));
+      g.setAttribute("tabindex", "0");
       g.setAttribute("aria-pressed", selected === st.id ? "true" : "false");
       g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(st.id); } });
     }
@@ -261,7 +262,7 @@ views.pipelines = {
       e.preventDefault();
       act("Pipeline registered", async () => {
         await api("POST", "/pipelines", { path: path.value.trim(), name: name.value.trim() });
-        draft.path = draft.name = "";
+        draft.path = draft.name = path.value = name.value = "";
       });
     } }, path, h("button", { type: "button", id: "browse", onclick: () => openPicker(path) }, "Browse…"), name, h("button", { class: "primary", type: "submit" }, "Register"));
     return [
@@ -370,7 +371,7 @@ views.run = {
       Object.assign(logState, { id: run.id, offset: 0, text: "", step: "", follow: true, done: false });
       pumpLog(run.id);
     }
-    const select = (id) => { logState.step = logState.step === id ? "" : id; route(); };
+    const select = (id) => { logState.step = logState.step === id ? "" : id; route(true); };
     const pre = h("pre", { id: "log", tabindex: "0", onscroll: (e) => {
       const el = e.currentTarget;
       logState.follow = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
@@ -423,15 +424,23 @@ function joinPath(dir, name) {
   return dir.endsWith(sep) ? dir + name : dir + sep + name;
 }
 
+let pickerSeq = 0;
 async function pickerLoad(path) {
+  const mine = ++pickerSeq; // only the newest request may paint
   const query = `?path=${encodeURIComponent(path)}&hidden=${picker.hidden}`;
+  const hadFocus = document.getElementById("picker").contains(document.activeElement);
   try {
-    picker.listing = await getJSON("/fs" + query);
+    const listing = await getJSON("/fs" + query);
+    if (mine !== pickerSeq) return;
+    picker.listing = listing;
     picker.error = "";
   } catch (e) {
+    if (mine !== pickerSeq) return;
     picker.error = e.message;
   }
   pickerPaint();
+  // Repainting replaces the buttons; keep keyboard focus inside the dialog.
+  if (hadFocus) (document.getElementById("picker-list")?.querySelector("button") || document.getElementById("picker-cancel")).focus();
 }
 
 function pickerPaint() {
@@ -476,8 +485,10 @@ async function openPicker(input) {
 
 document.getElementById("picker").addEventListener("close", () => {
   picker.open = false;
+  // Give focus back only if the user has not already moved on: this event arrives late.
+  const active = document.activeElement;
   const input = document.getElementById("register-path");
-  if (input) input.focus();
+  if (input && (!active || active === document.body || active.id === "browse")) input.focus();
 });
 
 // ---------- routing and refresh ----------
@@ -500,18 +511,22 @@ function focusIndex(main) {
 let generation = 0;
 let lastHash = null;
 
-async function route() {
+// route draws the current view. force redraws even while a field has focus: the user just acted.
+async function route(force) {
   const mine = ++generation;
   const { view, arg } = parseRoute();
   const main = document.getElementById("view");
-  const typing = main.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
   for (const a of document.querySelectorAll("#nav a")) a.classList.toggle("active", a.dataset.route === view.nav);
   if (view !== views.run) { clearTimeout(logState.timer); logState.id = ""; }
+  let loaded = false;
   try {
     const data = await view.load(arg);
+    loaded = true;
     if (mine !== generation) return;
     // Do not replace a form the user is typing in, or a dialog that is open.
-    if (picker.open || (typing && lastHash === location.hash)) return;
+    // Decided now, not before the request: the user may have moved on meanwhile.
+    const typing = main.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
+    if (picker.open || (typing && !force && lastHash === location.hash)) return;
     const kept = lastHash === location.hash ? focusIndex(main) : -1;
     const scroll = document.getElementById("log") ? document.getElementById("log").scrollTop : null;
     main.replaceChildren(...view.render(data).flat().filter(Boolean));
@@ -536,7 +551,11 @@ async function route() {
       main.replaceChildren(h("div", { class: "gate" }, h("h1", null, "Not found"), h("p", { class: "sub" }, e.message), h("a", { href: "#/" }, "Back to the dashboard")));
     } else if (e instanceof ApiError) {
       main.replaceChildren(h("div", { class: "gate", role: "alert" }, h("h1", null, "Something went wrong"), h("p", { class: "sub" }, e.message),
-        h("button", { onclick: () => route() }, "Try again")));
+        h("button", { onclick: () => route(true) }, "Try again")));
+    } else if (loaded) {
+      // The daemon answered; the page itself failed.
+      main.replaceChildren(h("div", { class: "gate", role: "alert" }, h("h1", null, "Something went wrong"), h("p", { class: "sub" }, e.message),
+        h("button", { onclick: () => route(true) }, "Try again")));
     } else {
       paintDaemon(false);
       lastHash = null;
@@ -564,6 +583,6 @@ async function paintDaemon(up) {
   } catch { /* shown on the next refresh */ }
 }
 
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", () => route());
 setInterval(() => { if (!document.hidden) route(); }, REFRESH_MS);
 route();

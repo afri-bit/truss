@@ -214,6 +214,9 @@ func checkBrowsePath(p, goos string) error {
 		}
 	}
 	if goos == "windows" {
+		if len(p) < 3 {
+			return fmt.Errorf("path must be absolute and start with a drive such as C:\\, got %q", p)
+		}
 		for _, el := range strings.FieldsFunc(p[2:], func(r rune) bool { return r == '/' || r == '\\' }) {
 			if reservedWindowsName(el) {
 				return fmt.Errorf("path contains the reserved name %q", el)

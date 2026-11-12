@@ -205,7 +205,7 @@ func TestBrowse_RequiresTheToken(t *testing.T) {
 func TestCheckBrowsePath_Syntax(t *testing.T) {
 	bad := []struct{ goos, path string }{
 		{"linux", ""}, {"linux", "rel"}, {"linux", "/a/../b"}, {"linux", "/a/\x00"}, {"linux", "/.."},
-		{"windows", `C:`}, {"windows", `C:foo`}, {"windows", `C:\a\..\b`}, {"windows", `C:/a/../b`},
+		{"windows", `C:`}, {"windows", `/`}, {"windows", `\`}, {"windows", `x`}, {"windows", `C:foo`}, {"windows", `C:\a\..\b`}, {"windows", `C:/a/../b`},
 		{"windows", `\\server\share`}, {"windows", `//server/share`}, {"windows", `\\?\C:\`}, {"windows", `\\.\PhysicalDrive0`},
 		{"windows", `\rooted`}, {"windows", `C:\file:stream`}, {"windows", `C:\x\CON`}, {"windows", `C:\NUL.txt`}, {"windows", `C:\a\com1`}, {"windows", `C:\LPT9. `}, {"windows", `C:\CONIN$`}, {"windows", `1:\`}, {"windows", "C:\\a\x00"},
 	}

@@ -29,12 +29,14 @@ Written alongside the implementation (constitution 2.0.0, principle I).
 - **FR-005** The listed directory is resolved through symbolic links and `path` is the real
   path; `parent` is its real parent, empty at a root. A link is listed with `link: true` and the
   kind of its target. Broken links and links to other things are not listed.
-- **FR-006** At most 5000 entries; `truncated` is true when there were more.
+- **FR-006** At most 5000 entries; `truncated` is true when there were more. At most 50000 names
+  are read from one folder. Further hardening (loopback peer, Windows device names, links to
+  network paths left out) is recorded in the ADR.
 - **FR-007** Register form: *Browse…* opens a dialog that starts at the folder of the typed path
   (or home), with Up, Home, drive buttons where there are several roots, and a *Show hidden*
   switch. Picking a file fills the path field and returns focus to it. Escape closes the dialog.
   Refreshes do not close the dialog or reset what was typed.
-- **FR-008** Keyboard order in the register form: path, Browse, name, Register. Run rows, step
+- **FR-008** Keyboard order in the register form: path, Browse, name, Register. Run rows (links) activate with Enter; step
   rows and step graph nodes are reachable and activate with Enter or Space. A refresh keeps
   keyboard focus where it was.
 - **FR-009** States: without a daemon the page says "Daemon unreachable" and how to start it,

@@ -37,7 +37,7 @@ for (const scheme of ["light", "dark"]) {
   });
 }
 
-test("the daemon going away shows the unreachable state, and coming back recovers", async () => {
+test("the daemon going away shows the unreachable state", async () => {
   const other = await startDaemon();
   const page = await b.newPage();
   await page.goto(other.authedUrl());
@@ -61,7 +61,8 @@ test("an empty daemon shows helpful empty states", async () => {
     // Picker over a folder with nothing to show.
     await page.locator("#register-path").fill(require("node:path").join(empty.homeDir, ".secret-dir", "x.yaml"));
     await page.locator("#browse").click();
-    await page.locator("#picker-path", { hasText: ".secret-dir" }).waitFor().catch(() => {});
+    await page.locator("#picker-path", { hasText: ".secret-dir" }).waitFor();
+    await page.getByText("No folders or .yaml files here.").waitFor();
     assert.deepEqual(page.problems, []);
   } finally {
     await page.context().close();
