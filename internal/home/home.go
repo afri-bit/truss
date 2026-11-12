@@ -52,6 +52,16 @@ func (d Dir) Clock() string { return d.Path("clock.json") }
 // Runs is the directory that holds one folder per run.
 func (d Dir) Runs() string { return d.Path("runs") }
 
+// Pipelines is the directory that holds one data folder per pipeline name.
+func (d Dir) Pipelines() string { return d.Path("pipelines") }
+
+// PipelineData is the data folder of the registered pipeline called name. The
+// caller must have checked that name is a valid registry name.
+func (d Dir) PipelineData(name string) string { return d.Path("pipelines", name) }
+
+// PipelineCache is the cache folder inside PipelineData.
+func (d Dir) PipelineCache(name string) string { return d.Path("pipelines", name, "cache") }
+
 // DaemonLog is the daemon's own log file.
 func (d Dir) DaemonLog() string { return d.Path("daemon.log") }
 

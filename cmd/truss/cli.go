@@ -34,6 +34,7 @@ Registered pipelines (these need the daemon):
   runs [<name>]                       list runs, newest first
   logs <run-id> [--follow]            show a run log
   cancel <run-id>                     end a queued or running run
+  cache clear <name>                  empty a pipeline's cache folder (no daemon needed)
 
   help | version
 `
@@ -103,6 +104,8 @@ func Run(ctx context.Context, args []string, cwd string, env []string, stdout, s
 		return in.logs(ctx)
 	case "cancel":
 		return in.cancel(ctx)
+	case "cache":
+		return in.cache()
 	}
 	return in.usage()
 }

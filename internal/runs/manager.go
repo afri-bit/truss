@@ -62,8 +62,12 @@ type Request struct {
 	// Definition is the validated definition to run, read when the run was requested.
 	Definition pipeline.Pipeline
 	// Dir is the directory the run starts in.
-	Dir     string
-	Trigger string
+	Dir string
+	// DataDir and CacheDir, when set, are handed to steps as TRUSS_DATA_DIR
+	// and TRUSS_CACHE_DIR. The caller creates them.
+	DataDir  string
+	CacheDir string
+	Trigger  string
 	// ScheduledFor is the time a schedule named; zero for manual runs.
 	ScheduledFor time.Time
 }
@@ -455,6 +459,12 @@ func (m *Manager) execute(ctx context.Context, rec *record) {
 
 	env := append(append([]string(nil), m.opts.Env...),
 		"TRUSS_RUN_ID="+id, "TRUSS_PIPELINE="+req.Pipeline, "TRUSS_TRIGGER="+req.Trigger)
+	if req.DataDir != "" {
+		env = append(env, "TRUSS_DATA_DIR="+req.DataDir)
+	}
+	if req.CacheDir != "" {
+		env = append(env, "TRUSS_CACHE_DIR="+req.CacheDir)
+	}
 	result, err := engine.Run(ctx, req.Definition, req.Dir, env, &follower{m: m, rec: rec, log: log})
 
 	m.mu.Lock()

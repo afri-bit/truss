@@ -30,16 +30,26 @@ func runLocal(ctx context.Context, args []string, cwd string, env []string, stdo
 		return 1
 	}
 
+	// Steps get a project-local data folder, the counterpart of the daemon's
+	// per-pipeline one (specs/008-workspace-and-cache).
+	abs := cwd
+	if a, absErr := filepath.Abs(cwd); absErr == nil {
+		abs = a
+	}
+	dataDir := filepath.Join(abs, ".truss", "data")
+	cacheDir := filepath.Join(dataDir, "cache")
+	if err := os.MkdirAll(cacheDir, 0o750); err != nil {
+		fmt.Fprintf(stderr, "error: prepare data folder: %s\n", err.Error())
+		return 1
+	}
+	env = append(append([]string(nil), env...), "TRUSS_DATA_DIR="+dataDir, "TRUSS_CACHE_DIR="+cacheDir)
+
 	log, tmp, tmpPath, dest, err := openRunLog(cwd, stdout)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: %s\n", err.Error())
 		return 1
 	}
-	dir := cwd
-	if abs, absErr := filepath.Abs(cwd); absErr == nil {
-		dir = abs
-	}
-	log.Setup(runlog.OSName(runtime.GOOS), runtime.GOARCH, executor.Shell(), dir)
+	log.Setup(runlog.OSName(runtime.GOOS), runtime.GOARCH, executor.Shell(), abs)
 	run, err := engine.Run(ctx, def, cwd, env, log)
 	if err != nil {
 		discardRunLog(tmp, tmpPath)

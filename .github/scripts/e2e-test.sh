@@ -364,6 +364,39 @@ else
 fi
 rm -rf "$work"
 
+# pipeline.workdir: steps start in that folder, and the data folders exist.
+new_dir
+mkdir "$work/project/app"
+cat >"$work/project/truss.yaml" <<EOF
+version: "1"
+
+pipeline:
+  name: workdir
+  workdir: app
+
+steps:
+  - id: touch
+    run: echo ran> marker.txt
+EOF
+run_truss "$work/project" run
+if [ "$code" -ne 0 ]; then
+	fail "workdir" "want exit 0"
+elif [ ! -e "$work/project/app/marker.txt" ] || [ -e "$work/project/marker.txt" ]; then
+	fail "workdir" "the step did not run in app"
+elif [ ! -d "$work/project/.truss/data/cache" ]; then
+	fail "workdir" "the cache folder was not created"
+else
+	pass "workdir"
+fi
+sed -i.bak 's/workdir: app/workdir: missing/' "$work/project/truss.yaml"
+run_truss "$work/project" run
+if [ "$code" -ne 1 ] || ! has_line "summary failed *"; then
+	fail "workdir missing" "want exit 1 and a failed summary"
+else
+	pass "workdir missing"
+fi
+rm -rf "$work"
+
 # Jobs: the steps of a job run in order and a job waits for the jobs it needs.
 new_dir
 cat >"$work/project/truss.yaml" <<EOF
