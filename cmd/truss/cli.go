@@ -16,7 +16,8 @@ const usageText = `TRUSS runs pipelines on your machine.
 usage: truss <command> [arguments]
 
 Run here, without the daemon:
-  run [<path>]                        run a pipeline definition (default: truss.yaml)
+  run [<path>] [--track]              run a pipeline definition (default: truss.yaml);
+                                      --track also reports it to the daemon (needs it)
   validate [<path>]                   check a definition without running it
 
 The daemon:
@@ -26,6 +27,11 @@ The daemon:
   daemon install [--address <host:port>] [--max-runs <n>]
   daemon uninstall                    start the daemon at login, or stop doing so
   desktop [--no-open]                 open TRUSS Desktop in the browser
+
+Secrets (no daemon needed; values come from standard input, never an argument):
+  secret set <name>                   store a secret
+  secret list                         list secret names
+  secret remove <name>                delete a secret
 
 Registered pipelines (these need the daemon):
   register [<path>] [--name <name>]   make a definition known to the daemon
@@ -46,6 +52,7 @@ type invocation struct {
 	args   []string
 	cwd    string
 	env    []string
+	stdin  io.Reader // nil reads as empty
 	stdout io.Writer
 	stderr io.Writer
 }
@@ -63,7 +70,12 @@ func (in invocation) usage() int {
 // Run dispatches one CLI invocation and returns the process exit code.
 // Help and version write to stdout and do not start a run.
 func Run(ctx context.Context, args []string, cwd string, env []string, stdout, stderr io.Writer) int {
-	in := invocation{cwd: cwd, env: env, stdout: stdout, stderr: stderr}
+	return RunWithInput(ctx, args, cwd, env, nil, stdout, stderr)
+}
+
+// RunWithInput is Run with a standard input, which `secret set` reads.
+func RunWithInput(ctx context.Context, args []string, cwd string, env []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	in := invocation{cwd: cwd, env: env, stdin: stdin, stdout: stdout, stderr: stderr}
 	switch {
 	case isHelp(args):
 		fmt.Fprint(stdout, usageText)
@@ -77,10 +89,23 @@ func Run(ctx context.Context, args []string, cwd string, env []string, stdout, s
 	in.args = args[1:]
 	switch args[0] {
 	case "run":
-		if !isRun(args) {
+		// --track is the only option of run; any other argument is the path,
+		// so a file named like a flag still runs (spec 001).
+		var pos []string
+		track := false
+		for _, a := range in.args {
+			if a == "--track" {
+				track = true
+			} else {
+				pos = append(pos, a)
+			}
+		}
+		if len(pos) > 1 {
 			return in.usage()
 		}
-		return runLocal(ctx, args, cwd, env, stdout, stderr)
+		return runLocal(ctx, pos, track, cwd, env, stdout, stderr)
+	case "secret":
+		return in.secret(ctx)
 	case "validate":
 		return in.validate(ctx)
 	case "daemon":
@@ -118,7 +143,7 @@ func isVersion(args []string) bool {
 }
 
 func isRun(args []string) bool {
-	return len(args) >= 1 && len(args) <= 2 && args[0] == "run"
+	return len(args) >= 1 && args[0] == "run"
 }
 
 // definitionPath returns the definition a command works on: the first
@@ -196,11 +221,14 @@ func (in invocation) validate(ctx context.Context) int {
 		fmt.Fprintf(in.stdout, "schedule %s (%s, missed: %s)\n", s.Cron, zone, s.Missed)
 	}
 	for _, s := range plan.Graph {
-		if len(s.Needs) == 0 {
-			fmt.Fprintf(in.stdout, "step %s\n", s.ID)
-			continue
+		line := "step " + s.ID
+		if len(s.Needs) > 0 {
+			line += " needs " + strings.Join(s.Needs, ", ")
 		}
-		fmt.Fprintf(in.stdout, "step %s needs %s\n", s.ID, strings.Join(s.Needs, ", "))
+		if len(s.Secrets) > 0 {
+			line += " uses secrets " + strings.Join(s.Secrets, ", ")
+		}
+		fmt.Fprintln(in.stdout, line)
 	}
 	return 0
 }

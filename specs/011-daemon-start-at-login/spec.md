@@ -6,7 +6,7 @@
 starts it." The rule from [006](../006-daemon-registry-and-scheduling/spec.md) stands: the daemon
 is the server, started separately. Desktop and the CLI never start it implicitly.
 
-Decision: [ADR 0006](../../docs/decisions/0006-login-start-is-per-user-and-marker-owned.md).
+Decision: [ADR 0008](../../docs/decisions/0008-login-start-is-per-user-and-marker-owned.md).
 
 User-facing documentation: [`docs/daemon.md`](../../docs/daemon.md#starting-at-login) and
 [`docs/cli.md`](../../docs/cli.md). Risk tier 2 (process execution at login, per-user system

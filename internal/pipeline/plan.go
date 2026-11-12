@@ -42,6 +42,7 @@ func flatten(p Pipeline) []Step {
 		steps := make([]Step, len(p.Steps))
 		for i, s := range p.Steps {
 			s.Env = mergeEnv(p.Env, s.Env)
+			s.Secrets = mergeNames(p.Secrets, s.Secrets)
 			steps[i] = s
 		}
 		return steps
@@ -62,6 +63,7 @@ func flatten(p Pipeline) []Step {
 			s.ID = joinID(job.ID, s.ID)
 			s.Needs = needs
 			s.Env = mergeEnv(p.Env, job.Env, s.Env)
+			s.Secrets = mergeNames(p.Secrets, job.Secrets, s.Secrets)
 			if s.Dir == "" {
 				s.Dir = job.Dir
 			}
@@ -81,6 +83,21 @@ func mergeEnv(layers ...map[string]string) map[string]string {
 				out = make(map[string]string)
 			}
 			out[k] = v
+		}
+	}
+	return out
+}
+
+// mergeNames returns the names of every layer, in order, without repeats.
+func mergeNames(layers ...[]string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, layer := range layers {
+		for _, n := range layer {
+			if !seen[n] {
+				seen[n] = true
+				out = append(out, n)
+			}
 		}
 	}
 	return out

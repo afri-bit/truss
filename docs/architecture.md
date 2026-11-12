@@ -24,6 +24,7 @@ flowchart TB
         engine["internal/engine"]
         executor["internal/executor"]
         runlog["internal/runlog"]
+        secrets["internal/secrets"]
     end
 
     cli --> api --> daemon
@@ -36,6 +37,9 @@ flowchart TB
     pipeline --> cron
     runs --> runlog
     cli --> runlog
+    cli --> secrets
+    daemon --> secrets
+    engine --> secrets
 ```
 
 The rule that holds it together: **arrows only point down.** The core knows nothing about the
@@ -51,6 +55,7 @@ two callers of the same engine, so a pipeline behaves the same in both.
 | `internal/cron` | Parse cron expressions and compute the next matching time. | Know what a match starts. |
 | `internal/engine` | Run a plan: start ready steps, respect concurrency, stop on failure, report events. | Print, read flags, or know about the daemon. |
 | `internal/executor` | Run one command in the host shell inside a stoppable process tree. | Decide ordering. |
+| `internal/secrets` | Keep named secret values in a private file; remove values from output streams. | Know pipelines or the engine. |
 | `internal/runlog` | Format and write the run log. | Execute steps. |
 | `internal/home` | Locate the TRUSS home directory and read and write its JSON files safely. | Hold state. |
 | `internal/registry` | Remember registered pipeline files by name. | Read pipeline content. |
@@ -58,7 +63,7 @@ two callers of the same engine, so a pipeline behaves the same in both.
 | `internal/runs` | Queue, execute and remember runs; enforce the parallel limit and overlap policy. | Know about HTTP or schedules. |
 | `internal/api` | The daemon's JSON types and a Go client for them. | Contain server logic. |
 | `internal/daemon` | Wire registry, scheduler and runs together; serve the HTTP API; watch files. | Reimplement what those packages do. |
-| `internal/loginstart` | Generate and install the per-user login item (systemd unit, launchd agent, Task Scheduler task) behind runner and file interfaces. See [ADR 0006](decisions/0006-login-start-is-per-user-and-marker-owned.md). | Know about the daemon or its API, or print. |
+| `internal/loginstart` | Generate and install the per-user login item (systemd unit, launchd agent, Task Scheduler task) behind runner and file interfaces. See [ADR 0008](decisions/0008-login-start-is-per-user-and-marker-owned.md). | Know about the daemon or its API, or print. |
 | `internal/webui` | TRUSS Desktop's static files, embedded in the binary. | Contain Go logic beyond serving files. |
 
 ## A run through the daemon
@@ -86,7 +91,9 @@ sequenceDiagram
     R->>R: close the run, start the next queued run
 ```
 
-`truss run` is the lower half only: the CLI calls the engine directly and prints the events.
+`truss run` is the lower half only: the CLI calls the engine directly and prints the events. With
+`--track` it also reports the run to the daemon's API (steps, log, outcome), which records it as a
+`local` run; the daemon does not execute it ([ADR 0007](decisions/0007-tracked-local-runs.md)).
 
 ## Design choices worth knowing
 

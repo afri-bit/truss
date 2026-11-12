@@ -27,6 +27,7 @@ import (
 	"github.com/afri-bit/truss/internal/registry"
 	"github.com/afri-bit/truss/internal/runs"
 	"github.com/afri-bit/truss/internal/scheduler"
+	"github.com/afri-bit/truss/internal/secrets"
 )
 
 // DefaultAddress is where the daemon listens unless told otherwise.
@@ -119,7 +120,7 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 	if err != nil {
 		return nil, err
 	}
-	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Env: opts.Env, Now: opts.Now})
+	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Env: opts.Env, Secrets: secrets.Open(opts.Home.Secrets()).Load, Now: opts.Now, Resolve: resolver(reg)})
 	if err != nil {
 		return nil, err
 	}
@@ -177,6 +178,7 @@ func (d *Daemon) Serve(ctx context.Context) error {
 	server := &http.Server{Handler: d.handler(), ReadHeaderTimeout: 10 * time.Second}
 	served := make(chan error, 1)
 	go func() { served <- server.Serve(d.listener) }()
+	d.runs.Resume()
 	d.logf("daemon started on %s (pid %d, home %s)", d.endpoint.Address, d.endpoint.PID, d.opts.Home)
 
 	ticker := time.NewTicker(d.opts.Tick)
@@ -298,6 +300,18 @@ func (d *Daemon) load(e registry.Entry, since time.Time, force bool) *definition
 		cur.scheduled = want
 	}
 	return cur
+}
+
+// resolver lets the run manager read a registered pipeline's file.
+func resolver(reg *registry.Registry) runs.Resolver {
+	return func(name string) (pipeline.Pipeline, string, error) {
+		e, ok := reg.Get(name)
+		if !ok {
+			return pipeline.Pipeline{}, "", fmt.Errorf("%w: %q", registry.ErrNotFound, name)
+		}
+		def, _, err := readDefinition(e.Path)
+		return def, filepath.Dir(e.Path), err
+	}
 }
 
 func readDefinition(path string) (pipeline.Pipeline, pipeline.ExecutionPlan, error) {

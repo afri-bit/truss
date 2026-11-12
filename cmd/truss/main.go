@@ -16,7 +16,7 @@ func main() {
 		os.Exit(1)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	code := Run(ctx, args, cwd, os.Environ(), os.Stdout, os.Stderr)
+	code := RunWithInput(ctx, args, cwd, os.Environ(), os.Stdin, os.Stdout, os.Stderr)
 	stop()
 	os.Exit(code)
 }
