@@ -8,7 +8,11 @@ import (
 )
 
 func (h Host) unitPath() string {
-	return filepath.Join(h.UserHome, ".config", "systemd", "user", UnitName)
+	config := h.ConfigHome
+	if config == "" {
+		config = filepath.Join(h.UserHome, ".config")
+	}
+	return filepath.Join(config, "systemd", "user", UnitName)
 }
 
 // SystemdUnit returns the text of the systemd user unit for s.
@@ -62,7 +66,9 @@ func (h Host) installSystemd(ctx context.Context, s Spec, startNow bool) (Result
 	}
 	fail := func(err error) (Result, error) {
 		if !existed {
+			_ = h.run(ctx, "systemctl", systemctl("disable", UnitName)...)
 			_ = h.Files.Remove(path)
+			_ = h.run(ctx, "systemctl", systemctl("daemon-reload")...)
 		}
 		return res, fmt.Errorf("%w (is a systemd user session available?)", err)
 	}
@@ -75,8 +81,9 @@ func (h Host) installSystemd(ctx context.Context, s Spec, startNow bool) (Result
 	active := h.run(ctx, "systemctl", systemctl("is-active", "--quiet", UnitName)...) == nil
 	if startNow || active {
 		if err := h.run(ctx, "systemctl", systemctl("restart", UnitName)...); err != nil {
-			return res, err
+			return fail(err)
 		}
+		res.Restarted = true
 	}
 	verb := "installed"
 	if existed {

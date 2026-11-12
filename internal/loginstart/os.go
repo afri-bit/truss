@@ -24,10 +24,28 @@ func (OSFiles) Read(path string) ([]byte, error) { return os.ReadFile(path) }
 
 // Write implements Files. Parent directories are created private to the user.
 func (OSFiles) Write(path string, data []byte, perm os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, perm)
+	// Write beside the target and rename, so a crash leaves the old file or the
+	// new one, and a symbolic link at path is replaced instead of followed.
+	tmp, err := os.CreateTemp(dir, ".truss-*")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), perm); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 // Remove implements Files.

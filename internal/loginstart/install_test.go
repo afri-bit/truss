@@ -24,7 +24,7 @@ func newFake(goos string) *fake {
 }
 
 func (f *fake) host() Host {
-	return Host{OS: f.os, UserHome: "/home/me", UID: 501, Scratch: "/home/me/.truss", Run: f, Files: f}
+	return Host{OS: f.os, UserHome: "/home/me", UID: 501, User: `PC\me`, Scratch: "/home/me/.truss", Run: f, Files: f}
 }
 
 func (f *fake) Run(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -247,7 +247,7 @@ func TestInstall_LaunchdReloadsALoadedAgent(t *testing.T) {
 	f := newFake("darwin")
 	f.files[plistFile] = LaunchdPlist(Spec{Binary: "/old"})
 	f.out["launchctl print gui/501/io.github.afri-bit.truss"] = "loaded"
-	if _, err := Install(t.Context(), f.host(), spec, false); err != nil {
+	if _, err := Install(t.Context(), f.host(), spec, true); err != nil {
 		t.Fatal(err)
 	}
 	f.wantCalls(t,
@@ -305,9 +305,9 @@ func TestInstall_Task(t *testing.T) {
 		t.Error("the temporary XML file must be removed")
 	}
 	f.wantCalls(t,
-		"schtasks.exe /Query /TN truss-daemon /XML",
-		"schtasks.exe /Create /TN truss-daemon /XML "+xmlScratch+" /F",
-		"schtasks.exe /Run /TN truss-daemon",
+		"schtasks.exe /Query /TN truss-daemon-PC_me /XML",
+		"schtasks.exe /Create /TN truss-daemon-PC_me /XML "+xmlScratch+" /F",
+		"schtasks.exe /Run /TN truss-daemon-PC_me",
 	)
 	if !strings.Contains(res.Messages[0], "installed") {
 		t.Errorf("messages = %v", res.Messages)
@@ -357,20 +357,20 @@ func TestInstall_TaskCreateFailureCleansUp(t *testing.T) {
 
 func TestUninstall_Task(t *testing.T) {
 	f := newFake("windows")
-	f.out["schtasks.exe /Query /TN truss-daemon /XML"] = "<Task><Description>" + Marker + "</Description></Task>"
+	f.out["schtasks.exe /Query /TN truss-daemon-PC_me /XML"] = "<Task><Description>" + Marker + "</Description></Task>"
 	if _, err := Uninstall(t.Context(), f.host()); err != nil {
 		t.Fatal(err)
 	}
 	f.wantCalls(t,
-		"schtasks.exe /Query /TN truss-daemon /XML",
-		"schtasks.exe /End /TN truss-daemon",
-		"schtasks.exe /Delete /TN truss-daemon /F",
+		"schtasks.exe /Query /TN truss-daemon-PC_me /XML",
+		"schtasks.exe /End /TN truss-daemon-PC_me",
+		"schtasks.exe /Delete /TN truss-daemon-PC_me /F",
 	)
 }
 
 func TestTask_NotCreatedByTrussIsLeftAlone(t *testing.T) {
 	f := newFake("windows")
-	f.out["schtasks.exe /Query /TN truss-daemon /XML"] = "<Task><Description>mine</Description></Task>"
+	f.out["schtasks.exe /Query /TN truss-daemon-PC_me /XML"] = "<Task><Description>mine</Description></Task>"
 	if _, err := Uninstall(t.Context(), f.host()); err == nil || !strings.Contains(err.Error(), "not created by truss") {
 		t.Errorf("Uninstall err = %v", err)
 	}
@@ -399,7 +399,7 @@ func TestInstalled(t *testing.T) {
 		}
 	}
 	f := newFake("windows")
-	f.out["schtasks.exe /Query /TN truss-daemon /XML"] = Marker
+	f.out["schtasks.exe /Query /TN truss-daemon-PC_me /XML"] = Marker
 	if ok, _ := Installed(t.Context(), f.host()); !ok {
 		t.Error("windows: want installed")
 	}
@@ -436,10 +436,105 @@ func TestInstall_LaunchdRetriesBootstrapAfterBootout(t *testing.T) {
 		}
 		return f.Run(t.Context(), fields[0], fields[1:]...)
 	})
-	if _, err := Install(t.Context(), h, spec, false); err != nil {
+	if _, err := Install(t.Context(), h, spec, true); err != nil {
 		t.Fatal(err)
 	}
 	if attempts != 3 {
 		t.Errorf("bootstrap attempts = %d, want 3", attempts)
+	}
+}
+
+func TestInstall_LaunchdLeavesALoadedAgentAloneWhileADaemonRuns(t *testing.T) {
+	f := newFake("darwin")
+	f.files[plistFile] = LaunchdPlist(Spec{Binary: "/old"})
+	f.out["launchctl print gui/501/io.github.afri-bit.truss"] = "loaded"
+	res, err := Install(t.Context(), f.host(), spec, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.wantCalls(t, "launchctl print gui/501/io.github.afri-bit.truss")
+	if res.Restarted || !strings.Contains(strings.Join(res.Messages, "\n"), "truss daemon stop") {
+		t.Errorf("res = %+v", res)
+	}
+}
+
+func TestInstall_SystemdRestartFailureRollsBackANewInstall(t *testing.T) {
+	f := newFake("linux")
+	f.failOn = []string{"restart"}
+	if _, err := Install(t.Context(), f.host(), spec, true); err == nil {
+		t.Fatal("want an error")
+	}
+	if _, ok := f.files[unitFile]; ok {
+		t.Error("the new unit file must be removed")
+	}
+	got := strings.Join(f.calls, "\n")
+	for _, want := range []string{"systemctl --user disable truss.service", "systemctl --user daemon-reload"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rollback lacks %q in:\n%s", want, got)
+		}
+	}
+}
+
+func TestInstall_SystemdHonoursConfigHome(t *testing.T) {
+	f := newFake("linux")
+	h := f.host()
+	h.ConfigHome = filepath.Join("/xdg", "config")
+	if _, err := Install(t.Context(), h, spec, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.files[filepath.Join("/xdg", "config", "systemd", "user", "truss.service")]; !ok {
+		t.Errorf("files = %v", f.files)
+	}
+}
+
+func TestInstall_RefusesWhenElevated(t *testing.T) {
+	for _, goos := range []string{"linux", "darwin", "windows"} {
+		f := newFake(goos)
+		h := f.host()
+		h.Elevated = true
+		if _, err := Install(t.Context(), h, spec, true); err == nil || !strings.Contains(err.Error(), "root or administrator") {
+			t.Errorf("%s: err = %v", goos, err)
+		}
+		if len(f.calls) != 0 || len(f.files) != 0 {
+			t.Errorf("%s: nothing may happen: %v %v", goos, f.calls, f.files)
+		}
+	}
+}
+
+func TestInstall_TaskRunFailureSaysTheTaskIsInstalled(t *testing.T) {
+	f := newFake("windows")
+	f.failOn = []string{"/Run"}
+	_, err := Install(t.Context(), f.host(), spec, true)
+	if err == nil || !strings.Contains(err.Error(), "installed but could not be started") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestInstall_TaskReinstallWhileRunningSaysHowToApply(t *testing.T) {
+	f := newFake("windows")
+	f.out["schtasks.exe /Query /TN truss-daemon-PC_me /XML"] = Marker
+	res, err := Install(t.Context(), f.host(), spec, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := strings.Join(res.Messages, "\n")
+	if !strings.Contains(out, "updated") || !strings.Contains(out, "truss daemon stop") {
+		t.Errorf("messages = %s", out)
+	}
+}
+
+func TestInstall_TaskTellsAboutTrussHome(t *testing.T) {
+	f := newFake("windows")
+	s := spec
+	s.Home = `C:\h`
+	res, err := Install(t.Context(), f.host(), s, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(res.Messages, "\n"), "TRUSS_HOME") {
+		t.Errorf("messages = %v", res.Messages)
+	}
+	if strings.Contains(f.files[xmlScratch], "TRUSS_HOME") {
+		t.Error("the task cannot carry TRUSS_HOME")
 	}
 }

@@ -15,7 +15,7 @@ var temporaryPrefixes = []string{
 func TemporaryReason(binary, tempDir string) string {
 	p := normalizePath(binary)
 	for _, part := range strings.Split(p, "/") {
-		if strings.HasPrefix(part, "go-build") {
+		if isGoBuildDir(part) {
 			return "it was built by go run or go test and is deleted when that command ends"
 		}
 	}
@@ -36,4 +36,19 @@ func TemporaryReason(binary, tempDir string) string {
 // normalizePath makes paths comparable across platforms: lower case, forward slashes.
 func normalizePath(p string) string {
 	return strings.ToLower(strings.ReplaceAll(p, `\`, "/"))
+}
+
+// isGoBuildDir matches the directories go run and go test build in: "go-build"
+// followed by digits, or the build cache directory "go-build" itself.
+func isGoBuildDir(name string) bool {
+	rest, ok := strings.CutPrefix(name, "go-build")
+	if !ok {
+		return false
+	}
+	for _, r := range rest {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }

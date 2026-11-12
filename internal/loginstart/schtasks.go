@@ -18,8 +18,8 @@ func TaskXML(s Spec) (string, error) {
 	if s.User == "" {
 		return "", errors.New("no user name for the scheduled task")
 	}
-	if s.Home != "" {
-		return "", errors.New("a custom TRUSS_HOME cannot be passed to a Windows login task; unset TRUSS_HOME or set it for your user with setx")
+	if strings.Contains(s.Binary, "%") {
+		return "", errors.New("Task Scheduler expands %NAME% in a command, so a binary path containing % cannot be used; move truss to another directory")
 	}
 	user := xmlText(s.User)
 	var b strings.Builder
@@ -49,7 +49,26 @@ func windowsArg(s string) string {
 	if s != "" && !strings.ContainsAny(s, " \t\"") {
 		return s
 	}
-	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+	var b strings.Builder
+	b.WriteByte('"')
+	slashes := 0
+	for _, r := range s {
+		switch r {
+		case '\\':
+			slashes++
+			b.WriteRune(r)
+		case '"':
+			b.WriteString(strings.Repeat(`\`, slashes+1)) // double the backslashes, escape the quote
+			b.WriteRune(r)
+			slashes = 0
+		default:
+			slashes = 0
+			b.WriteRune(r)
+		}
+	}
+	b.WriteString(strings.Repeat(`\`, slashes)) // backslashes before the closing quote
+	b.WriteByte('"')
+	return b.String()
 }
 
 // encodeUTF16 returns s as UTF-16 little endian with a byte order mark, the
@@ -67,24 +86,25 @@ func encodeUTF16(s string) []byte {
 // The schtasks.exe argument lists install and uninstall use.
 
 // SchtasksCreateArgs imports the task definition in xmlPath, replacing an older one.
-func SchtasksCreateArgs(xmlPath string) []string {
-	return []string{"/Create", "/TN", TaskName, "/XML", xmlPath, "/F"}
+func SchtasksCreateArgs(task, xmlPath string) []string {
+	return []string{"/Create", "/TN", task, "/XML", xmlPath, "/F"}
 }
 
 // SchtasksQueryArgs prints the task definition as XML; it fails when there is no task.
-func SchtasksQueryArgs() []string { return []string{"/Query", "/TN", TaskName, "/XML"} }
+func SchtasksQueryArgs(task string) []string { return []string{"/Query", "/TN", task, "/XML"} }
 
 // SchtasksRunArgs starts the task now.
-func SchtasksRunArgs() []string { return []string{"/Run", "/TN", TaskName} }
+func SchtasksRunArgs(task string) []string { return []string{"/Run", "/TN", task} }
 
 // SchtasksEndArgs stops the task's running instance.
-func SchtasksEndArgs() []string { return []string{"/End", "/TN", TaskName} }
+func SchtasksEndArgs(task string) []string { return []string{"/End", "/TN", task} }
 
 // SchtasksDeleteArgs deletes the task.
-func SchtasksDeleteArgs() []string { return []string{"/Delete", "/TN", TaskName, "/F"} }
+func SchtasksDeleteArgs(task string) []string { return []string{"/Delete", "/TN", task, "/F"} }
 
 func (h Host) installTask(ctx context.Context, s Spec, startNow bool) (Result, error) {
 	var res Result
+	task := TaskName(h.User)
 	doc, err := TaskXML(s)
 	if err != nil {
 		return res, err
@@ -98,27 +118,35 @@ func (h Host) installTask(ctx context.Context, s Spec, startNow bool) (Result, e
 		return res, fmt.Errorf("write %s: %w", xmlPath, err)
 	}
 	defer func() { _ = h.Files.Remove(xmlPath) }()
-	if err := h.run(ctx, "schtasks.exe", SchtasksCreateArgs(xmlPath)...); err != nil {
+	if err := h.run(ctx, "schtasks.exe", SchtasksCreateArgs(task, xmlPath)...); err != nil {
 		return res, fmt.Errorf("%w (some Windows setups only let administrators create a task that runs at logon; see docs/daemon.md)", err)
 	}
 	verb := "installed"
 	if existed {
 		verb = "updated"
 	}
-	res.add("login start %s: scheduled task %q (runs when you log on)", verb, TaskName)
+	res.add("login start %s: scheduled task %q (runs when you log on)", verb, task)
 	if startNow {
-		if err := h.run(ctx, "schtasks.exe", SchtasksRunArgs()...); err != nil {
-			return res, err
+		if err := h.run(ctx, "schtasks.exe", SchtasksRunArgs(task)...); err != nil {
+			return res, fmt.Errorf("the task was installed but could not be started: %w", err)
 		}
+		res.Restarted = true
 		res.add("the daemon was started through the task")
 	} else {
-		res.add("the daemon starts at your next logon; start it now with: schtasks /Run /TN %s", TaskName)
+		res.add("the daemon starts at your next logon; start it now with: schtasks /Run /TN %s", task)
+		if existed {
+			res.add("a running daemon keeps its old settings; to apply the change now: truss daemon stop, then truss daemon install again")
+		}
+	}
+	if s.Home != "" {
+		res.add("note: TRUSS_HOME is set in this shell but a task cannot carry it; the daemon uses the user variable of that name (setx) or the default home")
 	}
 	return res, nil
 }
 
 func (h Host) uninstallTask(ctx context.Context) (Result, error) {
 	var res Result
+	task := TaskName(h.User)
 	ok, err := Installed(ctx, h)
 	if err != nil {
 		return res, err
@@ -127,10 +155,10 @@ func (h Host) uninstallTask(ctx context.Context) (Result, error) {
 		res.add("login start is not installed")
 		return res, nil
 	}
-	_ = h.run(ctx, "schtasks.exe", SchtasksEndArgs()...) // not running is fine
-	if err := h.run(ctx, "schtasks.exe", SchtasksDeleteArgs()...); err != nil {
+	_ = h.run(ctx, "schtasks.exe", SchtasksEndArgs(task)...) // not running is fine
+	if err := h.run(ctx, "schtasks.exe", SchtasksDeleteArgs(task)...); err != nil {
 		return res, err
 	}
-	res.add("login start removed: scheduled task %q", TaskName)
+	res.add("login start removed: scheduled task %q", task)
 	return res, nil
 }

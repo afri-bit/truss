@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 // Marker is written into every file and task this package creates. Uninstall
@@ -30,10 +31,26 @@ const (
 	// UnitName is the systemd user unit, in ~/.config/systemd/user.
 	UnitName = "truss.service"
 	// Label is the launchd label; the plist is <Label>.plist.
-	Label = "io.github.afri-bit.truss"
-	// TaskName is the Task Scheduler task.
-	TaskName = "truss-daemon"
+	Label      = "io.github.afri-bit.truss"
+	taskPrefix = "truss-daemon"
 )
+
+// TaskName is the Task Scheduler task of a user. The scheduler's root folder is
+// shared by every account on the machine, so the name carries the user.
+func TaskName(user string) string {
+	var b strings.Builder
+	for _, r := range user {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '-' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	if b.Len() == 0 {
+		return taskPrefix
+	}
+	return taskPrefix + "-" + b.String()
+}
 
 // ErrUnsupported is returned on an operating system without a login mechanism here.
 var ErrUnsupported = errors.New("start at login is supported on Linux (systemd), macOS (launchd) and Windows (Task Scheduler) only")
@@ -71,6 +88,9 @@ func (s Spec) validate() error {
 		return errors.New("no path to the truss binary")
 	}
 	for name, v := range map[string]string{"binary path": s.Binary, "address": s.Address, "TRUSS_HOME": s.Home, "log path": s.LogPath, "user name": s.User} {
+		if !utf8.ValidString(v) {
+			return fmt.Errorf("the %s is not valid UTF-8", name)
+		}
 		if strings.IndexFunc(v, unicode.IsControl) >= 0 {
 			return fmt.Errorf("the %s contains a control character", name)
 		}
@@ -101,14 +121,22 @@ type Host struct {
 	UID      int    // numeric user id (macOS launchd domain)
 	Scratch  string // a private directory for short-lived files (Windows task XML)
 	// Wait is the pause between attempts to reload a launchd agent; zero means none.
-	Wait  time.Duration
-	Run   Runner
-	Files Files
+	Wait time.Duration
+	// User is the account as DOMAIN\name on Windows; it names the task.
+	User string
+	// ConfigHome is where systemd looks for user units: $XDG_CONFIG_HOME, else ~/.config.
+	ConfigHome string
+	// Elevated is true when running as root; install refuses.
+	Elevated bool
+	Run      Runner
+	Files    Files
 }
 
 // Result describes what Install or Uninstall did, one line per message.
 type Result struct {
 	Messages []string
+	// Restarted is true when Install started or restarted the daemon through the login item.
+	Restarted bool
 }
 
 func (r *Result) add(format string, a ...any) {
@@ -129,12 +157,12 @@ func Installed(ctx context.Context, h Host) (bool, error) {
 	case "darwin":
 		return h.hasMarker(h.plistPath())
 	case "windows":
-		out, err := h.Run.Run(ctx, "schtasks.exe", SchtasksQueryArgs()...)
+		out, err := h.Run.Run(ctx, "schtasks.exe", SchtasksQueryArgs(TaskName(h.User))...)
 		switch {
 		case err != nil: // no such task (or no schtasks: install will say so)
 			return false, nil
 		case !strings.Contains(string(out), Marker):
-			return false, fmt.Errorf("a scheduled task named %q exists but was not created by truss daemon install; leaving it alone", TaskName)
+			return false, fmt.Errorf("a scheduled task named %q exists but was not created by truss daemon install; leaving it alone", TaskName(h.User))
 		}
 		return true, nil
 	}
@@ -161,6 +189,12 @@ func (h Host) hasMarker(path string) (bool, error) {
 // through the login mechanism now; callers pass false when a daemon already runs,
 // because a second daemon would exit and be restarted in a loop.
 func Install(ctx context.Context, h Host, s Spec, startNow bool) (Result, error) {
+	if h.Elevated {
+		return Result{}, errors.New("do not run this as root or administrator: the daemon would run every pipeline with those rights and the login item would land in the wrong account. Run it as your own user")
+	}
+	if s.User == "" {
+		s.User = h.User
+	}
 	if err := s.validate(); err != nil {
 		return Result{}, err
 	}

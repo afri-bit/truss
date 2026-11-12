@@ -64,25 +64,32 @@ func (h Host) installLaunchd(ctx context.Context, s Spec, startNow bool) (Result
 	}
 	target := h.domain() + "/" + Label
 	loaded := h.run(ctx, "launchctl", "print", target) == nil
-	if loaded {
-		_ = h.run(ctx, "launchctl", "bootout", target)
-	}
-	if startNow || loaded {
+	// A loaded agent while a daemon answers is left alone: loading it again would
+	// start a second daemon that exits and is restarted in a loop.
+	if startNow {
+		if loaded {
+			_ = h.run(ctx, "launchctl", "bootout", target)
+		}
 		if err := h.bootstrap(ctx, path, loaded); err != nil {
 			if !existed {
 				_ = h.Files.Remove(path)
+				return res, fmt.Errorf("%w (is a graphical login session available?)", err)
 			}
-			return res, fmt.Errorf("%w (is a graphical login session available?)", err)
+			return res, fmt.Errorf("%w (the agent was unloaded; load it with: launchctl bootstrap %s %s)", err, h.domain(), path)
 		}
+		res.Restarted = true
 	}
 	verb := "installed"
 	if existed {
 		verb = "updated"
 	}
 	res.add("login start %s: %s", verb, path)
-	if startNow || loaded {
+	switch {
+	case res.Restarted:
 		res.add("the daemon is running under launchd and starts at every login")
-	} else {
+	case loaded:
+		res.add("the agent is already loaded and a daemon is running; to apply the change now: truss daemon stop, then truss daemon install again")
+	default:
 		res.add("the daemon starts at your next login; start it now with: launchctl bootstrap %s %s", h.domain(), path)
 	}
 	return res, nil

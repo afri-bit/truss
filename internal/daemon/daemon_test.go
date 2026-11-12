@@ -388,3 +388,15 @@ func TestDaemon_RemovesItsEndpointFileOnStop(t *testing.T) {
 		t.Fatalf("dial a stopped daemon: %v", err)
 	}
 }
+
+func TestCheckAddress(t *testing.T) {
+	for addr, ok := range map[string]bool{
+		"127.0.0.1:7878": true, "127.0.0.1:0": true, "[::1]:9000": true,
+		"0.0.0.0:7878": false, "localhost": false, "127.0.0.1:abc": false,
+		"127.0.0.1:70000": false, `127.0.0.1:1" --max-runs 5 "`: false,
+	} {
+		if err := CheckAddress(addr); (err == nil) != ok {
+			t.Errorf("CheckAddress(%q) = %v, want ok=%v", addr, err, ok)
+		}
+	}
+}
