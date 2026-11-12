@@ -22,6 +22,7 @@ func fakeUserHome(t *testing.T) string {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("USERPROFILE", dir)
+	t.Setenv("XDG_CONFIG_HOME", "") // CI runners may set it; the code would then ignore the fake home
 	return dir
 }
 

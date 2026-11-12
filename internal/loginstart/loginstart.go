@@ -231,7 +231,7 @@ func (h Host) run(ctx context.Context, name string, args ...string) error {
 		if msg != "" {
 			msg = ": " + msg
 		}
-		return fmt.Errorf("%s %s failed (%v)%s", name, strings.Join(args, " "), err, msg)
+		return fmt.Errorf("%s %s failed (%w)%s", name, strings.Join(args, " "), err, msg)
 	}
 	return nil
 }

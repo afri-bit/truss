@@ -20,7 +20,10 @@ func (ExecRunner) Run(ctx context.Context, name string, args ...string) ([]byte,
 type OSFiles struct{}
 
 // Read implements Files.
-func (OSFiles) Read(path string) ([]byte, error) { return os.ReadFile(path) }
+func (OSFiles) Read(path string) ([]byte, error) {
+	// #nosec G304 -- the paths are built by this package from the user's home directory.
+	return os.ReadFile(path)
+}
 
 // Write implements Files. Parent directories are created private to the user.
 func (OSFiles) Write(path string, data []byte, perm os.FileMode) error {

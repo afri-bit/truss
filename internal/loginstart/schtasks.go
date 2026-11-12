@@ -2,6 +2,7 @@ package loginstart
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -19,7 +20,7 @@ func TaskXML(s Spec) (string, error) {
 		return "", errors.New("no user name for the scheduled task")
 	}
 	if strings.Contains(s.Binary, "%") {
-		return "", errors.New("Task Scheduler expands %NAME% in a command, so a binary path containing % cannot be used; move truss to another directory")
+		return "", errors.New("a binary path containing % cannot be used because Task Scheduler expands %NAME% in commands; move truss to another directory")
 	}
 	user := xmlText(s.User)
 	var b strings.Builder
@@ -78,7 +79,7 @@ func encodeUTF16(s string) []byte {
 	out := make([]byte, 0, 2+2*len(units))
 	out = append(out, 0xFF, 0xFE)
 	for _, u := range units {
-		out = append(out, byte(u), byte(u>>8))
+		out = binary.LittleEndian.AppendUint16(out, u)
 	}
 	return out
 }
