@@ -21,6 +21,7 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 ### Added
 
+- **Start at login.** `truss daemon install` makes the daemon start at login (a systemd user unit on Linux, a launchd agent on macOS, a Task Scheduler task on Windows; no root or administrator rights) and `truss daemon uninstall` removes exactly what it created. `truss daemon status` shows whether login start is installed. Install refuses a binary in a temporary directory. See `specs/011-daemon-start-at-login`.
 - **The daemon.** `truss daemon start`, `stop`, `status` and `run` manage a background service that listens on `127.0.0.1:7878`. It keeps its state under `~/.truss` (or `TRUSS_HOME`) and protects its HTTP API (`/api/v1`) with a token only your user can read.
 - **Registered pipelines.** `truss register [<path>] [--name <name>]`, `unregister`, `pipelines`, `pause` and `resume`. The daemon stores the file's path, reads it again before every run, and notices edits.
 - **Daemon runs.** `truss trigger <name> [--follow]`, `runs`, `logs <run-id> [--follow]` and `cancel`. Runs queue up; `--max-runs` limits how many execute at once (default 4). The newest 200 runs and their logs are kept.

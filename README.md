@@ -147,6 +147,10 @@ RUN                     PIPELINE  STATUS     TRIGGER  CREATED              DURAT
 20261112-090110-a3f9c1  hello     succeeded  manual   2026-11-12 09:01:10  0s
 ```
 
+The daemon does not start by itself after a reboot. To have your schedules keep working, run
+`truss daemon install` once; it starts the daemon at every login and needs no admin rights
+(`truss daemon uninstall` takes it back). Details in [the daemon docs](docs/daemon.md#starting-at-login).
+
 ### 3. Put it on a schedule
 
 Add a trigger to the file and save. The daemon picks the change up by itself.
@@ -237,6 +241,7 @@ fails the run and stops the rest. Every field is described in the
 | **Run here** | `truss run [<path>]` | Run a file now, without the daemon |
 | | `truss validate [<path>]` | Check a file and show its steps |
 | **Daemon** | `truss daemon start` \| `stop` \| `status` | Manage the background service |
+| | `truss daemon install` \| `uninstall` | Start the daemon at login, or stop doing so |
 | | `truss desktop` | Open TRUSS Desktop |
 | **Pipelines** | `truss register [<path>] [--name <name>]` | Make a file known to the daemon |
 | | `truss unregister <name>` | Forget it; the file and history stay |

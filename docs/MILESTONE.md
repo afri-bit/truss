@@ -35,7 +35,7 @@ These are known gaps inside the release scope:
 
 - Daemon and Desktop are verified on Linux only. macOS and Windows build; their first proof is CI.
 - TRUSS Desktop has no automated UI test.
-- Start at login is documented, not automated.
+- Start at login is automated by `truss daemon install` ([spec 011](../specs/011-daemon-start-at-login/spec.md)) but verified by generation and fakes only; its first real run on each OS is a maintainer try-out.
 - `docs/agents.md` and the `/feature` skill still describe the pre-2.0.0 process.
 
 ### Not in v0.1.0
