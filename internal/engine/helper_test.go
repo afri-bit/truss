@@ -86,6 +86,11 @@ func runHelper(args []string) int {
 	case "partial": // <text>
 		fmt.Print(rest[0])
 		return 0
+	case "print-split": // <a> <b>: print a, pause, print b, with no newline between
+		fmt.Print(rest[0])
+		time.Sleep(150 * time.Millisecond)
+		fmt.Print(rest[1])
+		return 0
 	case "exit": // <code>
 		code, _ := strconv.Atoi(rest[0])
 		return code

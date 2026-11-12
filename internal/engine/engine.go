@@ -7,10 +7,27 @@ import (
 	"io"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/afri-bit/truss/internal/executor"
 	"github.com/afri-bit/truss/internal/pipeline"
+	"github.com/afri-bit/truss/internal/secrets"
 )
+
+// Option changes how Run works.
+type Option func(*config)
+
+type config struct {
+	loadSecrets func() (map[string]string, error)
+}
+
+// WithSecrets supplies the stored secrets, name to value. load is called once
+// per run, and only when a step declares a secret. Every value it returns is
+// removed from step output; the declared ones also become environment
+// variables of the steps that declare them.
+func WithSecrets(load func() (map[string]string, error)) Option {
+	return func(c *config) { c.loadSecrets = load }
+}
 
 // Run executes a pipeline on the host, running at most the plan's concurrency
 // of Steps at once. dir and env are captured by the caller and reused for every
@@ -26,10 +43,16 @@ import (
 // running Steps are stopped, nothing more starts, and every started Step still
 // reports its own outcome.
 //
+// A Step may declare secrets. Before any Step starts, every declared secret
+// must be available through WithSecrets; otherwise Run returns an error that
+// names the missing secrets (never a value) and starts nothing. Secret values
+// that appear in step output are replaced by "***" before they reach events
+// or the returned run. See specs/012-secrets.
+//
 // When ctx is cancelled the run is interrupted (FR-017): the error is ctx.Err()
 // itself, no later Step starts, and the returned run is partial. Callers must
 // ignore the returned run whenever err is not nil.
-func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, events StepEvents) (pipeline.PipelineRun, error) {
+func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, events StepEvents, opts ...Option) (pipeline.PipelineRun, error) {
 	if err := ctx.Err(); err != nil {
 		return pipeline.PipelineRun{}, err
 	}
@@ -39,6 +62,19 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 	plan, err := pipeline.Plan(p)
 	if err != nil {
 		return pipeline.PipelineRun{}, err
+	}
+
+	var cfg config
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	stored, err := resolveSecrets(plan, cfg)
+	if err != nil {
+		return pipeline.PipelineRun{}, err
+	}
+	hidden := make([]string, 0, len(stored))
+	for _, v := range stored {
+		hidden = append(hidden, v)
 	}
 
 	limit := max(plan.Concurrency, 1)
@@ -69,18 +105,26 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 			}
 			started[step.ID] = true
 			var out io.Writer
+			var red *secrets.Redactor
 			if events != nil {
 				events.StepStarted(step.ID)
-				out = stepOutput{id: step.ID, events: events}
+				id := step.ID
+				red = secrets.NewRedactor(hidden, func(b []byte) { events.StepOutput(id, append([]byte(nil), b...)) })
+				if red != nil {
+					out = red
+				} else {
+					out = stepOutput{id: id, events: events}
+				}
 			}
-			proc, err := executor.Start(runCtx, executor.Request{Run: step.Run, Dir: stepDir(dir, step.Dir), Env: stepEnv(env, step.Env), Out: out})
+			stepEnvironment := withSecrets(stepEnv(env, step.Env), step.Secrets, stored)
+			proc, err := executor.Start(runCtx, executor.Request{Run: step.Run, Dir: stepDir(dir, step.Dir), Env: stepEnvironment, Out: out})
 			slot := len(run.Steps)
 			run.Steps = append(run.Steps, pipeline.StepRun{})
 			if err != nil {
 				if events != nil {
 					events.StepFinished(step.ID, nil, err)
 				}
-				run.Steps[slot] = stepResult(step.ID, executor.Result{Err: err})
+				run.Steps[slot] = stepResult(step.ID, executor.Result{Err: err}, hidden)
 				failed = true
 				run.Status = pipeline.StatusFailed
 				run.FailedStep = step.ID
@@ -88,7 +132,7 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 				break
 			}
 			running++
-			go func(slot int, step pipeline.Step) {
+			go func(slot int, step pipeline.Step, red *secrets.Redactor) {
 				waitCtx := runCtx
 				if step.Timeout > 0 {
 					var release context.CancelFunc
@@ -96,6 +140,9 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 					defer release()
 				}
 				res := proc.Wait(waitCtx)
+				if red != nil {
+					red.Flush() // release a held-back tail before the step is reported finished
+				}
 				o := outcome{slot: slot, id: step.ID, res: res}
 				if res.Stopped && runCtx.Err() == nil && errors.Is(waitCtx.Err(), context.DeadlineExceeded) {
 					// The step's own limit ended it, not a failure elsewhere.
@@ -104,7 +151,7 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 					o.res.Err = fmt.Errorf("timed out after %s", step.Timeout)
 				}
 				done <- o
-			}(slot, step)
+			}(slot, step, red)
 		}
 		if running == 0 {
 			break
@@ -112,7 +159,7 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 
 		o := <-done
 		running--
-		stepRun := stepResult(o.id, o.res)
+		stepRun := stepResult(o.id, o.res, hidden)
 		if failed && o.res.Stopped && ctx.Err() == nil {
 			stepRun.StoppedBy = run.FailedStep
 		}
@@ -207,13 +254,13 @@ func (s stepOutput) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func stepResult(id string, res executor.Result) pipeline.StepRun {
+func stepResult(id string, res executor.Result, hidden []string) pipeline.StepRun {
 	step := pipeline.StepRun{
 		ID:       id,
 		Status:   pipeline.StatusSucceeded,
 		ExitCode: res.ExitCode,
-		Output:   res.Stdout,
-		Stderr:   res.Stderr,
+		Output:   secrets.Scrub(res.Stdout, hidden),
+		Stderr:   secrets.Scrub(res.Stderr, hidden),
 	}
 	if res.Err != nil {
 		step.Status = pipeline.StatusFailed
@@ -225,4 +272,55 @@ func stepResult(id string, res executor.Result) pipeline.StepRun {
 		step.Status = pipeline.StatusFailed
 	}
 	return step
+}
+
+// resolveSecrets returns the stored secrets when any step declares one, and
+// nil otherwise (the store is then never read). It fails, naming only the
+// missing names, when a declared secret is not available.
+func resolveSecrets(plan pipeline.ExecutionPlan, cfg config) (map[string]string, error) {
+	used := map[string]bool{}
+	var firstUse = map[string]string{}
+	var order []string
+	for _, step := range plan.Graph {
+		for _, name := range step.Secrets {
+			if !used[name] {
+				used[name] = true
+				firstUse[name] = step.ID
+				order = append(order, name)
+			}
+		}
+	}
+	if len(order) == 0 {
+		return nil, nil
+	}
+	stored := map[string]string{}
+	if cfg.loadSecrets != nil {
+		var err error
+		if stored, err = cfg.loadSecrets(); err != nil {
+			return nil, fmt.Errorf("cannot read secrets: %w", err)
+		}
+	}
+	var missing []string
+	for _, name := range order {
+		if _, ok := stored[name]; !ok {
+			missing = append(missing, fmt.Sprintf("%s (step %s)", name, firstUse[name]))
+		}
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("missing secrets: %s; store each with: truss secret set <name>", strings.Join(missing, ", "))
+	}
+	return stored, nil
+}
+
+// withSecrets appends the named secrets to env. Later entries win when the
+// process starts, so a secret overrides a variable of the same name.
+func withSecrets(env []string, names []string, stored map[string]string) []string {
+	if len(names) == 0 {
+		return env
+	}
+	out := append([]string(nil), env...)
+	for _, name := range names {
+		out = append(out, name+"="+stored[name])
+	}
+	return out
 }

@@ -40,7 +40,7 @@ func runLocal(ctx context.Context, args []string, cwd string, env []string, stdo
 		dir = abs
 	}
 	log.Setup(runlog.OSName(runtime.GOOS), runtime.GOARCH, executor.Shell(), dir)
-	run, err := engine.Run(ctx, def, cwd, env, log)
+	run, err := engine.Run(ctx, def, cwd, env, log, engine.WithSecrets(secretLoader(env)))
 	if err != nil {
 		discardRunLog(tmp, tmpPath)
 		fmt.Fprintf(stderr, "error: %s\n", err.Error())

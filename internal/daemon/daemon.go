@@ -26,6 +26,7 @@ import (
 	"github.com/afri-bit/truss/internal/registry"
 	"github.com/afri-bit/truss/internal/runs"
 	"github.com/afri-bit/truss/internal/scheduler"
+	"github.com/afri-bit/truss/internal/secrets"
 )
 
 // DefaultAddress is where the daemon listens unless told otherwise.
@@ -118,7 +119,7 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 	if err != nil {
 		return nil, err
 	}
-	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Env: opts.Env, Now: opts.Now})
+	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Env: opts.Env, Secrets: secrets.Open(opts.Home.Secrets()).Load, Now: opts.Now})
 	if err != nil {
 		return nil, err
 	}
