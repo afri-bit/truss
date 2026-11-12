@@ -19,6 +19,7 @@ pipeline:
   name: nightly               # required
   concurrency: 2              # steps at once; default 1
   overlap: queue              # queue | skip | parallel; default queue
+  workdir: app                # where steps start; default: the run's directory
 
 on:                           # optional; needs the daemon
   schedule:
@@ -68,6 +69,7 @@ A file has `steps` or `jobs`, never both.
 |---|---|---|
 | `name` | required | Shown in logs. Also the default name when you register the file. |
 | `concurrency` | `1` | The most steps that run at the same time. A whole number of at least 1. |
+| `workdir` | the run's directory | The directory steps start in: relative to where the run starts (your current directory for `truss run`, the file's directory for the daemon), or absolute. A job's or step's `dir` replaces it. The directory must exist, or the step fails with a diagnostic and no exit code. |
 | `overlap` | `queue` | What happens when a run is requested while another run of this pipeline is still active. Used by the daemon. |
 
 `overlap` values:
@@ -141,6 +143,12 @@ Windows). Every step starts a new shell, so `cd` or `export` in one step does no
 | `dir` | no | Working directory, relative to where the run starts: your current directory for `truss run`, the file's directory for the daemon. |
 | `timeout` | no | Ends the step when it runs longer: `90s`, `5m`, `1h30m`. |
 
+A step's working directory is the first one set of: its own `dir`, its job's `dir`,
+`pipeline.workdir`, the run's starting directory. They replace each other; they are not joined,
+so a relative `dir` is always relative to the run's starting directory, not to `workdir`. On
+Windows a path with a drive letter must be absolute (`C:\work`, not `C:work`); `\work` means
+that folder on the drive the run starts on.
+
 Top-level steps form a graph through `needs`. A step starts when everything it needs has
 succeeded and a concurrency slot is free. Without `needs` and with the default concurrency,
 steps simply run top to bottom.
@@ -174,6 +182,22 @@ jobs:
     steps:
       - { id: compile, run: go build ./... }
 ```
+
+## Data and cache folders
+
+Every run gets two folders that outlive the run. Steps find them in variables:
+
+| Variable | `truss run` | Daemon run |
+|---|---|---|
+| `TRUSS_DATA_DIR` | `.truss/data` in the current directory | `~/.truss/pipelines/<name>/` |
+| `TRUSS_CACHE_DIR` | `.truss/data/cache` | `~/.truss/pipelines/<name>/cache` |
+
+TRUSS creates both before the first step and never empties them. What goes in is up to your
+steps: a package cache, a downloaded toolchain. There are no cache keys, no saving or
+restoring, and no clean workspace per run; the folders are plain directories. `.truss/` is
+where `truss run` also writes `run.log`; add it to `.gitignore`. A `<name>` is the registered
+name. Pipeline `env` can override both variables like any other. To clear a cache see
+[the daemon page](daemon.md#data-and-cache-folders).
 
 ## When something fails
 

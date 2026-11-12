@@ -68,6 +68,7 @@ Options of `daemon start` and `daemon run`:
 | `truss runs [<name>]` | Lists the newest runs, optionally of one pipeline. |
 | `truss logs <run-id>` | Prints a run log. `--follow` keeps printing until the run ends. |
 | `truss cancel <run-id>` | Ends a queued or running run. |
+| `truss cache clear <name>` | Empties the pipeline's cache folder. Needs no daemon. |
 
 `-f` is short for `--follow`. Interrupting a followed log stops the printing, not the run.
 
