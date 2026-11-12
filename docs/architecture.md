@@ -58,6 +58,7 @@ two callers of the same engine, so a pipeline behaves the same in both.
 | `internal/runs` | Queue, execute and remember runs; enforce the parallel limit and overlap policy. | Know about HTTP or schedules. |
 | `internal/api` | The daemon's JSON types and a Go client for them. | Contain server logic. |
 | `internal/daemon` | Wire registry, scheduler and runs together; serve the HTTP API; watch files. | Reimplement what those packages do. |
+| `internal/loginstart` | Generate and install the per-user login item (systemd unit, launchd agent, Task Scheduler task) behind runner and file interfaces. See [ADR 0006](decisions/0006-login-start-is-per-user-and-marker-owned.md). | Know about the daemon or its API, or print. |
 | `internal/webui` | TRUSS Desktop's static files, embedded in the binary. | Contain Go logic beyond serving files. |
 
 ## A run through the daemon

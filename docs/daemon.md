@@ -160,13 +160,15 @@ login start removed: /home/me/.config/systemd/user/truss.service
 the login item. Run it from the `truss` you want to keep: the path of that binary is what gets
 recorded. It refuses a binary in a temporary directory (a `go run` build, `/tmp`, `AppData\Local\Temp`),
 because the login item would stop working when the file is cleaned up. Run it again after you
-move or upgrade the binary or to change the options.
+move or upgrade the binary or to change the options. If a daemon is already running, a reinstall
+keeps it as it is (except under systemd, which restarts it); to apply new options now, run
+`truss daemon stop` and then `truss daemon install` again.
 
 | System | What `install` creates | Restarts after a crash | Output of the daemon |
 |---|---|---|---|
 | Linux | systemd user unit `~/.config/systemd/user/truss.service`, enabled with `systemctl --user` | `Restart=on-failure` | the journal: `journalctl --user -u truss` |
 | macOS | launchd agent `~/Library/LaunchAgents/io.github.afri-bit.truss.plist`, loaded into your `gui/<uid>` domain | `KeepAlive` on failure only | `daemon.log` in the TRUSS home |
-| Windows | Task Scheduler task `truss-daemon`, at logon of your user, least privilege | up to 3 times, a minute apart | not captured; a console window stays open |
+| Windows | Task Scheduler task `truss-daemon-<user>`, at logon of your user, least privilege | up to 3 times, a minute apart | not captured; a console window stays open |
 
 Things to know:
 
@@ -176,8 +178,15 @@ Things to know:
 - `uninstall` removes only what `install` created, recognised by the text "Managed by truss
   daemon install" in the file or task. A unit, plist or task with that name that you wrote yourself is
   left alone and reported. It stops the daemon that the login item started, not one you started by hand.
-- If `TRUSS_HOME` is set when you install, the login item uses it (Linux and macOS). On Windows
-  `install` refuses it; unset it, or set it for your user with `setx`.
+- If `TRUSS_HOME` is set when you install, the login item uses it (Linux and macOS). A Windows
+  task cannot carry it: the daemon uses the user variable of that name (`setx TRUSS_HOME ...`)
+  or the default home, and `install` says so.
+- Do not run `install` with `sudo` or as administrator; it refuses. The login item belongs to
+  your own account.
+- On Windows the task is named `truss-daemon-<your user>`, and `uninstall` ends its daemon
+  without cancelling runs gracefully: run `truss daemon stop` first.
+- If a unit, plist or task with the same name exists and `install` did not create it, `install`
+  and `uninstall` stop with an error and leave it alone.
 - On Windows the daemon runs in a console window that stays open, and its output is not saved.
   Some Windows setups only let administrators create a task that runs at logon; if `install`
   reports "access denied", TRUSS does not work around it.
