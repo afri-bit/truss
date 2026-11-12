@@ -84,7 +84,10 @@ Three limits work together:
 | Overlap | `pipeline.overlap` in the file | `queue` | Whether two runs of the *same* pipeline may overlap, wait, or the second is skipped. |
 | Steps at once | `pipeline.concurrency` in the file | 1 | How many steps of one run execute in parallel. |
 
-Runs that cannot start yet are `queued` and start in the order they were requested.
+Runs that cannot start yet are `queued` and start in the order they were requested. The queue
+survives a restart: stop the daemon and start it again, and the queued runs start, still in
+order. A queued run whose pipeline was unregistered or no longer loads in the meantime is closed
+as `failed` with the reason.
 
 ## Run states
 
@@ -94,7 +97,7 @@ Runs that cannot start yet are `queued` and start in the order they were request
 | `running` | Steps are executing. |
 | `succeeded` | Every step succeeded. |
 | `failed` | A step failed; the note names it. |
-| `cancelled` | You cancelled it, or the daemon stopped. |
+| `cancelled` | You cancelled it, or the daemon stopped while it was running. |
 | `skipped` | Requested but never started: a missed schedule, or `overlap: skip`. |
 
 Steps are `pending`, `running`, `succeeded`, `failed`, `stopped` (ended because another step
@@ -120,8 +123,8 @@ directory is private to your user.
 | `runs/<run-id>/run.log` | Its run log, the same format `truss run` prints. |
 | `daemon.log` | The daemon's own log when started with `daemon start`. |
 
-The newest 200 runs are kept. A run that was active when the daemon died is closed as `failed`
-on the next start.
+The newest 200 runs are kept. A run that was *running* when the daemon died is closed as
+`failed` on the next start. Runs that were only *queued* are kept and start again.
 
 ## Security
 

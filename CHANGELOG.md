@@ -11,6 +11,7 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 ### Changed
 
+- Queued runs survive a daemon restart. They stay `queued` when the daemon stops and start in request order when it starts again, instead of being cancelled. A queued run whose pipeline can no longer be loaded is closed as `failed`. Runs that were running are cancelled on a graceful stop, or closed as `failed` after a crash, as before.
 - `truss help` and usage errors print the full command list. The first usage line is now `usage: truss <command> [arguments]`.
 - Project process: constitution 2.0.0. A specification travels with the code instead of gating it, and tests ship with the behavior (see `docs/decisions/0005-specs-record-they-do-not-gate.md`).
 - Require Go 1.27.3. Go 1.22.5's standard library is affected by GO-2025-3956 (`os/exec` LookPath) and GO-2025-3750 (`os` and `syscall`), which the vulnerability scan reports through the host executor and CLI.

@@ -1,6 +1,7 @@
 package runs
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -350,5 +351,119 @@ func TestHistory_KeepsCreationOrderWhenTheClockDoesNotMove(t *testing.T) {
 		if want := fmt.Sprint(7 - i); run.Reason != want {
 			t.Fatalf("position %d is run %s, want run %s (newest first)", i, run.Reason, want)
 		}
+	}
+}
+
+// resolveTo returns a Resolver that serves definitions by pipeline name.
+func resolveTo(dir string, defs map[string]pipeline.Pipeline) Resolver {
+	return func(name string) (pipeline.Pipeline, string, error) {
+		d, ok := defs[name]
+		if !ok {
+			return pipeline.Pipeline{}, "", fmt.Errorf("%w: %q", ErrNotFound, name)
+		}
+		return d, dir, nil
+	}
+}
+
+func TestQueue_SurvivesAGracefulRestartAndStartsInRequestOrder(t *testing.T) {
+	dir := t.TempDir()
+	gate := filepath.Join(t.TempDir(), "gate")
+	d := def("p", pipeline.OverlapQueue, pipeline.Step{ID: "wait", Run: waitFor(gate)})
+	m := open(t, Options{Dir: dir})
+	running := submit(t, m, "p", d)
+	second, third := submit(t, m, "p", d), submit(t, m, "p", d)
+	await(t, m, running.ID, api.RunRunning)
+	m.Close() // a graceful stop: the running run ends, the queue stays
+
+	if got, _ := m.Get(second.ID); got.Status != api.RunQueued {
+		t.Fatalf("queued run after Close = %s", got.Status)
+	}
+	release(t, gate)
+	again := open(t, Options{Dir: dir, Resolve: resolveTo(t.TempDir(), map[string]pipeline.Pipeline{"p": d})})
+	if got, _ := again.Get(running.ID); got.Status != api.RunCancelled {
+		t.Fatalf("run that was running = %s", got.Status)
+	}
+	if running, queued := again.Counts(); running != 0 || queued != 2 {
+		t.Fatalf("before Resume: %d running, %d queued", running, queued)
+	}
+	again.Resume()
+	a := await(t, again, second.ID, api.RunSucceeded, api.RunFailed)
+	b := await(t, again, third.ID, api.RunSucceeded, api.RunFailed)
+	if a.Status != api.RunSucceeded || b.Status != api.RunSucceeded {
+		t.Fatalf("restored runs: %s, %s", a.Status, b.Status)
+	}
+	if a.StartedAt.After(*b.StartedAt) || a.FinishedAt.After(*b.StartedAt) {
+		t.Fatalf("overlap queue started out of order: %v..%v then %v", a.StartedAt, a.FinishedAt, b.StartedAt)
+	}
+}
+
+func TestQueue_RestoredRunsKeepTheirTriggerAndRespectLimits(t *testing.T) {
+	dir := t.TempDir()
+	gate := filepath.Join(t.TempDir(), "gate")
+	d := def("p", pipeline.OverlapParallel, pipeline.Step{ID: "wait", Run: waitFor(gate)})
+	first := open(t, Options{Dir: dir, MaxParallel: 1})
+	r1 := submit(t, first, "p", d)
+	r2, err := first.Submit(Request{Pipeline: "p", Definition: d, Dir: t.TempDir(), Trigger: api.TriggerSchedule, ScheduledFor: time.Date(2026, 11, 11, 9, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	await(t, first, r1.ID, api.RunRunning)
+	first.Close()
+
+	again := open(t, Options{Dir: dir, MaxParallel: 1, Resolve: resolveTo(t.TempDir(), map[string]pipeline.Pipeline{"p": d})})
+	again.Resume()
+	got := await(t, again, r2.ID, api.RunRunning)
+	if got.Trigger != api.TriggerSchedule || got.ScheduledFor == nil {
+		t.Fatalf("restored run lost its origin: %+v", got)
+	}
+	release(t, gate)
+	await(t, again, r2.ID, api.RunSucceeded)
+}
+
+func TestQueue_RunThatCannotBeRestoredFailsWithTheReason(t *testing.T) {
+	for name, resolve := range map[string]Resolver{
+		"no resolver":      nil,
+		"pipeline is gone": resolveTo(t.TempDir(), nil),
+		"definition invalid": func(string) (pipeline.Pipeline, string, error) {
+			return pipeline.Pipeline{}, "", errors.New("step wait: run is empty")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			gate := filepath.Join(t.TempDir(), "never")
+			d := def("p", pipeline.OverlapQueue, pipeline.Step{ID: "wait", Run: waitFor(gate)})
+			m := open(t, Options{Dir: dir})
+			submit(t, m, "p", d)
+			queued := submit(t, m, "p", d)
+			m.Close()
+
+			again := open(t, Options{Dir: dir, Resolve: resolve})
+			again.Resume()
+			got, err := again.Get(queued.ID)
+			if err != nil || got.Status != api.RunFailed || !strings.Contains(got.Reason, "could not be restored") {
+				t.Fatalf("run = %+v, err = %v", got, err)
+			}
+			if got.Steps[0].Status != api.StepSkipped {
+				t.Fatalf("steps = %+v", got.Steps)
+			}
+		})
+	}
+}
+
+func TestQueue_CancelWorksOnARestoredQueuedRun(t *testing.T) {
+	dir := t.TempDir()
+	d := def("p", pipeline.OverlapQueue, pipeline.Step{ID: "wait", Run: waitFor(filepath.Join(t.TempDir(), "never"))})
+	m := open(t, Options{Dir: dir})
+	submit(t, m, "p", d)
+	queued := submit(t, m, "p", d)
+	m.Close()
+
+	again := open(t, Options{Dir: dir, Resolve: resolveTo(t.TempDir(), map[string]pipeline.Pipeline{"p": d})})
+	if got, err := again.Cancel(queued.ID); err != nil || got.Status != api.RunCancelled {
+		t.Fatalf("cancel = %+v, %v", got, err)
+	}
+	again.Resume()
+	if _, queuedNow := again.Counts(); queuedNow != 0 {
+		t.Fatalf("cancelled run still queued")
 	}
 }
