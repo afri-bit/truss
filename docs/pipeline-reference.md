@@ -158,7 +158,6 @@ output chunks is still caught.
 
 Redaction is exact text matching. It **cannot** catch a value that a step:
 
-- prints it on one stream (stdout or stderr) in pieces with output from the other stream in between;
 - encodes or transforms (base64, hex, URL encoding, upper case, reversed, characters inserted);
 - splits across lines of its own;
 - writes to a file, sends over the network or passes to another program's own log.

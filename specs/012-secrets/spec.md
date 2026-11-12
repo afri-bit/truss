@@ -74,13 +74,13 @@ Tier 2 (secrets handling, pipeline schema, CLI output). Decision record:
   the declared ones) that appears in step stdout or stderr is replaced by `***` before it reaches
   the run log, `.truss/run.log`, the daemon's stored log, the API and Desktop, and before the
   in-memory step results.
-- **FR-017** A value split across several output chunks is still replaced. Output is held back
+- **FR-017** A value split across several output chunks is still replaced. Stdout and stderr are matched separately, so output on one never releases a
+  half-seen value on the other. Output is held back
   only while its tail could still turn out to be the start of a secret, and released when it
   cannot, or when the step ends. A value containing newlines is replaced as a whole.
 - **FR-018** Redaction is exact text matching. It **cannot** catch a value that a step encodes
   (base64, hex, URL encoding), transforms (case, reversal, characters inserted), splits over
-  several lines of its own, interleaves with the other stream (stdout and stderr share one
-  matcher, so a value printed in pieces with output from the other stream between them can show), or writes to a file, the network or anywhere other than stdout and
+  several lines of its own,  or writes to a file, the network or anywhere other than stdout and
   stderr. A very short secret is replaced wherever it occurs, which can garble unrelated output.
 - **FR-019** Secrets reach a step only through its environment. Anything the step itself does with
   them (`echo`, `env`, `set -x`) is the step's responsibility; the user must not print them.

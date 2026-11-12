@@ -173,3 +173,17 @@ func TestRun_SecretOverridesEnv(t *testing.T) {
 		t.Errorf("env won over the secret: %q", ev.out["a"])
 	}
 }
+
+func TestRun_RedactsAValueWhenTheOtherStreamInterleaves(t *testing.T) {
+	half := len(canary) / 2
+	p := secretPipeline(pipeline.Step{ID: "mix", Run: helperCmd("print-interleaved", canary[:half], canary[half:], "warning\n"), Secrets: []string{"TRUSS_TOKEN"}})
+	ev := newSink()
+	run, err := Run(context.Background(), p, t.TempDir(), os.Environ(), ev, store(map[string]string{"TRUSS_TOKEN": canary}))
+	if err != nil || run.Status != pipeline.StatusSucceeded {
+		t.Fatalf("run = %+v, err = %v", run, err)
+	}
+	got := ev.out["mix"]
+	if strings.Contains(got, canary[:half]) || strings.Contains(got, canary[half:]) || !strings.Contains(got, "***") || !strings.Contains(got, "warning") {
+		t.Errorf("events output = %q", got)
+	}
+}

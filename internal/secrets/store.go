@@ -39,12 +39,15 @@ type fileFormat struct {
 // Load returns every secret, name to value. A missing file is an empty store.
 // On Linux and macOS a file that group or others can access is refused.
 func (s *Store) Load() (map[string]string, error) {
-	info, err := os.Stat(s.path)
+	info, err := os.Lstat(s.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return map[string]string{}, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("read secrets: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("secrets file %s is a symbolic link; TRUSS keeps secrets in a regular file", s.path)
 	}
 	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		return nil, fmt.Errorf("secrets file %s is accessible to other users (mode %04o); run: chmod 600 %s",

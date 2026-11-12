@@ -3,12 +3,15 @@ package executor
 import "io"
 
 // Request is one host-shell invocation.
-// Out, when set, receives stdout and stderr as the process writes them.
+// Out, when set, receives stdout and stderr as the process writes them. When
+// ErrOut is also set, stderr goes to ErrOut instead, so a caller can treat the
+// streams separately; writes to the two are still serialized with each other.
 type Request struct {
-	Run string
-	Dir string
-	Env []string
-	Out io.Writer
+	Run    string
+	Dir    string
+	Env    []string
+	Out    io.Writer
+	ErrOut io.Writer
 }
 
 // Result is the outcome of running a host shell.

@@ -104,20 +104,22 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 				continue
 			}
 			started[step.ID] = true
-			var out io.Writer
-			var red *secrets.Redactor
+			var out, errOut io.Writer
+			var reds []*secrets.Redactor
 			if events != nil {
 				events.StepStarted(step.ID)
 				id := step.ID
-				red = secrets.NewRedactor(hidden, func(b []byte) { events.StepOutput(id, append([]byte(nil), b...)) })
-				if red != nil {
-					out = red
+				emit := func(b []byte) { events.StepOutput(id, append([]byte(nil), b...)) }
+				// Each stream has its own matcher: output of one stream must not
+				// release the held-back half of a value printed on the other.
+				if ro, re := secrets.NewRedactor(hidden, emit), secrets.NewRedactor(hidden, emit); ro != nil {
+					out, errOut, reds = ro, re, []*secrets.Redactor{ro, re}
 				} else {
 					out = stepOutput{id: id, events: events}
 				}
 			}
 			stepEnvironment := withSecrets(stepEnv(env, step.Env), step.Secrets, stored)
-			proc, err := executor.Start(runCtx, executor.Request{Run: step.Run, Dir: stepDir(dir, step.Dir), Env: stepEnvironment, Out: out})
+			proc, err := executor.Start(runCtx, executor.Request{Run: step.Run, Dir: stepDir(dir, step.Dir), Env: stepEnvironment, Out: out, ErrOut: errOut})
 			slot := len(run.Steps)
 			run.Steps = append(run.Steps, pipeline.StepRun{})
 			if err != nil {
@@ -132,7 +134,7 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 				break
 			}
 			running++
-			go func(slot int, step pipeline.Step, red *secrets.Redactor) {
+			go func(slot int, step pipeline.Step, reds []*secrets.Redactor) {
 				waitCtx := runCtx
 				if step.Timeout > 0 {
 					var release context.CancelFunc
@@ -140,7 +142,7 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 					defer release()
 				}
 				res := proc.Wait(waitCtx)
-				if red != nil {
+				for _, red := range reds {
 					red.Flush() // release a held-back tail before the step is reported finished
 				}
 				o := outcome{slot: slot, id: step.ID, res: res}
@@ -151,7 +153,7 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 					o.res.Err = fmt.Errorf("timed out after %s", step.Timeout)
 				}
 				done <- o
-			}(slot, step, red)
+			}(slot, step, reds)
 		}
 		if running == 0 {
 			break

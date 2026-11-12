@@ -132,3 +132,20 @@ func TestStore_CorruptFileErrorHasNoContent(t *testing.T) {
 		t.Errorf("error = %v", err)
 	}
 }
+
+func TestStore_RefusesSymbolicLink(t *testing.T) {
+	s := newStore(t)
+	if err := s.Set("TOKEN", canary); err != nil {
+		t.Fatal(err)
+	}
+	real := s.Path() + ".real"
+	if err := os.Rename(s.Path(), real); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, s.Path()); err != nil {
+		t.Skipf("cannot create a symbolic link here: %v", err)
+	}
+	if _, err := s.Load(); err == nil {
+		t.Fatal("Load followed a symbolic link")
+	}
+}

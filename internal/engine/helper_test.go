@@ -91,6 +91,13 @@ func runHelper(args []string) int {
 		time.Sleep(150 * time.Millisecond)
 		fmt.Print(rest[1])
 		return 0
+	case "print-interleaved": // <a> <b> <err>: stdout a, stderr err, stdout b
+		fmt.Print(rest[0])
+		time.Sleep(150 * time.Millisecond)
+		fmt.Fprint(os.Stderr, rest[2])
+		time.Sleep(150 * time.Millisecond)
+		fmt.Print(rest[1])
+		return 0
 	case "exit": // <code>
 		code, _ := strconv.Atoi(rest[0])
 		return code
