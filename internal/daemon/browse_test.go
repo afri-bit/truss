@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -206,7 +207,7 @@ func TestCheckBrowsePath_Syntax(t *testing.T) {
 		{"linux", ""}, {"linux", "rel"}, {"linux", "/a/../b"}, {"linux", "/a/\x00"}, {"linux", "/.."},
 		{"windows", `C:`}, {"windows", `C:foo`}, {"windows", `C:\a\..\b`}, {"windows", `C:/a/../b`},
 		{"windows", `\\server\share`}, {"windows", `//server/share`}, {"windows", `\\?\C:\`}, {"windows", `\\.\PhysicalDrive0`},
-		{"windows", `\rooted`}, {"windows", `C:\file:stream`}, {"windows", `1:\`}, {"windows", "C:\\a\x00"},
+		{"windows", `\rooted`}, {"windows", `C:\file:stream`}, {"windows", `C:\x\CON`}, {"windows", `C:\NUL.txt`}, {"windows", `C:\a\com1`}, {"windows", `C:\LPT9. `}, {"windows", `C:\CONIN$`}, {"windows", `1:\`}, {"windows", "C:\\a\x00"},
 	}
 	for _, tc := range bad {
 		if err := checkBrowsePath(tc.path, tc.goos); err == nil {
@@ -214,11 +215,30 @@ func TestCheckBrowsePath_Syntax(t *testing.T) {
 		}
 	}
 	good := []struct{ goos, path string }{
-		{"linux", "/"}, {"linux", "/home/u"}, {"linux", "/a..b/c"}, {"windows", `C:\`}, {"windows", `c:\Users\me`}, {"windows", `D:/work`},
+		{"linux", "/"}, {"linux", "/home/u"}, {"linux", "/a..b/c"}, {"windows", `C:\`}, {"windows", `c:\Users\me`}, {"windows", `C:\console`}, {"windows", `C:\com10`}, {"windows", `D:/work`},
 	}
 	for _, tc := range good {
 		if err := checkBrowsePath(tc.path, tc.goos); err != nil {
 			t.Errorf("%s %q rejected: %v", tc.goos, tc.path, err)
 		}
+	}
+}
+
+func TestBrowse_RefusesANonLoopbackPeer(t *testing.T) {
+	d, _ := boot(t, home.Dir(t.TempDir()), nil)
+	req := httptest.NewRequest(http.MethodGet, api.Prefix+"/fs?path="+url.QueryEscape(browseTree(t)), nil)
+	req.Host = "127.0.0.1"
+	req.RemoteAddr = "192.0.2.1:1234"
+	req.Header.Set("Authorization", "Bearer "+d.Endpoint().Token)
+	rec := httptest.NewRecorder()
+	d.handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("remote peer: %d", rec.Code)
+	}
+	req.RemoteAddr = "127.0.0.1:1234"
+	rec = httptest.NewRecorder()
+	d.handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("loopback peer: %d", rec.Code)
 	}
 }

@@ -1,8 +1,10 @@
 package daemon
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -15,8 +17,12 @@ import (
 	"github.com/afri-bit/truss/internal/api"
 )
 
-// maxBrowseEntries bounds one directory listing.
-const maxBrowseEntries = 5000
+// maxBrowseEntries bounds one directory listing; maxBrowseScan bounds how many
+// names are read from a directory before the listing stops.
+const (
+	maxBrowseEntries = 5000
+	maxBrowseScan    = 50000
+)
 
 // statusError carries an HTTP status for an error that is not one of the
 // domain errors statusFor knows.
@@ -56,7 +62,7 @@ func (d *Daemon) browse(w http.ResponseWriter, r *http.Request) error {
 	if !info.IsDir() {
 		return badRequest("%q is not a directory", path)
 	}
-	dirents, err := os.ReadDir(resolved)
+	dirents, scanCut, err := readNames(r.Context(), resolved)
 	if err != nil {
 		return browseError(path, err)
 	}
@@ -71,6 +77,11 @@ func (d *Daemon) browse(w http.ResponseWriter, r *http.Request) error {
 			continue
 		}
 		entry := api.DirEntry{Name: name, Link: de.Type()&(fs.ModeSymlink|fs.ModeIrregular) != 0} // Windows junctions are irregular
+		// Never touch a link that points at a network or device path: Windows
+		// would open a connection and send credentials to it.
+		if entry.Link && networkLink(filepath.Join(resolved, name)) {
+			continue
+		}
 		// Stat follows a link to its target; a broken link fails and is left out.
 		st, err := os.Stat(filepath.Join(resolved, name))
 		if err != nil {
@@ -93,10 +104,48 @@ func (d *Daemon) browse(w http.ResponseWriter, r *http.Request) error {
 		}
 		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
 	})
+	list.Truncated = scanCut
 	if len(list.Entries) > maxBrowseEntries {
 		list.Entries, list.Truncated = list.Entries[:maxBrowseEntries], true
 	}
 	return writeJSON(w, http.StatusOK, list)
+}
+
+// readNames reads directory entries in batches, so a huge folder costs a
+// bounded amount of memory and time. cut is true when it stopped early.
+func readNames(ctx context.Context, dir string) (names []os.DirEntry, cut bool, err error) {
+	f, err := os.Open(dir) // #nosec G304 -- a listing of a directory the user chose; only names are read
+	if err != nil {
+		return nil, false, err
+	}
+	defer func() { _ = f.Close() }()
+	for len(names) < maxBrowseScan {
+		batch, err := f.ReadDir(1000)
+		names = append(names, batch...)
+		if errors.Is(err, io.EOF) {
+			return names, false, nil
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		if ctx.Err() != nil {
+			return nil, false, ctx.Err()
+		}
+	}
+	return names, true, nil
+}
+
+// networkLink reports whether a link's target is a UNC, device or extended
+// path. Such targets only exist on Windows.
+func networkLink(link string) bool {
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	target, err := os.Readlink(link)
+	if err != nil {
+		return false
+	}
+	return strings.HasPrefix(target, `\\`) || strings.HasPrefix(target, "//")
 }
 
 func isYAMLName(name string) bool {
@@ -165,6 +214,11 @@ func checkBrowsePath(p, goos string) error {
 		}
 	}
 	if goos == "windows" {
+		for _, el := range strings.FieldsFunc(p[2:], func(r rune) bool { return r == '/' || r == '\\' }) {
+			if reservedWindowsName(el) {
+				return fmt.Errorf("path contains the reserved name %q", el)
+			}
+		}
 		isLetter := len(p) >= 3 && (p[0]|0x20 >= 'a' && p[0]|0x20 <= 'z')
 		if !isLetter || p[1] != ':' || (p[2] != '\\' && p[2] != '/') {
 			return fmt.Errorf("path must be absolute and start with a drive such as C:\\, got %q", p)
@@ -178,4 +232,22 @@ func checkBrowsePath(p, goos string) error {
 		return fmt.Errorf("path must be absolute, got %q", p)
 	}
 	return nil
+}
+
+// reservedWindowsName reports whether a path element names a Windows device
+// (CON, NUL, COM1, ...), with or without an extension or trailing dots and spaces.
+func reservedWindowsName(el string) bool {
+	base := strings.TrimRight(el, ". ")
+	if i := strings.IndexByte(base, '.'); i >= 0 {
+		base = base[:i]
+	}
+	base = strings.ToUpper(strings.TrimRight(base, " "))
+	switch base {
+	case "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$":
+		return true
+	}
+	if len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) {
+		return base[3] >= '0' && base[3] <= '9'
+	}
+	return false
 }

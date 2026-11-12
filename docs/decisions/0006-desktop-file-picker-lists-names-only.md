@@ -23,10 +23,16 @@ Add `GET /api/v1/fs?path=&hidden=` to the v1 API (additive). It lists one direct
   target; a broken link or a link to something else is left out.
 - **Same guards as the rest of the API**: token, local `Host`, loopback bind, plus a loopback
   peer check. `roots` tells the page where to start: `/`, or the existing drive letters.
-- At most 5000 entries; `truncated` says when there were more.
+- At most 5000 entries; at most 50000 names are read from a folder. `truncated` says when there were more.
+- A link whose target is a UNC or device path (Windows) is left out without being touched, so
+  listing a folder never opens a network connection. Windows device names (`CON`, `NUL`,
+  `COM1`...) in a path are refused.
 
 ## Consequences
 
+- Status codes (404, 403, 400) tell a token holder whether a path exists. Same boundary.
+- Windows drive roots are found by trying `A:\` to `Z:\`; a disconnected network drive can slow that.
+- Windows "hidden" and system attributes are not honored; only dot-names are hidden.
 - The picker leaks directory and `*.yaml` names to whoever holds the token. That is the same
   trust boundary as the shell the daemon already runs commands in (see `docs/daemon.md`).
 - Listing is not confined to the home directory: pipelines legitimately live elsewhere, and

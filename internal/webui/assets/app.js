@@ -412,6 +412,12 @@ views.run = {
 // (names only, GET /fs) and the dialog builds the path from them.
 const picker = { open: false, hidden: false, listing: null, error: "" };
 
+// safeName shows bidirectional control characters as visible escapes, so a
+// file name cannot pretend to end in .yaml.
+function safeName(name) {
+  return name.replace(/[\u202a-\u202e\u2066-\u2069\u200e\u200f]/g, (c) => "\\u" + c.charCodeAt(0).toString(16));
+}
+
 function joinPath(dir, name) {
   const sep = dir.includes("\\") && !dir.includes("/") ? "\\" : "/";
   return dir.endsWith(sep) ? dir + name : dir + sep + name;
@@ -448,7 +454,7 @@ function pickerPaint() {
     l && (l.entries.length
       ? h("ul", { class: "picker-list", id: "picker-list" }, l.entries.map((en) => h("li", null,
         h("button", { type: "button", class: "entry " + en.kind, onclick: () => (en.kind === "dir" ? pickerLoad(joinPath(l.path, en.name)) : choose(en.name)) },
-          h("span", { class: "kind", "aria-hidden": "true" }, en.kind === "dir" ? "📁" : "📄"), en.name + (en.link ? " →" : ""), en.kind === "dir" && h("span", { class: "sr" }, " (folder)")))))
+          h("span", { class: "kind", "aria-hidden": "true" }, en.kind === "dir" ? "📁" : "📄"), safeName(en.name) + (en.link ? " →" : ""), en.kind === "dir" && h("span", { class: "sr" }, " (folder)")))))
       : h("div", { class: "empty" }, "No folders or .yaml files here.")),
     l && l.truncated && h("p", { class: "sub" }, "Only the first entries are shown. Type the path instead."),
     h("div", { class: "picker-foot" }, h("button", { type: "button", id: "picker-cancel", onclick: () => dlg.close() }, "Cancel")));
