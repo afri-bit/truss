@@ -101,6 +101,11 @@ function until(iso) {
   return ms <= 0 ? "now" : "in " + span(ms);
 }
 const badge = (status) => h("span", { class: "badge s-" + status }, status);
+// A step that failed but let the run go on (continue-on-error) is shown apart
+// from a failure that failed the run.
+const stepState = (st) => (st.status === "failed" && st.continued_on_error ? "tolerated" : st.status);
+const stepBadge = (st) => h("span", { class: "badge s-" + stepState(st), title: st.reason || "" },
+  stepState(st) === "tolerated" ? "failed · continued" : st.status);
 const isActive = (run) => run.status === "queued" || run.status === "running";
 function pipelineState(p) {
   if (!p.valid) return "invalid";
@@ -285,7 +290,10 @@ views.pipeline = {
   },
   render({ pipeline: p, runs }) {
     const last = p.last_run;
-    const statusOf = (st) => (last && (last.steps.find((x) => x.id === st.id) || {}).status) || "pending";
+    const statusOf = (st) => {
+      const x = last && last.steps.find((y) => y.id === st.id);
+      return x ? stepState(x) : "pending";
+    };
     return [
       h("a", { class: "crumb", href: "#/pipelines" }, "← Pipelines"),
       h("div", { class: "head" }, h("div", null, h("h1", null, p.name), h("p", { class: "sub mono" }, p.path)),
@@ -381,12 +389,14 @@ views.run = {
             location.hash = "#/runs/" + next.id;
           }) }, "Run again"))),
       run.reason && h("section", null, h("div", { class: "panel empty" + (run.status === "failed" ? " error" : "") }, run.reason)),
-      run.steps.length > 0 && h("section", null, h("h2", null, "Steps"), graph(run.steps, (st) => st.status, logState.step, select)),
+      run.steps.length > 0 && h("section", null, h("h2", null, "Steps"), graph(run.steps, stepState, logState.step, select)),
       run.steps.length > 0 && h("div", { class: "runlayout" },
         h("section", null, h("h2", null, "Step results"), h("div", { class: "panel" }, h("ul", { class: "steps" },
-          run.steps.map((st) => h("li", { class: logState.step === st.id ? "selected" : "", title: st.error || "", onclick: () => select(st.id) },
-            badge(st.status), h("span", { class: "id" }, st.id),
-            h("span", { class: "dur" }, st.exit_code != null && st.exit_code !== 0 ? `exit ${st.exit_code} · ` : "", took(st))))))),
+          run.steps.map((st) => h("li", { class: logState.step === st.id ? "selected" : "", title: st.error || st.reason || "", onclick: () => select(st.id) },
+            stepBadge(st), h("span", { class: "id" }, st.id),
+            h("span", { class: "dur" }, st.reason ? st.reason : [
+              st.attempts > 1 ? `attempt ${st.attempts} · ` : "",
+              st.exit_code != null && st.exit_code !== 0 ? `exit ${st.exit_code} · ` : "", took(st)])))))),
         h("section", null, h("h2", null, "Run log"), h("div", { class: "log" },
           h("div", { class: "bar" },
             logState.step ? [`only step ${logState.step}`, h("button", { onclick: () => select(logState.step) }, "Show all")] : "whole run · click a step to filter",

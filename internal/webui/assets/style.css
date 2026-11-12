@@ -110,7 +110,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .s-failed, .s-invalid { color: var(--bad); }
 .s-running { color: var(--run); }
 .s-running::before { animation: pulse 1.1s ease-in-out infinite; }
-.s-queued, .s-pending { color: var(--wait); }
+.s-queued, .s-pending, .s-tolerated { color: var(--wait); }
 .s-cancelled, .s-stopped, .s-skipped, .s-paused { color: var(--off); }
 @keyframes pulse { 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) { .s-running::before { animation: none; } }
