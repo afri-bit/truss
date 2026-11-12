@@ -181,3 +181,11 @@ func TestDaemon_RunUsesTheStoreAndRedactsLogAndAPI(t *testing.T) {
 		}
 	}
 }
+
+func TestTrimLineEnding(t *testing.T) {
+	for in, want := range map[string]string{"v\n": "v", "v\r\n": "v", "v\r": "v\r", "v": "v", "v\n\n": "v\n", "": ""} {
+		if got := trimLineEnding(in); got != want {
+			t.Errorf("trimLineEnding(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

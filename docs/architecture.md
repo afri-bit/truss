@@ -24,6 +24,7 @@ flowchart TB
         engine["internal/engine"]
         executor["internal/executor"]
         runlog["internal/runlog"]
+        secrets["internal/secrets"]
     end
 
     cli --> api --> daemon
@@ -36,6 +37,9 @@ flowchart TB
     pipeline --> cron
     runs --> runlog
     cli --> runlog
+    cli --> secrets
+    daemon --> secrets
+    engine --> secrets
 ```
 
 The rule that holds it together: **arrows only point down.** The core knows nothing about the

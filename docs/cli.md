@@ -41,7 +41,7 @@ and the process list.
 |---|---|
 | `truss secret set <name>` | Stores a secret. On a terminal it asks twice, with no echo. From a pipe or file the whole input is the value, minus one trailing newline. |
 | `truss secret list` | Prints the names, one per line. Never values. |
-| `truss secret remove <name>` | Deletes a secret. An unknown name is an error. |
+| `truss secret remove <name>` | Deletes a secret and prints `secret <name> removed`. An unknown name is an error. |
 
 ```console
 $ printf %s "$NPM_TOKEN" | truss secret set NPM_TOKEN

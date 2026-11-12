@@ -26,15 +26,15 @@ Tier 2 (secrets handling, pipeline schema, CLI output). Decision record:
 ### Store
 
 - **FR-001** Secrets are kept in `secrets.json` in the TRUSS home (`~/.truss` or `TRUSS_HOME`),
-  a JSON file of names to values. On Linux and macOS the file is created with mode `0600`, is
-  replaced atomically, and the home directory is `0700`. A file readable by group or others
+  a JSON file (`{"version": 1, "secrets": {name: value}}`). On Linux and macOS the file is created with mode `0600`, is
+  replaced atomically, and the home directory is `0700` when TRUSS creates it (an existing directory is left as it is). A file readable by group or others
   is refused with an error that names the file and says to `chmod 600` it; values are not read.
 - **FR-002** On Windows, Unix mode bits do not exist. The file lives in the user's profile and
   relies on the ACL it inherits there. TRUSS does not change ACLs. This is documented, not hidden.
 - **FR-003** Values are **not encrypted** at rest. Anyone who can read the file as your user, or
   a backup of your home directory, can read them.
 - **FR-004** A name matches `[A-Za-z_][A-Za-z0-9_]*`, the same rule as `env` names. A value is
-  any non-empty text. Names and values are never written anywhere but the store.
+  any non-empty text. Values are never written anywhere but the store; names appear in `list`, `validate` and error messages.
 - **FR-005** The store is global to the TRUSS home. Per-pipeline scoping is out of scope.
 
 ### Commands
@@ -42,11 +42,11 @@ Tier 2 (secrets handling, pipeline schema, CLI output). Decision record:
 - **FR-006** `truss secret set <name>` reads the value from standard input. When standard input
   is a terminal it prompts without echo and asks for the value twice; a mismatch stores nothing.
   When it is not a terminal (a pipe or file) the whole input is the value, minus one trailing
-  newline (`\n` or `\r\n`). The value is never an argument. An empty value is an error. Output:
+  line ending (`\n` or `\r\n`, not a lone `\r`). The value is never an argument. An empty value is an error. Output:
   `secret <name> saved`.
 - **FR-007** `truss secret list` prints names only, sorted, one per line. It prints nothing for an
   empty store.
-- **FR-008** `truss secret remove <name>` deletes a secret; an unknown name is an error.
+- **FR-008** `truss secret remove <name>` deletes a secret and prints `secret <name> removed`; an unknown name is an error.
 - **FR-009** These commands do not need the daemon. The daemon reads the store at the start of
   each run, so a change applies to the next run without a restart.
 - **FR-010** The daemon API has no secret endpoints. Secrets cannot be read or written through
@@ -79,7 +79,8 @@ Tier 2 (secrets handling, pipeline schema, CLI output). Decision record:
   cannot, or when the step ends. A value containing newlines is replaced as a whole.
 - **FR-018** Redaction is exact text matching. It **cannot** catch a value that a step encodes
   (base64, hex, URL encoding), transforms (case, reversal, characters inserted), splits over
-  several lines of its own, or writes to a file, the network or anywhere other than stdout and
+  several lines of its own, interleaves with the other stream (stdout and stderr share one
+  matcher, so a value printed in pieces with output from the other stream between them can show), or writes to a file, the network or anywhere other than stdout and
   stderr. A very short secret is replaced wherever it occurs, which can garble unrelated output.
 - **FR-019** Secrets reach a step only through its environment. Anything the step itself does with
   them (`echo`, `env`, `set -x`) is the step's responsibility; the user must not print them.

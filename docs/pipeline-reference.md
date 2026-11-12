@@ -132,7 +132,7 @@ Do not put secrets in `env`: the file is plain text. Use [`secrets`](#secrets).
 A list of secret names, allowed at the top level, on a job, and on a step. Each name must be
 stored first with `truss secret set <name>` (see [the CLI](cli.md#secrets)). A declared secret
 becomes an environment variable of the same name in the steps that declare it, directly or
-through their job or the pipeline, and in no other step. It overrides an `env` entry of the same name.
+through their job or the pipeline, and in no other step. It overrides an `env` entry or an inherited variable of the same name.
 
 ```yaml
 secrets: [GITHUB_TOKEN]          # every step
@@ -158,6 +158,7 @@ output chunks is still caught.
 
 Redaction is exact text matching. It **cannot** catch a value that a step:
 
+- prints it on one stream (stdout or stderr) in pieces with output from the other stream in between;
 - encodes or transforms (base64, hex, URL encoding, upper case, reversed, characters inserted);
 - splits across lines of its own;
 - writes to a file, sends over the network or passes to another program's own log.

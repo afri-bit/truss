@@ -97,7 +97,7 @@ func (in invocation) readSecretValue(ctx context.Context, name string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("read the value: %w", err)
 	}
-	value := strings.TrimSuffix(strings.TrimSuffix(string(data), "\n"), "\r")
+	value := trimLineEnding(string(data))
 	if value == "" {
 		return "", errors.New("the value is empty; nothing was stored")
 	}
@@ -134,4 +134,12 @@ func readHidden(ctx context.Context, f *os.File, w io.Writer, prompt string) (st
 		}
 		return strings.TrimRight(r.line, "\r\n"), nil
 	}
+}
+
+// trimLineEnding drops one trailing "\n" or "\r\n", and nothing else.
+func trimLineEnding(s string) string {
+	if t, ok := strings.CutSuffix(s, "\r\n"); ok {
+		return t
+	}
+	return strings.TrimSuffix(s, "\n")
 }
