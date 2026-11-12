@@ -125,6 +125,14 @@ func (l *Log) SummaryFailed(steps int, errorText string) {
 	l.line("error " + errorText)
 }
 
+// SummaryCancelled writes the closing line for a run that was cancelled.
+// steps is the number of steps that started.
+func (l *Log) SummaryCancelled(steps int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.summary("cancelled", steps)
+}
+
 func (l *Log) summary(status string, steps int) {
 	finish := l.stamp()
 	dur := formatDuration(finish.Sub(l.setupAt))
@@ -173,4 +181,13 @@ func formatDuration(d time.Duration) string {
 		ms = 0
 	}
 	return fmt.Sprintf("%d.%03ds", ms/1000, ms%1000)
+}
+
+// OSName returns the operating system name the setup section shows for a
+// GOOS value.
+func OSName(goos string) string {
+	if goos == "darwin" {
+		return "macOS"
+	}
+	return goos
 }

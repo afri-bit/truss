@@ -133,23 +133,31 @@ func TestRun_WithoutNeedsRunsInDefinitionOrder(t *testing.T) {
 	}
 }
 
+// FR-016 (spec 004) replaces the spec 003 rule that unknown fields are ignored:
+// depends_on is not a recognised field, so the definition is now rejected
+// before any Step runs.
 func TestRun_DependsOnIsNotADependency(t *testing.T) {
 	dir := t.TempDir()
+	marker := filepath.Join(dir, "ran.txt")
 	body := "version: \"1\"\npipeline:\n  name: plain\nsteps:\n" +
-		"  - id: first\n    depends_on: [second]\n    run: echo first\n" +
-		"  - id: second\n    run: echo second\n"
+		"  - id: first\n    depends_on: [second]\n    run: " + yamlSingle(helperCmd("touch", marker)) + "\n" +
+		"  - id: second\n    run: " + yamlSingle(helperCmd("touch", marker)) + "\n"
 	path := filepath.Join(dir, "pipeline.yaml")
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	code, out, errOut := invoke(t, dir, []string{"run", path})
-	if code != 0 {
+	if code != 1 {
 		t.Fatalf("exit = %d, stderr = %s", code, errOut)
 	}
-	first := strings.Index(out, "step first started")
-	second := strings.Index(out, "step second started")
-	if first < 0 || second < first {
-		t.Fatalf("start order is not first, second:\n%s", out)
+	if !strings.Contains(errOut, `error: `) || !strings.Contains(errOut, `unknown field "depends_on" in step "first"`) {
+		t.Fatalf("stderr = %q", errOut)
+	}
+	if strings.Contains(out, "step ") {
+		t.Fatalf("a step ran:\n%s", out)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("a step command ran: %v", err)
 	}
 }
 
@@ -604,7 +612,7 @@ func echoHello() string {
 	return "echo \"Hello from TRUSS\""
 }
 
-const wantUsage = "usage: truss run [<path>]\n       truss help\n       truss version\n"
+const wantUsage = usageText
 
 func TestHelp_PrintsUsageWithoutRunLog(t *testing.T) {
 	cases := [][]string{nil, {"help"}, {"--help"}}

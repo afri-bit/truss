@@ -58,6 +58,36 @@ func runHelper(args []string) int {
 			fmt.Printf("%s %d\n", rest[1], i)
 		}
 		return 0
+	case "touch-and-wait": // <mine> <other> [exit code after the rendezvous]
+		if err := os.WriteFile(rest[0], nil, 0o600); err != nil {
+			return 2
+		}
+		if !pollFile(rest[1], 10*time.Second) {
+			return 3
+		}
+		if len(rest) > 2 {
+			code, _ := strconv.Atoi(rest[2])
+			return code
+		}
+		return 0
+	case "touch": // <file>
+		if err := os.WriteFile(rest[0], nil, 0o600); err != nil {
+			return 2
+		}
+		return 0
+	case "partial": // <text>: write text with no newline
+		fmt.Print(rest[0])
+		return 0
+	case "print-cwd":
+		wd, err := os.Getwd()
+		if err != nil {
+			return 2
+		}
+		fmt.Println(wd)
+		return 0
+	case "print-env": // <name>
+		fmt.Println(os.Getenv(rest[0]))
+		return 0
 	case "exit": // <code>
 		code, _ := strconv.Atoi(rest[0])
 		return code

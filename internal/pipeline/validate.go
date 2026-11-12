@@ -1,7 +1,9 @@
 package pipeline
 
 import (
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -14,8 +16,27 @@ func Validate(p Pipeline) error {
 		}
 		return fmt.Errorf("unsupported schema version %q", p.Version)
 	}
+	if p.unknownField != "" {
+		return fmt.Errorf("unknown field %q %s", p.unknownField, p.unknownIn)
+	}
 	if strings.TrimSpace(p.Name) == "" {
 		return fmt.Errorf("missing pipeline name")
+	}
+	if p.concurrencyBad || p.Concurrency < 0 {
+		text := p.concurrencyText
+		if !p.concurrencyBad {
+			text = strconv.Quote(strconv.Itoa(p.Concurrency))
+		}
+		return fmt.Errorf("pipeline concurrency must be a whole number of at least 1, got %s", text)
+	}
+	if len(p.issues) > 0 {
+		return errors.New(p.issues[0])
+	}
+	if p.hasSteps && p.hasJobs {
+		return fmt.Errorf("a pipeline has either steps or jobs, not both")
+	}
+	if p.hasJobs || len(p.Jobs) > 0 {
+		return validateJobs(p.Jobs)
 	}
 	if p.stepsNotList {
 		return fmt.Errorf("steps must be a list")
@@ -23,43 +44,75 @@ func Validate(p Pipeline) error {
 	if len(p.Steps) == 0 {
 		return fmt.Errorf("pipeline must contain one or more steps")
 	}
-	index := make(map[string]int, len(p.Steps))
-	for i, step := range p.Steps {
+	index, err := validateSteps(p.Steps, "")
+	if err != nil {
+		return err
+	}
+	return validateNeeds("step", p.Steps, index)
+}
+
+// validateSteps checks ids and run strings of one steps list and returns the
+// position of each id. job is the owning job id, or empty.
+func validateSteps(steps []Step, job string) (map[string]int, error) {
+	index := make(map[string]int, len(steps))
+	for i, step := range steps {
 		id := strings.TrimSpace(step.ID)
 		if id == "" {
-			return fmt.Errorf("missing step id")
+			if job != "" {
+				return nil, fmt.Errorf("missing step id in job %q", job)
+			}
+			return nil, fmt.Errorf("missing step id")
 		}
 		if _, ok := index[id]; ok {
-			return fmt.Errorf("duplicate step id %q", id)
+			return nil, fmt.Errorf("duplicate step id %q", joinID(job, id))
 		}
 		index[id] = i
 		if step.runNotString || strings.TrimSpace(step.Run) == "" {
-			return fmt.Errorf("missing or empty run for step %q", id)
+			return nil, fmt.Errorf("missing or empty run for step %q", joinID(job, id))
 		}
 	}
-	return validateNeeds(p.Steps, index)
+	return index, nil
 }
 
-// validateNeeds checks the declared dependencies. index maps each step id to
-// its position in steps. The first fault in definition order is reported, and
-// within one list the first faulty entry is reported. Cycles are reported only
-// once every list is otherwise valid.
-func validateNeeds(steps []Step, index map[string]int) error {
+func validateJobs(jobs []Job) error {
+	if len(jobs) == 0 {
+		return fmt.Errorf("pipeline must contain one or more jobs")
+	}
+	index := make(map[string]int, len(jobs))
+	nodes := make([]Step, len(jobs))
+	for i, job := range jobs {
+		if len(job.Steps) == 0 {
+			return fmt.Errorf("job %q must contain one or more steps", job.ID)
+		}
+		if _, err := validateSteps(job.Steps, job.ID); err != nil {
+			return err
+		}
+		index[job.ID] = i
+		nodes[i] = Step{ID: job.ID, Needs: job.Needs}
+	}
+	return validateNeeds("job", nodes, index)
+}
+
+// validateNeeds checks the declared dependencies of steps or jobs; kind is
+// that word. index maps each id to its position in steps. The first fault in
+// definition order is reported, and within one list the first faulty entry is
+// reported. Cycles are reported only once every list is otherwise valid.
+func validateNeeds(kind string, steps []Step, index map[string]int) error {
 	for _, step := range steps {
 		id := strings.TrimSpace(step.ID)
 		if step.needsInvalid {
-			return fmt.Errorf("step %q needs must be a list of step ids", id)
+			return fmt.Errorf("%s %q needs must be a list of %s ids", kind, id, kind)
 		}
 		seen := make(map[string]struct{}, len(step.Needs))
 		for _, need := range step.Needs {
 			if _, ok := index[need]; !ok {
-				return fmt.Errorf("step %q needs unknown step %q", id, need)
+				return fmt.Errorf("%s %q needs unknown %s %q", kind, id, kind, need)
 			}
 			if need == id {
-				return fmt.Errorf("step %q depends on itself", id)
+				return fmt.Errorf("%s %q depends on itself", kind, id)
 			}
 			if _, ok := seen[need]; ok {
-				return fmt.Errorf("step %q repeats step %q", id, need)
+				return fmt.Errorf("%s %q repeats %s %q", kind, id, kind, need)
 			}
 			seen[need] = struct{}{}
 		}

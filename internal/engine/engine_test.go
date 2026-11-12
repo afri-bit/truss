@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/afri-bit/truss/internal/pipeline"
@@ -56,7 +57,10 @@ func TestRun_EmitsStepEventsInOrder(t *testing.T) {
 	}
 }
 
+// eventLog records every event in the order it was received. Concurrent Steps
+// report output from their own goroutines, so every method locks.
 type eventLog struct {
+	mu     sync.Mutex
 	events []stepEvent
 }
 
@@ -68,14 +72,28 @@ type stepEvent struct {
 }
 
 func (r *eventLog) StepStarted(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.events = append(r.events, stepEvent{kind: "started", id: id})
 }
 
 func (r *eventLog) StepOutput(id string, chunk []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.events = append(r.events, stepEvent{kind: "output", id: id, chunk: string(chunk)})
 }
 
+// StepStopped records that id was ended because failedID failed. The failed
+// Step's id is kept in chunk.
+func (r *eventLog) StepStopped(id, failedID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, stepEvent{kind: "stopped", id: id, chunk: failedID})
+}
+
 func (r *eventLog) StepFinished(id string, exitCode *int, startErr error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	ev := stepEvent{kind: "finished", id: id, exit: exitCode}
 	if startErr != nil {
 		ev.chunk = startErr.Error()

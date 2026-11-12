@@ -4,60 +4,49 @@ This file is the release scope for TRUSS. Feature specifications say how one cap
 
 Agents and contributors read it before choosing or expanding a feature. `develop` is the integration branch. New work uses the branch names in `.specify/memory/constitution.md`.
 
-## v0.1.0
+## v0.1.0: the MVP
 
-v0.1.0 is the first tagged release. It is the smallest version a developer can use on Linux, macOS, and Windows: one pipeline file, one local command, a log that explains the run, and a pipeline that can wait on other steps and run independent steps together.
+v0.1.0 is the first tagged release and the first version worth using every day on your own
+machine: write a pipeline file, run it by hand, or hand it to the daemon and let it run on a
+schedule, and watch all of it from the terminal or from TRUSS Desktop.
 
-Do not tag v0.1.0 until every item in this section has a specification and an implementation that matches it. `go.mod` already says `// version: 0.1.0`. The changelog stays under `[Unreleased]` until the tag.
+Do not tag v0.1.0 until every item in this section has a specification and an implementation
+that matches it. `go.mod` already says `// version: 0.1.0`. The changelog stays under
+`[Unreleased]` until the tag.
 
 ### In this release
 
-**Workflow.** `truss.yaml` in the working directory is the pipeline definition. `truss run` loads that file, or an explicit path. `.truss/run.log` stores the latest run log and is replaced by the next finished run. TRUSS does not edit ignore files and does not keep run history.
+| Capability | What it means | Spec | State |
+|---|---|---|---|
+| Local runs | `truss run` executes `truss.yaml` on the host shell, fail-fast | `001-host-pipeline-engine` | Implemented |
+| Run log | Timestamped, readable log; `truss help`, `truss version` | `002-local-run-log` | Implemented |
+| Step dependencies | `needs` between steps | `003-step-dependencies` | Implemented |
+| Step concurrency | `pipeline.concurrency`, strict fields, stoppable process trees | `004-step-concurrency` | Implemented |
+| Jobs, schedules, step settings | `jobs`, `on.schedule`, `env`, `dir`, `timeout`, `overlap`, `truss validate` | `005-jobs-schedules-and-step-settings` | Implemented |
+| Daemon | Background service, registry, cron scheduling with missed-run policy, run queue and history, HTTP API, CLI commands | `006-daemon-registry-and-scheduling` | Implemented |
+| TRUSS Desktop | Dashboard, pipeline control, run view with graph and live log | `007-truss-desktop` | First version |
 
-**Run log.** The log is readable while the run proceeds and is the same text saved afterward.
+**Operating systems.** Linux, macOS and Windows. A `run` string is a command for that host's
+shell; v0.1.0 does not promise that one file runs unchanged on every shell.
 
-- The setup section says the environment was captured and is ready, then shows the operating system, architecture, host shell, and working directory.
-- Every line TRUSS writes has a local timestamp, `YYYY-MM-DD HH:MM:SS`.
-- Each started step shows when it started, its output, when it finished, how long it took, and its exit code. A step that cannot start shows a diagnostic and no exit code.
-- The summary shows the pipeline status, how many steps started, the run duration, and when the run finished.
-- The setup section and summary do not list environment variable names, environment variable values, or secrets. There is no secret store in this release.
+### Before the tag
 
-**Engine.** Parsing, validation, planning, and host execution stay independent of the CLI. Steps run on the host shell. A failure fails the whole run: in-flight work stops, and steps that have not started do not run.
+These are known gaps inside the release scope:
 
-**CLI.** `truss run` starts a run. `truss help` and `truss version` answer without starting one. Any other invocation prints usage and does not start a run.
-
-**Operating systems.** Linux, macOS, and Windows are the supported hosts. A `run` string is a command for that host's shell. v0.1.0 does not promise that one pipeline file runs unchanged on every shell.
-
-**Pipeline file.** Schema version `"1"` gains step dependencies and concurrency before the tag, in their own specification:
-
-- `needs` lists step ids that must succeed before a step starts. A time delay is an ordinary `run` command, not a schema field.
-- Concurrency defaults to 1, so a file with no `needs` stays sequential. A higher concurrency runs steps whose needs are already met.
-- A failure still fails the whole run. Independent branches do not continue.
-- Unknown pipeline fields are rejected once that specification lands, so a misspelled `needs` cannot run in file order.
-
-### Already specified
-
-| Feature | Spec | State |
-|---|---|---|
-| Sequential host engine | `specs/001-host-pipeline-engine/` | Implemented |
-| Local run log, help, and version | `specs/002-local-run-log/` | Implemented |
-| Step `needs`, still one step at a time | `specs/003-step-dependencies/` | Implemented |
-
-The next specification is concurrency: ready steps run together when the pipeline raises the limit above 1. Do not start that code before its spec, plan, and tasks exist. Until then, execution stays sequential even when steps declare `needs`.
+- Daemon and Desktop are verified on Linux only. macOS and Windows build; their first proof is CI.
+- TRUSS Desktop has no automated UI test.
+- Start at login is documented, not automated.
+- `docs/agents.md` and the `/feature` skill still describe the pre-2.0.0 process.
 
 ### Not in v0.1.0
 
-These stay on the roadmap until a later release:
-
-- Daemon, API, and SDKs
 - Container execution and remote workers
-- Matrix builds, cache, artifacts, and a secret store
-- CI-provider plugins and dashboards
+- Matrix builds, conditions, retries, caches, artifacts, a secret store
+- Triggers other than cron and manual (file changes, webhooks)
+- A packaged desktop window, tray icon and notifications
+- SDKs and CI-provider plugins
 - A pipeline file that is portable across host shells
-- Per-step environment, working directory, timeouts, and retries
-- Cancellation as a reported status
-- Named deployment environments
 
 ## How to change this file
 
-Change this file when the release scope changes. Do not treat a chat or a local note as the milestone. A new capability inside v0.1.0 still gets its own `specs/<feature>/` before implementation.
+Change this file when the release scope changes. Do not treat a chat or a local note as the milestone. A new capability inside v0.1.0 gets its own `specs/<feature>/spec.md` in the same pull request as its code.

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TRUSS Desktop</title>
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="#/">
+      <img src="logo.svg" alt="" width="28" height="28">
+      <span>TRUSS <small>Desktop</small></span>
+    </a>
+    <nav id="nav">
+      <a href="#/" data-route="dashboard">Dashboard</a>
+      <a href="#/pipelines" data-route="pipelines">Pipelines</a>
+      <a href="#/runs" data-route="runs">Runs</a>
+    </nav>
+    <div class="daemon" id="daemon"></div>
+  </aside>
+  <main id="view" tabindex="-1"></main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

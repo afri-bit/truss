@@ -55,14 +55,28 @@ func runHelper(args []string) int {
 	}
 	rest := args[1:]
 	switch args[0] {
-	case "touch-and-wait": // <mine> <other>
+	case "touch-and-wait": // <mine> <other> [deadline-ms]
 		if err := os.WriteFile(rest[0], nil, 0o600); err != nil {
 			return 2
 		}
-		if pollFile(rest[1], 30*time.Second) {
+		if pollFile(rest[1], deadlineArg(rest, 2)) {
 			return 0
 		}
 		return 3
+	case "rendezvous-exit": // <mine> <other> <code>: touch, wait for other, exit code
+		if err := os.WriteFile(rest[0], nil, 0o600); err != nil {
+			return 2
+		}
+		pollFile(rest[1], 30*time.Second)
+		code, _ := strconv.Atoi(rest[2])
+		return code
+	case "exit-after": // <waitfile> <code>: wait for the file, then exit code
+		pollFile(rest[0], 30*time.Second)
+		code, _ := strconv.Atoi(rest[1])
+		return code
+	case "kill-self": // <waitfile>: wait for the file, then die by SIGKILL
+		pollFile(rest[0], 30*time.Second)
+		return killSelf()
 	case "print-lines": // <n> <label>
 		n, _ := strconv.Atoi(rest[0])
 		for i := 1; i <= n; i++ {
@@ -84,6 +98,17 @@ func runHelper(args []string) int {
 		}
 	}
 	return 2
+}
+
+// deadlineArg returns rest[i] as milliseconds, or 30 s when it is absent. The
+// deadline only turns a wrong implementation into a failure instead of a hang.
+func deadlineArg(rest []string, i int) time.Duration {
+	if len(rest) > i {
+		if ms, err := strconv.Atoi(rest[i]); err == nil {
+			return time.Duration(ms) * time.Millisecond
+		}
+	}
+	return 30 * time.Second
 }
 
 func spawnGrandchild(rest []string) int {

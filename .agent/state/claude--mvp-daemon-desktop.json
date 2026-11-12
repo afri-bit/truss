@@ -1,0 +1,38 @@
+{
+  "work_id": "claude--mvp-daemon-desktop",
+  "title": "MVP: jobs and schedules, daemon, registry, TRUSS Desktop (specs 005-007)",
+  "tier": 2,
+  "branch": "claude/cool-dijkstra-9ydyl3",
+  "status": "in_progress",
+  "step": "awaiting-review",
+  "steps_done": [
+    "schema-and-engine",
+    "daemon-and-api",
+    "cli",
+    "desktop",
+    "docs-and-specs",
+    "constitution-2.0.0",
+    "verify"
+  ],
+  "requirements": [],
+  "specs": [
+    "specs/005-jobs-schedules-and-step-settings",
+    "specs/006-daemon-registry-and-scheduling",
+    "specs/007-truss-desktop"
+  ],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [
+    "Accept constitution 2.0.0 and ADRs 0003-0005?",
+    "Daemon and Desktop are verified on Linux only; macOS and Windows need CI",
+    "No independent /review was run on this branch"
+  ],
+  "next_actions": [
+    "Maintainer reviews the branch",
+    "Align docs/agents.md and the /feature skill with constitution 2.0.0",
+    "Automated UI test for TRUSS Desktop"
+  ],
+  "pr": null,
+  "created": "2026-11-11T22:00:00Z",
+  "updated": "2026-11-12T00:30:00Z"
+}
