@@ -352,3 +352,102 @@ func TestHistory_KeepsCreationOrderWhenTheClockDoesNotMove(t *testing.T) {
 		}
 	}
 }
+
+func TestSubmit_RetriesConditionsAndContinueOnErrorShowInStepsAndLog(t *testing.T) {
+	m := open(t, Options{})
+	run := submit(t, m, "rich", def("rich", "",
+		pipeline.Step{ID: "flaky", Run: "exit 1", Retries: 1, ContinueOnError: true},
+		pipeline.Step{ID: "after", Run: "echo never", Needs: []string{"flaky"}},
+		pipeline.Step{ID: "report", Run: "echo reported", Needs: []string{"flaky"}, If: cond(t, "failure()")},
+		pipeline.Step{ID: "gated", Run: "echo never", If: cond(t, "env.TRUSS_TRIGGER == 'schedule'")},
+		pipeline.Step{ID: "plain", Run: "echo ok"},
+	))
+	done := await(t, m, run.ID, api.RunSucceeded, api.RunFailed)
+	if done.Status != api.RunSucceeded {
+		t.Fatalf("run = %+v", done)
+	}
+	byID := map[string]api.Step{}
+	for _, s := range done.Steps {
+		byID[s.ID] = s
+	}
+	if f := byID["flaky"]; f.Status != api.StepFailed || f.Attempts != 2 || !f.ContinuedOnError || f.ExitCode == nil || *f.ExitCode != 1 {
+		t.Fatalf("flaky = %+v", f)
+	}
+	if s := byID["after"]; s.Status != api.StepSkipped || s.Reason != "step flaky did not succeed" || s.StartedAt != nil {
+		t.Fatalf("after = %+v", s)
+	}
+	if s := byID["gated"]; s.Status != api.StepSkipped || s.Reason != "its if condition is false" {
+		t.Fatalf("gated = %+v", s)
+	}
+	for _, id := range []string{"report", "plain"} {
+		if s := byID[id]; s.Status != api.StepSucceeded || s.Attempts != 0 || s.Reason != "" || s.ContinuedOnError {
+			t.Fatalf("%s = %+v", id, s)
+		}
+	}
+	data, _, _, _ := m.Log(run.ID, 0)
+	text := string(data)
+	for _, want := range []string{
+		"step flaky retry 2 of 2 in 0.000s",
+		"step flaky failed but the run continues (continue-on-error)",
+		"step after skipped because step flaky did not succeed",
+		"step gated skipped because its if condition is false",
+		"summary succeeded steps 3",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("log lacks %q:\n%s", want, text)
+		}
+	}
+	if strings.Count(text, "step flaky started") != 2 {
+		t.Errorf("want one start line per attempt:\n%s", text)
+	}
+}
+
+func TestSubmit_FailureWithoutConditionsLooksAsBefore(t *testing.T) {
+	m := open(t, Options{})
+	run := submit(t, m, "old", def("old", "",
+		pipeline.Step{ID: "boom", Run: "exit 3"},
+		pipeline.Step{ID: "after", Run: "echo never", Needs: []string{"boom"}},
+	))
+	done := await(t, m, run.ID, api.RunFailed)
+	if s := done.Steps[1]; s.Status != api.StepSkipped || s.Reason != "" {
+		t.Fatalf("after = %+v", s)
+	}
+	data, _, _, _ := m.Log(run.ID, 0)
+	if strings.Contains(string(data), "skipped") || strings.Contains(string(data), "retry") {
+		t.Fatalf("log changed for a definition without the new fields:\n%s", data)
+	}
+}
+
+func TestCancel_DuringRetryWaitEndsTheRun(t *testing.T) {
+	m := open(t, Options{})
+	run := submit(t, m, "wait", def("wait", "",
+		pipeline.Step{ID: "a", Run: "exit 1", Retries: 2, RetryDelay: time.Hour}))
+	awaitStep(t, m, run.ID, "a", api.StepRunning)
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		got, _ := m.Get(run.ID)
+		if got.Steps[0].Attempts == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("never waiting to retry: %+v", got.Steps)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if _, err := m.Cancel(run.ID); err != nil {
+		t.Fatal(err)
+	}
+	done := await(t, m, run.ID, api.RunCancelled)
+	if done.Steps[0].Status != api.StepCancelled {
+		t.Fatalf("steps = %+v", done.Steps)
+	}
+}
+
+func cond(t *testing.T, text string) *pipeline.Condition {
+	t.Helper()
+	c, err := pipeline.ParseCondition(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}

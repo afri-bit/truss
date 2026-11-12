@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -386,5 +387,83 @@ func TestDaemon_RemovesItsEndpointFileOnStop(t *testing.T) {
 	}
 	if _, err := api.Dial(context.Background(), h); !errors.Is(err, api.ErrNotRunning) {
 		t.Fatalf("dial a stopped daemon: %v", err)
+	}
+}
+
+const retryConditionDefinition = `version: "1"
+pipeline:
+  name: rich
+steps:
+  - id: lint
+    run: exit 1
+    retries: 1
+    continue-on-error: true
+  - id: report
+    run: echo reported
+    needs: [lint]
+    if: failure()
+  - id: publish
+    run: echo published
+    needs: [lint]
+  - id: dev-only
+    run: echo dev
+    if: env.TRUSS_TRIGGER == 'schedule'
+`
+
+func TestDaemon_RunShowsAttemptsContinuedAndSkippedSteps(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	path := writeDefinition(t, t.TempDir(), "truss.yaml", retryConditionDefinition)
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Trigger(ctx, "rich"); err != nil {
+		t.Fatal(err)
+	}
+	run := awaitRuns(t, c, "rich", 1)[0]
+	if run.Status != api.RunSucceeded {
+		t.Fatalf("run = %+v", run)
+	}
+	got := map[string]api.Step{}
+	for _, s := range run.Steps {
+		got[s.ID] = s
+	}
+	if s := got["lint"]; s.Status != api.StepFailed || s.Attempts != 2 || !s.ContinuedOnError {
+		t.Fatalf("lint = %+v", s)
+	}
+	if s := got["report"]; s.Status != api.StepSucceeded {
+		t.Fatalf("report = %+v", s)
+	}
+	if s := got["publish"]; s.Status != api.StepSkipped || s.Reason != "step lint did not succeed" {
+		t.Fatalf("publish = %+v", s)
+	}
+	if s := got["dev-only"]; s.Status != api.StepSkipped || s.Reason != "its if condition is false" {
+		t.Fatalf("dev-only = %+v", s)
+	}
+
+	// The wire format: new fields appear only where they apply.
+	raw, _ := json.Marshal(run.Steps)
+	text := string(raw)
+	for _, want := range []string{`"attempts":2`, `"continued_on_error":true`, `"reason":"step lint did not succeed"`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("steps JSON lacks %s: %s", want, text)
+		}
+	}
+	if strings.Count(text, `"attempts"`) != 1 || strings.Count(text, `"continued_on_error"`) != 1 {
+		t.Errorf("new fields leaked onto other steps: %s", text)
+	}
+	data, _, _, err := c.Log(ctx, run.ID, 0)
+	if err != nil || !strings.Contains(string(data), "step lint retry 2 of 2 in 0.000s") {
+		t.Fatalf("log (%v):\n%s", err, data)
+	}
+}
+
+func TestDaemon_RejectsAnInvalidCondition(t *testing.T) {
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	path := writeDefinition(t, t.TempDir(), "truss.yaml", "version: \"1\"\npipeline:\n  name: bad\nsteps:\n  - id: a\n    run: echo a\n    if: sometimes()\n")
+	_, err := c.Register(context.Background(), api.RegisterRequest{Path: path})
+	var apiErr *api.StatusError
+	if !errors.As(err, &apiErr) || apiErr.Code != http.StatusUnprocessableEntity || !strings.Contains(err.Error(), "unknown function") {
+		t.Fatalf("Register error = %v", err)
 	}
 }

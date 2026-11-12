@@ -31,7 +31,9 @@ const (
 	// StepStopped marks a step TRUSS ended because another step failed.
 	StepStopped   = "stopped"
 	StepCancelled = "cancelled"
-	// StepSkipped marks a step that never started because the run ended first.
+	// StepSkipped marks a step that never started: its if condition was false,
+	// a step it needs did not succeed, or the run ended first. Reason says
+	// which when a condition or a needed step caused it.
 	StepSkipped = "skipped"
 )
 
@@ -72,6 +74,14 @@ type Step struct {
 	Error      string     `json:"error,omitempty"`
 	StartedAt  *time.Time `json:"started_at,omitempty"`
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
+	// Attempts is the number of the current or last attempt. It is present
+	// only for a step that was run again after a failure; ExitCode, Error and
+	// the times describe that attempt.
+	Attempts int `json:"attempts,omitempty"`
+	// ContinuedOnError marks a failed step whose continue-on-error let the run go on.
+	ContinuedOnError bool `json:"continued_on_error,omitempty"`
+	// Reason says why a step was skipped by a condition or by a step it needs.
+	Reason string `json:"reason,omitempty"`
 }
 
 // Schedule is one cron trigger of a pipeline and when it fires next.

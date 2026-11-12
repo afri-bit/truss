@@ -74,6 +74,7 @@ type record struct {
 	cancel    context.CancelFunc
 	cancelled bool            // someone asked for the run to end
 	stopped   map[string]bool // steps TRUSS stopped after a failure
+	waiting   map[string]bool // steps waiting between two attempts
 }
 
 // Manager queues, executes and remembers runs. It is safe for concurrent use.
@@ -322,7 +323,7 @@ func (m *Manager) newRecord(name, trigger string, scheduledFor time.Time) *recor
 		now = m.lastCreated.Add(time.Nanosecond)
 	}
 	m.lastCreated = now
-	rec := &record{stopped: map[string]bool{}}
+	rec := &record{stopped: map[string]bool{}, waiting: map[string]bool{}}
 	rec.run = api.Run{Pipeline: name, Trigger: trigger, CreatedAt: now, Steps: []api.Step{}}
 	if !scheduledFor.IsZero() {
 		rec.run.ScheduledFor = &scheduledFor
@@ -530,7 +531,35 @@ func (f *follower) step(id string, change func(*api.Step)) {
 func (f *follower) StepStarted(id string) {
 	f.log.StepStarted(id)
 	now := f.m.opts.Now()
-	f.step(id, func(s *api.Step) { s.Status, s.StartedAt = api.StepRunning, &now })
+	f.step(id, func(s *api.Step) {
+		s.Status, s.ExitCode, s.Error, s.FinishedAt = api.StepRunning, nil, "", nil
+		if s.StartedAt == nil {
+			s.StartedAt = &now
+		}
+	})
+	f.m.mu.Lock()
+	delete(f.rec.waiting, id)
+	f.m.mu.Unlock()
+}
+
+// StepRetrying keeps the step running while it waits for its next attempt.
+func (f *follower) StepRetrying(id string, attempt, attempts int, delay time.Duration) {
+	f.log.StepRetrying(id, attempt, attempts, delay)
+	f.step(id, func(s *api.Step) { s.Status, s.Attempts, s.FinishedAt = api.StepRunning, attempt, nil })
+	f.m.mu.Lock()
+	f.rec.waiting[id] = true
+	f.m.mu.Unlock()
+}
+
+func (f *follower) StepContinued(id string) {
+	f.log.StepContinued(id)
+	f.step(id, func(s *api.Step) { s.ContinuedOnError = true })
+}
+
+func (f *follower) StepSkipped(id, reason string) {
+	f.log.StepSkipped(id, reason)
+	now := f.m.opts.Now()
+	f.step(id, func(s *api.Step) { s.Status, s.Reason, s.FinishedAt = api.StepSkipped, reason, &now })
 }
 
 func (f *follower) StepOutput(id string, chunk []byte) { f.log.StepOutput(id, chunk) }
@@ -539,7 +568,13 @@ func (f *follower) StepStopped(id, failedID string) {
 	f.log.StepStopped(id, failedID)
 	f.m.mu.Lock()
 	f.rec.stopped[id] = true
+	waiting := f.rec.waiting[id]
 	f.m.mu.Unlock()
+	if waiting {
+		// Stopped between attempts: no StepFinished follows.
+		now := f.m.opts.Now()
+		f.step(id, func(s *api.Step) { s.Status, s.FinishedAt = api.StepStopped, &now })
+	}
 }
 
 func (f *follower) StepFinished(id string, exitCode *int, startErr error) {

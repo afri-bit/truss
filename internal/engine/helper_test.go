@@ -86,6 +86,36 @@ func runHelper(args []string) int {
 	case "partial": // <text>
 		fmt.Print(rest[0])
 		return 0
+	case "touch-exit": // <file> <code>: create the file, then exit code
+		if err := os.WriteFile(rest[0], nil, 0o600); err != nil {
+			return 2
+		}
+		code, _ := strconv.Atoi(rest[1])
+		return code
+	case "flaky": // <counterfile> <failures>: fail the first <failures> runs, then succeed
+		f, err := os.OpenFile(rest[0], os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+		if err != nil {
+			return 2
+		}
+		_, _ = f.WriteString("x")
+		_ = f.Close()
+		data, _ := os.ReadFile(rest[0])
+		failures, _ := strconv.Atoi(rest[1])
+		if len(data) <= failures {
+			fmt.Printf("attempt %d\n", len(data))
+			return 1
+		}
+		fmt.Printf("attempt %d\n", len(data))
+		return 0
+	case "block-first": // <file>: block on the first run, exit 0 once the file exists
+		if _, err := os.Stat(rest[0]); err == nil {
+			return 0
+		}
+		if err := os.WriteFile(rest[0], nil, 0o600); err != nil {
+			return 2
+		}
+		time.Sleep(time.Hour)
+		return 3
 	case "exit": // <code>
 		code, _ := strconv.Atoi(rest[0])
 		return code
