@@ -1,14 +1,35 @@
-# TRUSS
+<h1 align="center">TRUSS</h1>
 
-**Pipelines that live on your machine. Write one YAML file, run it by hand or on a schedule, and watch it from the terminal or from TRUSS Desktop.**
+<p align="center">
+  <img src="docs/images/logo.svg" alt="TRUSS logo" width="128" height="128">
+</p>
 
-[![CI](https://github.com/afri-bit/truss/actions/workflows/ci.yml/badge.svg)](https://github.com/afri-bit/truss/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/badge/go-1.27.3-00ADD8?logo=go)](go.mod)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<p align="center">
+  <strong>Pipelines that live on your machine.</strong><br>
+  Write one YAML file, run it by hand or on a schedule,<br>
+  and watch it from the terminal or from TRUSS Desktop.
+</p>
+
+<p align="center">
+  <a href="https://github.com/afri-bit/truss/actions/workflows/ci.yml"><img src="https://github.com/afri-bit/truss/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="go.mod"><img src="https://img.shields.io/badge/go-1.27.3-00ADD8?logo=go" alt="Go"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="docs/pipeline-reference.md">Pipeline file</a> ·
+  <a href="docs/cli.md">Commands</a> ·
+  <a href="docs/daemon.md">Daemon</a> ·
+  <a href="docs/desktop.md">Desktop</a> ·
+  <a href="docs/architecture.md">Architecture</a>
+</p>
 
 > **Status:** early development. The first release, [v0.1.0](docs/MILESTONE.md), is not tagged yet. The pipeline file, the CLI and the daemon API may still change until then.
 
-![TRUSS Desktop dashboard](docs/images/desktop-dashboard.png)
+<p align="center">
+  <img src="docs/images/desktop-dashboard.png" alt="TRUSS Desktop dashboard" width="900">
+</p>
 
 ## Contents
 
