@@ -432,7 +432,7 @@ func (m *Manager) start(rec *record) {
 // execute runs one pipeline through the engine and records the outcome.
 func (m *Manager) execute(ctx context.Context, rec *record) {
 	id, req := rec.run.ID, rec.req
-	var out io.Writer = io.Discard
+	out := io.Discard
 	f, logErr := os.OpenFile(m.logPath(id), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) // #nosec G304 -- path is built from the run id
 	if logErr == nil {
 		out = f

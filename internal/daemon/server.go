@@ -287,6 +287,7 @@ func (d *Daemon) getRunLog(w http.ResponseWriter, r *http.Request) error {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set(api.HeaderLogOffset, strconv.FormatInt(next, 10))
 	w.Header().Set(api.HeaderRunStatus, status)
-	_, err = w.Write(data)
+	// The log is served as plain text with nosniff, so a browser never renders it.
+	_, err = w.Write(data) // #nosec G705
 	return err
 }

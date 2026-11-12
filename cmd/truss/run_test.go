@@ -612,7 +612,7 @@ func echoHello() string {
 	return "echo \"Hello from TRUSS\""
 }
 
-const wantUsage = "usage: truss run [<path>]\n       truss help\n       truss version\n"
+const wantUsage = usageText
 
 func TestHelp_PrintsUsageWithoutRunLog(t *testing.T) {
 	cases := [][]string{nil, {"help"}, {"--help"}}

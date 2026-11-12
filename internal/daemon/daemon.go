@@ -277,7 +277,7 @@ func (d *Daemon) load(e registry.Entry, since time.Time, force bool) *definition
 	unchanged := old != nil && statErr == nil && !old.modTime.IsZero() && info.ModTime().Equal(old.modTime) && info.Size() == old.size
 	missingStill := old != nil && statErr != nil && old.modTime.IsZero()
 	cur := old
-	if force || !(unchanged || missingStill) {
+	if force || (!unchanged && !missingStill) {
 		cur = &definition{}
 		if statErr != nil {
 			cur.err = fmt.Errorf("read pipeline definition: %w", statErr)

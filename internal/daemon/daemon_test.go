@@ -322,9 +322,9 @@ func seed(t *testing.T, missed string) home.Dir {
 func TestDaemon_ScheduleMissedWhileOffIsSkippedAndRecorded(t *testing.T) {
 	h := seed(t, "skip")
 	_, c := boot(t, h, &fakeClock{now: today(11, 0, 0)})
-	list := awaitRuns(t, c, "nightly", 1)
+	awaitRuns(t, c, "nightly", 1)
 	time.Sleep(30 * time.Millisecond)
-	list, _ = c.Runs(context.Background(), "nightly", 0)
+	list, _ := c.Runs(context.Background(), "nightly", 0)
 	if len(list) != 1 {
 		t.Fatalf("runs = %+v", list)
 	}
