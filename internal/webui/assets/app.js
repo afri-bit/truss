@@ -742,7 +742,7 @@ views.runs = {
 };
 
 // The run view keeps its log between refreshes so the text is not re-fetched.
-const logState = { id: "", offset: 0, text: "", step: "", follow: true, timer: 0, done: false, query: "" };
+const logState = { id: "", offset: 0, text: "", step: "", follow: true, timer: 0, done: false, query: "", decoder: null };
 
 function paintLog() {
   const pre = document.getElementById("log");
@@ -820,7 +820,7 @@ views.run = {
   render({ run, pipeline }) {
     if (logState.id !== run.id) {
       clearTimeout(logState.timer);
-      Object.assign(logState, { id: run.id, offset: 0, text: "", step: "", follow: true, done: false, query: "" });
+      Object.assign(logState, { id: run.id, offset: 0, text: "", step: "", follow: true, done: false, query: "", decoder: new TextDecoder("utf-8") });
       pumpLog(run.id);
     }
     const select = (id) => { logState.step = logState.step === id ? "" : id; route(true); };
