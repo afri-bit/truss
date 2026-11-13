@@ -70,7 +70,8 @@ Written alongside the implementation (constitution 2.0.0, principle I).
 - **FR-016** Cancelling ends every process of the run. The log closes with
   `summary cancelled steps <n> duration <d>`.
 - **FR-017** Each run keeps its record and its run log (the spec 002 format) in the TRUSS home.
-  The newest 200 runs are kept. Runs left active by a dead daemon are closed as `failed`.
+  The newest 200 runs are kept. Runs left running by a dead daemon are closed as `failed`.
+  *Amended by [spec 010](../010-run-tracking-and-queue/spec.md): runs that were only `queued` are kept and start again.*
 
 ### Scheduling
 

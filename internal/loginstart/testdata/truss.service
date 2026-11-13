@@ -1,0 +1,12 @@
+# Managed by truss daemon install. Remove it with "truss daemon uninstall".
+[Unit]
+Description=TRUSS daemon
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/truss daemon run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

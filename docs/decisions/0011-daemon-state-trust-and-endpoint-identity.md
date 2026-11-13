@@ -1,4 +1,4 @@
-# 0006. The daemon trusts its state files and registered paths only as far as it can check them
+# 0011. The daemon trusts its state files and registered paths only as far as it can check them
 
 - Status: Accepted
 - Date: 2026-11-12

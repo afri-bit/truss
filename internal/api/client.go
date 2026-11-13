@@ -202,3 +202,65 @@ func (c *Client) Log(ctx context.Context, id string, offset int64) ([]byte, int6
 	}
 	return data, next, resp.Header.Get(HeaderRunStatus), nil
 }
+
+// Browse lists a directory for the register dialog. An empty path means the
+// user's home directory.
+func (c *Client) Browse(ctx context.Context, path string, hidden bool) (DirListing, error) {
+	q := url.Values{}
+	if path != "" {
+		q.Set("path", path)
+	}
+	if hidden {
+		q.Set("hidden", "true")
+	}
+	var l DirListing
+	return l, c.call(ctx, http.MethodGet, "/fs?"+q.Encode(), nil, &l)
+}
+
+// CreateRun opens a tracked run in state running.
+func (c *Client) CreateRun(ctx context.Context, req CreateRunRequest) (Run, error) {
+	var r Run
+	return r, c.call(ctx, http.MethodPost, "/runs", req, &r)
+}
+
+// ReportStep reports the state of one step of a tracked run and returns the run.
+func (c *Client) ReportStep(ctx context.Context, id string, u StepUpdate) (Run, error) {
+	var r Run
+	return r, c.call(ctx, http.MethodPost, "/runs/"+url.PathEscape(id)+"/steps", u, &r)
+}
+
+// AppendLog appends data to the log of a tracked run at offset, which must be
+// the current end of the log. It returns the next offset and the run's status;
+// an empty append only reads the status.
+func (c *Client) AppendLog(ctx context.Context, id string, offset int64, data []byte) (int64, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		"http://"+c.endpoint.Address+Prefix+"/runs/"+url.PathEscape(id)+"/log?offset="+strconv.FormatInt(offset, 10), bytes.NewReader(data))
+	if err != nil {
+		return 0, "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.endpoint.Token)
+	req.Header.Set("Content-Type", "text/plain; charset=utf-8")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, "", fmt.Errorf("reach the daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 {
+		var e Error
+		if json.NewDecoder(resp.Body).Decode(&e) != nil || e.Message == "" {
+			e.Message = "the daemon answered " + resp.Status
+		}
+		return 0, "", &StatusError{Code: resp.StatusCode, Message: e.Message}
+	}
+	next, err := strconv.ParseInt(resp.Header.Get(HeaderLogOffset), 10, 64)
+	if err != nil {
+		next = offset + int64(len(data))
+	}
+	return next, resp.Header.Get(HeaderRunStatus), nil
+}
+
+// FinishRun closes a tracked run.
+func (c *Client) FinishRun(ctx context.Context, id string, req FinishRequest) (Run, error) {
+	var r Run
+	return r, c.call(ctx, http.MethodPost, "/runs/"+url.PathEscape(id)+"/finish", req, &r)
+}

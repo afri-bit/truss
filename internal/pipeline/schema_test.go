@@ -161,3 +161,71 @@ func TestValidate_NewFieldFaults(t *testing.T) {
 		})
 	}
 }
+
+func TestSecrets_ParseAndPlanMerge(t *testing.T) {
+	p := mustParse(t, `
+version: "1"
+pipeline: {name: s}
+secrets: [A_TOKEN]
+jobs:
+  build:
+    secrets: [B_TOKEN, A_TOKEN]
+    steps:
+      - id: one
+        run: x
+        secrets: [C_TOKEN]
+      - id: two
+        run: y
+`)
+	if err := Validate(p); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := Plan(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string][]string{
+		"build/one": {"A_TOKEN", "B_TOKEN", "C_TOKEN"},
+		"build/two": {"A_TOKEN", "B_TOKEN"},
+	}
+	for _, s := range plan.Graph {
+		if !reflect.DeepEqual(s.Secrets, want[s.ID]) {
+			t.Errorf("%s secrets = %v, want %v", s.ID, s.Secrets, want[s.ID])
+		}
+	}
+}
+
+func TestSecrets_StepOnlyAppliesToThatStep(t *testing.T) {
+	p := mustParse(t, "version: \"1\"\npipeline: {name: s}\nsteps:\n  - {id: a, run: x, secrets: [T]}\n  - {id: b, run: y}\n")
+	plan, _ := Plan(p)
+	if len(plan.Graph[0].Secrets) != 1 || len(plan.Graph[1].Secrets) != 0 {
+		t.Errorf("plan = %+v", plan.Graph)
+	}
+}
+
+func TestSecrets_Invalid(t *testing.T) {
+	const pasted = "ghp-not-a-name-0001"
+	tests := map[string]string{
+		"not a list":    "secrets: NAME",
+		"bad name":      "secrets: [\"" + pasted + "\"]",
+		"number":        "secrets: [1]",
+		"duplicate":     "secrets: [A, A]",
+		"nested":        "secrets: [[A]]",
+		"step bad name": "steps:\n  - {id: a, run: x, secrets: [\"" + pasted + "\"]}",
+	}
+	for name, body := range tests {
+		t.Run(name, func(t *testing.T) {
+			text := "version: \"1\"\npipeline: {name: s}\n"
+			if !strings.HasPrefix(body, "steps") {
+				text += "steps:\n  - {id: a, run: x}\n"
+			}
+			err := Validate(mustParse(t, text+body+"\n"))
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			if strings.Contains(err.Error(), pasted) {
+				t.Errorf("error echoes the entry: %v", err)
+			}
+		})
+	}
+}

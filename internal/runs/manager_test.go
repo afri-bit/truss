@@ -1,6 +1,7 @@
 package runs
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -371,5 +372,295 @@ func TestSubmit_FailsWhenTheRunLogCannotBeOpened(t *testing.T) {
 	got := await(t, m, second.ID, api.RunFailed, api.RunSucceeded)
 	if got.Status != api.RunFailed || !strings.Contains(got.Reason, "run log") {
 		t.Fatalf("run = %+v, want failed with a run log reason", got)
+	}
+}
+
+func TestSubmit_RetriesConditionsAndContinueOnErrorShowInStepsAndLog(t *testing.T) {
+	m := open(t, Options{})
+	run := submit(t, m, "rich", def("rich", "",
+		pipeline.Step{ID: "flaky", Run: "exit 1", Retries: 1, ContinueOnError: true},
+		pipeline.Step{ID: "after", Run: "echo never", Needs: []string{"flaky"}},
+		pipeline.Step{ID: "report", Run: "echo reported", Needs: []string{"flaky"}, If: cond(t, "failure()")},
+		pipeline.Step{ID: "gated", Run: "echo never", If: cond(t, "env.TRUSS_TRIGGER == 'schedule'")},
+		pipeline.Step{ID: "plain", Run: "echo ok"},
+	))
+	done := await(t, m, run.ID, api.RunSucceeded, api.RunFailed)
+	if done.Status != api.RunSucceeded {
+		t.Fatalf("run = %+v", done)
+	}
+	byID := map[string]api.Step{}
+	for _, s := range done.Steps {
+		byID[s.ID] = s
+	}
+	if f := byID["flaky"]; f.Status != api.StepFailed || f.Attempts != 2 || !f.ContinuedOnError || f.ExitCode == nil || *f.ExitCode != 1 {
+		t.Fatalf("flaky = %+v", f)
+	}
+	if s := byID["after"]; s.Status != api.StepSkipped || s.Reason != "step flaky did not succeed" || s.StartedAt != nil {
+		t.Fatalf("after = %+v", s)
+	}
+	if s := byID["gated"]; s.Status != api.StepSkipped || s.Reason != "its if condition is false" {
+		t.Fatalf("gated = %+v", s)
+	}
+	for _, id := range []string{"report", "plain"} {
+		if s := byID[id]; s.Status != api.StepSucceeded || s.Attempts != 0 || s.Reason != "" || s.ContinuedOnError {
+			t.Fatalf("%s = %+v", id, s)
+		}
+	}
+	data, _, _, _ := m.Log(run.ID, 0)
+	text := string(data)
+	for _, want := range []string{
+		"step flaky retry 2 of 2 in 0.000s",
+		"step flaky failed but the run continues (continue-on-error)",
+		"step after skipped because step flaky did not succeed",
+		"step gated skipped because its if condition is false",
+		"summary succeeded steps 3",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("log lacks %q:\n%s", want, text)
+		}
+	}
+	if strings.Count(text, "step flaky started") != 2 {
+		t.Errorf("want one start line per attempt:\n%s", text)
+	}
+}
+
+func TestSubmit_FailureWithoutConditionsLooksAsBefore(t *testing.T) {
+	m := open(t, Options{})
+	run := submit(t, m, "old", def("old", "",
+		pipeline.Step{ID: "boom", Run: "exit 3"},
+		pipeline.Step{ID: "after", Run: "echo never", Needs: []string{"boom"}},
+	))
+	done := await(t, m, run.ID, api.RunFailed)
+	if s := done.Steps[1]; s.Status != api.StepSkipped || s.Reason != "" {
+		t.Fatalf("after = %+v", s)
+	}
+	data, _, _, _ := m.Log(run.ID, 0)
+	if strings.Contains(string(data), "skipped") || strings.Contains(string(data), "retry") {
+		t.Fatalf("log changed for a definition without the new fields:\n%s", data)
+	}
+}
+
+func TestCancel_DuringRetryWaitEndsTheRun(t *testing.T) {
+	m := open(t, Options{})
+	run := submit(t, m, "wait", def("wait", "",
+		pipeline.Step{ID: "a", Run: "exit 1", Retries: 2, RetryDelay: time.Hour}))
+	awaitStep(t, m, run.ID, "a", api.StepRunning)
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		data, _, _, _ := m.Log(run.ID, 0)
+		if strings.Contains(string(data), "step a retry 2 of 3") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("never waiting to retry:\n%s", data)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if _, err := m.Cancel(run.ID); err != nil {
+		t.Fatal(err)
+	}
+	done := await(t, m, run.ID, api.RunCancelled)
+	if done.Steps[0].Status != api.StepCancelled {
+		t.Fatalf("steps = %+v", done.Steps)
+	}
+}
+
+func cond(t *testing.T, text string) *pipeline.Condition {
+	t.Helper()
+	c, err := pipeline.ParseCondition(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+func TestSubmit_StepStoppedWhileWaitingToRetryKeepsItsLastAttempt(t *testing.T) {
+	m := open(t, Options{})
+	gate := filepath.Join(t.TempDir(), "gate")
+	d := def("wait", "",
+		pipeline.Step{ID: "a", Run: "exit 1", Retries: 2, RetryDelay: time.Hour},
+		pipeline.Step{ID: "b", Run: waitFor(gate) + " && exit 1"},
+	)
+	d.Concurrency = 2
+	run := submit(t, m, "wait", d)
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		data, _, _, _ := m.Log(run.ID, 0)
+		if strings.Contains(string(data), "step a retry 2 of 3") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("a never waited to retry:\n%s", data)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	release(t, gate)
+	done := await(t, m, run.ID, api.RunFailed)
+	a := done.Steps[0]
+	if a.Status != api.StepStopped || a.Attempts != 0 || a.ExitCode == nil || *a.ExitCode != 1 || a.FinishedAt == nil {
+		t.Fatalf("a = %+v", a)
+	}
+}
+
+func TestSubmit_ConditionValuesNeverReachTheLogOrTheAPI(t *testing.T) {
+	m := open(t, Options{})
+	const secret = "s3cr3t-value-9f2"
+	d := def("quiet", "",
+		pipeline.Step{ID: "gated", Run: "echo never", Env: map[string]string{"TOKEN": secret}, If: cond(t, "env.TOKEN == 'other'")},
+		pipeline.Step{ID: "open", Run: "echo ok", Env: map[string]string{"TOKEN": secret}, If: cond(t, "env.TOKEN == '"+secret+"'")},
+	)
+	run := submit(t, m, "quiet", d)
+	done := await(t, m, run.ID, api.RunSucceeded, api.RunFailed)
+	data, _, _, _ := m.Log(run.ID, 0)
+	if strings.Contains(string(data), secret) || strings.Contains(done.Reason, secret) {
+		t.Fatalf("an environment value leaked:\n%s", data)
+	}
+	for _, st := range done.Steps {
+		if strings.Contains(st.Reason, secret) || strings.Contains(st.Error, secret) {
+			t.Fatalf("step = %+v", st)
+		}
+	}
+	if done.Steps[0].Status != api.StepSkipped || done.Steps[1].Status != api.StepSucceeded {
+		t.Fatalf("steps = %+v", done.Steps)
+	}
+}
+
+// resolveTo returns a Resolver that serves definitions by pipeline name.
+func resolveTo(dir string, defs map[string]pipeline.Pipeline) Resolver {
+	return func(name string) (pipeline.Pipeline, string, error) {
+		d, ok := defs[name]
+		if !ok {
+			return pipeline.Pipeline{}, "", fmt.Errorf("%w: %q", ErrNotFound, name)
+		}
+		return d, dir, nil
+	}
+}
+
+func TestQueue_SurvivesAGracefulRestartAndStartsInRequestOrder(t *testing.T) {
+	dir := t.TempDir()
+	gate := filepath.Join(t.TempDir(), "gate")
+	d := def("p", pipeline.OverlapQueue, pipeline.Step{ID: "wait", Run: waitFor(gate)})
+	m := open(t, Options{Dir: dir})
+	running := submit(t, m, "p", d)
+	second, third := submit(t, m, "p", d), submit(t, m, "p", d)
+	await(t, m, running.ID, api.RunRunning)
+	m.Close() // a graceful stop: the running run ends, the queue stays
+
+	if got, _ := m.Get(second.ID); got.Status != api.RunQueued {
+		t.Fatalf("queued run after Close = %s", got.Status)
+	}
+	release(t, gate)
+	again := open(t, Options{Dir: dir, Resolve: resolveTo(t.TempDir(), map[string]pipeline.Pipeline{"p": d})})
+	if got, _ := again.Get(running.ID); got.Status != api.RunCancelled {
+		t.Fatalf("run that was running = %s", got.Status)
+	}
+	if running, queued := again.Counts(); running != 0 || queued != 2 {
+		t.Fatalf("before Resume: %d running, %d queued", running, queued)
+	}
+	again.Resume()
+	a := await(t, again, second.ID, api.RunSucceeded, api.RunFailed)
+	b := await(t, again, third.ID, api.RunSucceeded, api.RunFailed)
+	if a.Status != api.RunSucceeded || b.Status != api.RunSucceeded {
+		t.Fatalf("restored runs: %s, %s", a.Status, b.Status)
+	}
+	if a.StartedAt.After(*b.StartedAt) || a.FinishedAt.After(*b.StartedAt) {
+		t.Fatalf("overlap queue started out of order: %v..%v then %v", a.StartedAt, a.FinishedAt, b.StartedAt)
+	}
+}
+
+func TestQueue_RestoredRunsKeepTheirTriggerAndRespectLimits(t *testing.T) {
+	dir := t.TempDir()
+	gate := filepath.Join(t.TempDir(), "gate")
+	d := def("p", pipeline.OverlapParallel, pipeline.Step{ID: "wait", Run: waitFor(gate)})
+	first := open(t, Options{Dir: dir, MaxParallel: 1})
+	r1 := submit(t, first, "p", d)
+	r2, err := first.Submit(Request{Pipeline: "p", Definition: d, Dir: t.TempDir(), Trigger: api.TriggerSchedule, ScheduledFor: time.Date(2026, 11, 11, 9, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	await(t, first, r1.ID, api.RunRunning)
+	first.Close()
+
+	again := open(t, Options{Dir: dir, MaxParallel: 1, Resolve: resolveTo(t.TempDir(), map[string]pipeline.Pipeline{"p": d})})
+	again.Resume()
+	got := await(t, again, r2.ID, api.RunRunning)
+	if got.Trigger != api.TriggerSchedule || got.ScheduledFor == nil {
+		t.Fatalf("restored run lost its origin: %+v", got)
+	}
+	release(t, gate)
+	await(t, again, r2.ID, api.RunSucceeded)
+}
+
+func TestQueue_RunThatCannotBeRestoredFailsWithTheReason(t *testing.T) {
+	for name, resolve := range map[string]Resolver{
+		"no resolver":      nil,
+		"pipeline is gone": resolveTo(t.TempDir(), nil),
+		"definition invalid": func(string) (pipeline.Pipeline, string, error) {
+			return pipeline.Pipeline{}, "", errors.New("step wait: run is empty")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			gate := filepath.Join(t.TempDir(), "never")
+			d := def("p", pipeline.OverlapQueue, pipeline.Step{ID: "wait", Run: waitFor(gate)})
+			m := open(t, Options{Dir: dir})
+			submit(t, m, "p", d)
+			queued := submit(t, m, "p", d)
+			m.Close()
+
+			again := open(t, Options{Dir: dir, Resolve: resolve})
+			again.Resume()
+			got, err := again.Get(queued.ID)
+			if err != nil || got.Status != api.RunFailed || !strings.Contains(got.Reason, "could not be restored") {
+				t.Fatalf("run = %+v, err = %v", got, err)
+			}
+			if got.Steps[0].Status != api.StepSkipped {
+				t.Fatalf("steps = %+v", got.Steps)
+			}
+		})
+	}
+}
+
+func TestQueue_CancelWorksOnARestoredQueuedRun(t *testing.T) {
+	dir := t.TempDir()
+	d := def("p", pipeline.OverlapQueue, pipeline.Step{ID: "wait", Run: waitFor(filepath.Join(t.TempDir(), "never"))})
+	m := open(t, Options{Dir: dir})
+	submit(t, m, "p", d)
+	queued := submit(t, m, "p", d)
+	m.Close()
+
+	again := open(t, Options{Dir: dir, Resolve: resolveTo(t.TempDir(), map[string]pipeline.Pipeline{"p": d})})
+	if got, err := again.Cancel(queued.ID); err != nil || got.Status != api.RunCancelled {
+		t.Fatalf("cancel = %+v, %v", got, err)
+	}
+	again.Resume()
+	if _, queuedNow := again.Counts(); queuedNow != 0 {
+		t.Fatalf("cancelled run still queued")
+	}
+}
+
+func TestSubmit_StepsSeeTheDataFoldersAndEnvCanOverrideThem(t *testing.T) {
+	m := open(t, Options{})
+	data := t.TempDir()
+	cache := filepath.Join(data, "cache") // created by the run, as after a cache clear
+	show := "echo $TRUSS_DATA_DIR && echo $TRUSS_CACHE_DIR"
+	if runtime.GOOS == "windows" {
+		show = "echo %TRUSS_DATA_DIR% && echo %TRUSS_CACHE_DIR%"
+	}
+	d := def("dirs", "", pipeline.Step{ID: "show", Run: show})
+	d.Env = map[string]string{"TRUSS_CACHE_DIR": "overridden"}
+	run, err := m.Submit(Request{Pipeline: "dirs", Definition: d, Dir: t.TempDir(), DataDir: data, CacheDir: cache, Trigger: api.TriggerManual})
+	if err != nil {
+		t.Fatal(err)
+	}
+	await(t, m, run.ID, api.RunSucceeded)
+	log, _, _, _ := m.Log(run.ID, 0)
+	for _, want := range []string{"step show | " + data, "step show | overridden"} {
+		if !strings.Contains(string(log), want) {
+			t.Errorf("log lacks %q:\n%s", want, log)
+		}
+	}
+	if info, err := os.Stat(cache); err != nil || !info.IsDir() {
+		t.Fatalf("cache folder not recreated: %v", err)
 	}
 }

@@ -13,6 +13,9 @@ const (
 	StatusSucceeded Status = "succeeded"
 	// StatusFailed means the run failed or a command could not start.
 	StatusFailed Status = "failed"
+	// StatusSkipped means the step was not run because of an if: condition
+	// or because a step it needs did not succeed.
+	StatusSkipped Status = "skipped"
 )
 
 // Step is one unit of work in a pipeline definition.
@@ -25,11 +28,29 @@ type Step struct {
 	// Env holds the variables this step adds to the run environment. In an
 	// ExecutionPlan it is already merged: pipeline, then job, then step.
 	Env map[string]string
+	// Secrets names the stored secrets this step receives as environment
+	// variables. In an ExecutionPlan it is already merged: pipeline, then job,
+	// then step, without repeats. Only names are held here, never values.
+	Secrets []string
 	// Dir is the step's working directory. A relative Dir is resolved against
 	// the directory the run starts in. Empty means that directory itself.
 	Dir string
 	// Timeout ends the step when it runs longer. Zero means no limit.
-	Timeout      time.Duration
+	Timeout time.Duration
+	// Retries is how many more times a failed step is run. Zero means never.
+	Retries int
+	// RetryDelay is the wait before each retry. Zero means no wait.
+	RetryDelay time.Duration
+	// ContinueOnError lets the run go on when this step fails.
+	ContinueOnError bool
+	// If decides whether the step runs. Nil means the default: run when every
+	// step it needs succeeded.
+	If *Condition
+	// Job, JobFirst and JobIf are set by Plan on the steps of a job: the job's
+	// id, whether this is its first step, and the job's own condition.
+	Job          string
+	JobFirst     bool
+	JobIf        *Condition
 	runNotString bool
 	needsInvalid bool
 }
@@ -37,10 +58,13 @@ type Step struct {
 // Job is a named, ordered list of steps. The steps of a job run one after
 // another; jobs wait for the jobs they need.
 type Job struct {
-	ID    string
-	Needs []string
-	Env   map[string]string
-	Dir   string
+	ID      string
+	Needs   []string
+	Env     map[string]string
+	Secrets []string
+	Dir     string
+	// If decides whether the job runs. Nil means the default.
+	If    *Condition
 	Steps []Step
 }
 
@@ -88,8 +112,12 @@ type Pipeline struct {
 	// definition did not declare it, which is the same as 1.
 	Concurrency int
 	// Overlap is empty when the definition did not declare it (queue).
-	Overlap   Overlap
+	Overlap Overlap
+	// Workdir is the directory steps start in, as written: relative to the
+	// directory the run starts in, or absolute. Empty means that directory.
+	Workdir   string
 	Env       map[string]string
+	Secrets   []string
 	Schedules []Schedule
 
 	nonStringVersion bool
@@ -133,9 +161,16 @@ type StepRun struct {
 	// StoppedBy is the id of the Step whose failure caused this Step to be
 	// stopped. It is empty otherwise.
 	StoppedBy string
+	// Attempts is how many times the step ran; the other fields describe the
+	// last attempt.
+	Attempts int
+	// ContinuedOnError is true when the step failed and its continue-on-error
+	// let the run go on.
+	ContinuedOnError bool
 }
 
-// PipelineRun is one execution of a plan. Steps contains only started steps.
+// PipelineRun is one execution of a plan. Steps contains only started steps;
+// a skipped step is reported through the engine's events, not here.
 type PipelineRun struct {
 	Name   string
 	Status Status

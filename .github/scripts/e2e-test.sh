@@ -364,6 +364,160 @@ else
 fi
 rm -rf "$work"
 
+# retries: a failed step is run again after retry_delay, and each attempt is logged.
+new_dir
+if $windows; then
+	flaky_run='if exist tried (echo second try) else (echo x> tried & exit /b 1)'
+else
+	flaky_run='if [ -f tried ]; then echo second try; else echo x > tried; exit 1; fi'
+fi
+cat >"$work/project/truss.yaml" <<EOF
+version: "1"
+pipeline:
+  name: retry
+steps:
+  - id: flaky
+    run: '$flaky_run'
+    retries: 2
+    retry_delay: 1s
+EOF
+run_truss "$work/project" run
+tries="$(grep -c ' step flaky started$' <<<"$out")"
+if [ "$code" -ne 0 ]; then
+	fail "retries" "want exit 0 after the second attempt"
+elif [ "$tries" -ne 2 ] || ! has_line "step flaky finished duration *s exit 1" ||
+	! has_line "step flaky retry 2 of 3 in 1.000s" || ! has_line "step flaky | second try" ||
+	! has_line "step flaky finished duration *s exit 0" || ! has_line "summary succeeded steps 1 duration *s"; then
+	fail "retries" "missing the attempt lines"
+else
+	pass "retries"
+fi
+rm -rf "$work"
+
+# continue-on-error and if: a tolerated failure does not fail the run; a step that needs it is
+# skipped unless its condition says otherwise; a false condition skips the step.
+new_dir
+cat >"$work/project/truss.yaml" <<EOF
+version: "1"
+pipeline:
+  name: tolerant
+steps:
+  - id: lint
+    run: $second_fails
+    continue-on-error: true
+  - id: test
+    run: echo tested
+  - id: report
+    needs: [lint]
+    run: echo never
+  - id: notify
+    needs: [lint]
+    if: failure()
+    run: echo lint failed
+  - id: deploy
+    if: env.TRUSS_E2E_DEPLOY == 'yes'
+    run: echo deploying
+EOF
+run_truss "$work/project" run
+if [ "$code" -ne 0 ]; then
+	fail "continue-on-error" "want exit 0"
+elif ! has_line "step lint finished duration *s exit 1" ||
+	! has_line "step lint failed but the run continues (continue-on-error)" ||
+	! has_line "step test | tested" ||
+	! has_line "step report skipped because step lint did not succeed" ||
+	! has_line "step notify | lint failed" ||
+	! has_line "step deploy skipped because its if condition is false" ||
+	! has_line "summary succeeded steps 3 duration *s"; then
+	fail "continue-on-error" "missing the expected lines"
+elif [[ "$out" == *"step report started"* || "$out" == *"step deploy started"* ]]; then
+	fail "continue-on-error" "a skipped step started"
+else
+	pass "continue-on-error"
+fi
+rm -rf "$work"
+
+# A failure still fails the run; only always() and failure() steps start after it.
+new_dir
+cat >"$work/project/truss.yaml" <<EOF
+version: "1"
+pipeline:
+  name: cleanup
+steps:
+  - id: build
+    run: $second_fails
+  - id: test
+    needs: [build]
+    run: echo never
+  - id: tidy
+    needs: [build]
+    if: always()
+    run: echo cleaning
+EOF
+run_truss "$work/project" run
+if [ "$code" -ne 1 ]; then
+	fail "always()" "want exit 1"
+elif ! has_line "step tidy | cleaning" || ! has_line "summary failed steps 2 duration *s" ||
+	! has_line "error cleanup failed at build (exit 1)"; then
+	fail "always()" "want the cleanup step and a failed summary"
+elif [[ "$out" == *"step test"* ]]; then
+	fail "always()" "a step without a condition started after the failure"
+else
+	pass "always()"
+fi
+rm -rf "$work"
+
+# An invalid condition is rejected before any step runs.
+new_dir
+cat >"$work/project/truss.yaml" <<EOF
+version: "1"
+pipeline:
+  name: bad
+steps:
+  - id: a
+    run: echo never
+    if: sometimes()
+EOF
+run_truss "$work/project" run
+if [ "$code" -ne 1 ] || [ -n "$out" ] || [[ "$err" != *'step "a" if: unknown function "sometimes"'* ]]; then
+	fail "invalid if" "want exit 1, no log and the diagnostic on stderr"
+else
+	pass "invalid if"
+fi
+rm -rf "$work"
+
+# pipeline.workdir: steps start in that folder, and the data folders exist.
+new_dir
+mkdir "$work/project/app"
+cat >"$work/project/truss.yaml" <<EOF
+version: "1"
+
+pipeline:
+  name: workdir
+  workdir: app
+
+steps:
+  - id: touch
+    run: echo ran> marker.txt
+EOF
+run_truss "$work/project" run
+if [ "$code" -ne 0 ]; then
+	fail "workdir" "want exit 0"
+elif [ ! -e "$work/project/app/marker.txt" ] || [ -e "$work/project/marker.txt" ]; then
+	fail "workdir" "the step did not run in app"
+elif [ ! -d "$work/project/.truss/data/cache" ]; then
+	fail "workdir" "the cache folder was not created"
+else
+	pass "workdir"
+fi
+sed -i.bak 's/workdir: app/workdir: missing/' "$work/project/truss.yaml"
+run_truss "$work/project" run
+if [ "$code" -ne 1 ] || ! has_line "summary failed *"; then
+	fail "workdir missing" "want exit 1 and a failed summary"
+else
+	pass "workdir missing"
+fi
+rm -rf "$work"
+
 # Jobs: the steps of a job run in order and a job waits for the jobs it needs.
 new_dir
 cat >"$work/project/truss.yaml" <<EOF
@@ -431,6 +585,26 @@ else
 	else
 		pass "runs"
 	fi
+	# A tracked run executes here, in this shell, and is recorded by the daemon (spec 010).
+	run_truss "$work/project" run --track
+	tracked_id="$(printf '%s' "$err" | sed -n 's/^tracking as run \([^ ]*\) .*/\1/p')"
+	if [ "$code" -ne 0 ] || [ -z "$tracked_id" ] || ! has_line "summary succeeded steps 3 duration *"; then
+		fail "run --track" "want exit 0, the run log on stdout and the run id on stderr"
+	else
+		pass "run --track"
+		run_truss "$work/project" runs jobs
+		if [ "$code" -ne 0 ] || [[ "$out" != *"$tracked_id"*"succeeded"*"local"* ]]; then
+			fail "run --track history" "want the local run in the history"
+		else
+			pass "run --track history"
+		fi
+		run_truss "$work/project" logs "$tracked_id"
+		if [ "$code" -ne 0 ] || ! has_line "step ship/publish | publishing" || ! has_line "summary succeeded steps 3 duration *"; then
+			fail "run --track log" "want the run log in the daemon"
+		else
+			pass "run --track log"
+		fi
+	fi
 	run_truss "$work/project" unregister jobs
 	run_truss "$work/project" pipelines
 	if [ "$code" -ne 0 ] || [[ "$out" != "no pipelines registered"* ]]; then
@@ -450,6 +624,72 @@ if [ "$code" -ne 1 ]; then
 	fail "daemon status" "want exit 1 when no daemon runs"
 else
 	pass "daemon status"
+fi
+run_truss "$work/project" run --track
+if [ "$code" -ne 1 ] || [ -n "$out" ] || [[ "$err" != *"truss daemon start"* ]]; then
+	fail "run --track without a daemon" "want exit 1, no output and the start hint"
+else
+	pass "run --track without a daemon"
+fi
+# Secrets: stored from standard input, passed to a step, redacted in the log.
+mkdir -p "$work/secrets"
+show_cmd='echo token=$E2E_TOKEN'
+if [ "$windows" = true ]; then
+	show_cmd='echo token=%E2E_TOKEN%' # the step runs under cmd.exe
+fi
+cat >"$work/secrets/truss.yaml" <<EOF_SECRETS
+version: "1"
+pipeline:
+  name: secrets
+steps:
+  - id: show
+    run: '$show_cmd'
+    secrets: [E2E_TOKEN]
+EOF_SECRETS
+run_truss "$work/secrets" run
+if [ "$code" -ne 1 ] || [[ "$err" != *"missing secrets: E2E_TOKEN"* ]] || [[ "$out" == *"started"* ]]; then
+	fail "secret missing" "want exit 1 before any step"
+else
+	pass "secret missing"
+fi
+(cd "$work/secrets" && printf %s "e2e-canary-value" | "$truss" secret set E2E_TOKEN >"$work/.stdout" 2>"$work/.stderr")
+code=$?
+out="$(cat "$work/.stdout")"
+err="$(cat "$work/.stderr")"
+if [ "$code" -ne 0 ] || [ "$out" != "secret E2E_TOKEN saved" ]; then
+	fail "secret set" "want exit 0 and the saved line"
+else
+	pass "secret set"
+fi
+run_truss "$work/secrets" secret list
+if [ "$code" -ne 0 ] || [ "$out" != "E2E_TOKEN" ]; then
+	fail "secret list" "want the name only"
+else
+	pass "secret list"
+fi
+run_truss "$work/secrets" run
+if [ "$code" -ne 0 ] || [[ "$out" == *"e2e-canary-value"* ]] || ! has_line "step show | token=***"; then
+	fail "secret redaction" "want exit 0 and the value replaced by ***"
+else
+	pass "secret redaction"
+fi
+
+# Start at login: a binary in a temporary directory must be refused before
+# anything is installed. HOME and USERPROFILE point at an empty directory so a
+# regression would not write into the real home; the refusal itself is what
+# keeps systemctl, launchctl and schtasks from being run.
+mkdir -p "$work/copy" "$work/fakehome"
+ext=""
+$windows && ext=".exe"
+cp "$truss" "$work/copy/truss-copy$ext"
+(cd "$work/project" && HOME="$work/fakehome" USERPROFILE="$work/fakehome" "$work/copy/truss-copy$ext" daemon install >"$work/.stdout" 2>"$work/.stderr")
+code=$?
+out="$(cat "$work/.stdout")"
+err="$(cat "$work/.stderr")"
+if [ "$code" -ne 1 ] || [[ "$err" != *"looks temporary"* ]]; then
+	fail "daemon install refuses a temporary binary" "want exit 1 and the reason"
+else
+	pass "daemon install refuses a temporary binary"
 fi
 unset TRUSS_HOME
 rm -rf "$work"

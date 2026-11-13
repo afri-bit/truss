@@ -189,7 +189,7 @@ succeeded
 failed
 ```
 
-A step that is stopped because another step failed is `failed`. A step that never started is omitted from the run log, not reported as `skipped`. An interrupted run reports no status. `cancelled` is not a status in v0.1.0.
+A step that is stopped because another step failed is `failed`. A step that never started only because an earlier failure ended the run is omitted from the run log, not reported as `skipped`. A step skipped by an `if` condition, or because a step it needs did not succeed, is logged and shown as `skipped` with the reason (spec 009). A step with `retries` has one attempt per run of its command; its result is the last attempt. A step that failed under `continue-on-error` is `failed` and does not fail the run (a tolerated failure). An interrupted run reports no status. `cancelled` is not a status in v0.1.0.
 
 ### Exit Code
 
@@ -205,6 +205,10 @@ non-0  failure
 ### Environment
 
 The variables and execution context available to a step.
+
+### Secret
+
+A named value stored in the TRUSS home with `truss secret set` and handed to the steps that declare it in `secrets`, as an environment variable. Its value is replaced by `***` in step output. Stored unencrypted; see ADR 0006.
 
 ## Platform
 
@@ -231,8 +235,21 @@ jobs wait for the jobs they need. In logs a step of a job is named `job/step`.
 
 ### Trigger
 
-What causes a pipeline run: `manual` (someone asked), `schedule` (a cron time was reached), or
-`catch-up` (a missed cron time that the schedule asked to make up for).
+What causes a pipeline run: `manual` (someone asked), `schedule` (a cron time was reached),
+`catch-up` (a missed cron time that the schedule asked to make up for), or `local` (a run started
+in a shell with `truss run --track`; see Tracked Run).
+
+### Tracked Run
+
+A run that executes in the caller's shell and environment (`truss run --track`) and reports its
+steps and log to the daemon, so it appears in the run history with the trigger `local`. The
+daemon records it but never starts, queues or restarts it, and it takes no run slot. Cancelling
+it in the daemon asks the CLI to stop; the daemon cannot end the process itself.
+
+### Queued Run
+
+A run waiting for a free slot or for an earlier run of the same pipeline. It survives a daemon
+restart and starts afterwards, in the order it was requested.
 
 ### Schedule
 
@@ -254,6 +271,21 @@ stays the source of truth.
 
 What happens when a run is requested while another run of the same pipeline is active:
 `queue`, `skip`, or `parallel`.
+
+### Workdir
+
+`pipeline.workdir`: the directory steps start in, relative to where the run starts or absolute.
+A job's or step's `dir` replaces it.
+
+### Data Folder
+
+A folder per pipeline that outlives runs and is never cleaned by TRUSS: `~/.truss/pipelines/<name>/`
+for the daemon, `.truss/data` for `truss run`. Steps find it in `TRUSS_DATA_DIR`.
+
+### Cache Folder
+
+The `cache` folder inside the Data Folder, found in `TRUSS_CACHE_DIR`. A plain directory for
+steps to keep reusable files in. TRUSS does not save, restore or key it.
 
 ### TRUSS Home
 

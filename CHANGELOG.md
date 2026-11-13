@@ -11,6 +11,7 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 ### Changed
 
+- Queued runs survive a daemon restart. They stay `queued` when the daemon stops and start in request order when it starts again, instead of being cancelled. A queued run whose pipeline can no longer be loaded is closed as `failed`. Runs that were running are cancelled on a graceful stop, or closed as `failed` after a crash, as before.
 - `truss help` and usage errors print the full command list. The first usage line is now `usage: truss <command> [arguments]`.
 - Project process: constitution 2.0.0. A specification travels with the code instead of gating it, and tests ship with the behavior (see `docs/decisions/0005-specs-record-they-do-not-gate.md`).
 - Require Go 1.27.3. Go 1.22.5's standard library is affected by GO-2025-3956 (`os/exec` LookPath) and GO-2025-3750 (`os` and `syscall`), which the vulnerability scan reports through the host executor and CLI.
@@ -21,15 +22,27 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 ### Added
 
+- **Retries.** A step may set `retries` (0 to 100) and `retry_delay`. A failed attempt is run again; each attempt is logged with its own `started` and `finished` lines, and a `step <id> retry <n> of <total> in <delay>` line comes between them. The step's result is its last attempt (specs/009-retries-and-conditions).
+- **`continue-on-error: true`** on a step. Its failure is logged and shown but does not fail the run or stop other steps. Steps that need it are skipped unless their `if` says otherwise.
+- **Conditions.** `if` on a step or a job takes a small expression: `always()`, `success()`, `failure()`, `==`, `!=`, `&&`, `||`, `!`, parentheses, quoted text and `env.NAME`. A skipped step is logged as `step <id> skipped because <reason>` and shown as skipped. After a failure only steps whose condition calls `always()` or `failure()` start. Definitions without these fields behave exactly as before; an older TRUSS rejects them as unknown fields.
+- The daemon API reports `attempts`, `continued_on_error` and `reason` on a step, only where they apply. TRUSS Desktop shows attempts, skip reasons and tolerated failures.
+- **Start at login.** `truss daemon install` makes the daemon start at login (a systemd user unit on Linux, a launchd agent on macOS, a Task Scheduler task on Windows; no root or administrator rights) and `truss daemon uninstall` removes exactly what it created. `truss daemon status` shows whether login start is installed. Install refuses a binary in a temporary directory. See `specs/011-daemon-start-at-login`.
+- **Tracked local runs.** `truss run --track` still executes in your shell with your environment, and also reports the run to the daemon: it shows up in `truss runs` and TRUSS Desktop with the trigger `local`, its steps and its log. It needs a running daemon and fails with the usual hint before running anything if there is none; if the daemon goes away mid-run, the run finishes normally with one warning. Cancelling a tracked run in the daemon or Desktop stops the local run. Desktop shows a `local` badge. New API v1 endpoints, additive: `POST /runs`, `POST /runs/{id}/steps`, `POST /runs/{id}/log?offset=`, `POST /runs/{id}/finish` (see `docs/decisions/0007-tracked-local-runs.md`).
+- **Secrets.** `truss secret set|list|remove` keeps credentials in `secrets.json` in the TRUSS home (private file, not encrypted; `set` reads standard input or a hidden prompt, never an argument). A pipeline, job or step lists `secrets: [NAME]` and receives them as environment variables. A missing secret fails the run before any step starts. Stored values in step output are replaced by `***` in the run log, saved logs, API and Desktop; encoded or transformed values are not caught (specs/012-secrets, ADR 0006).
 - **The daemon.** `truss daemon start`, `stop`, `status` and `run` manage a background service that listens on `127.0.0.1:7878`. It keeps its state under `~/.truss` (or `TRUSS_HOME`) and protects its HTTP API (`/api/v1`) with a token only your user can read.
 - **Registered pipelines.** `truss register [<path>] [--name <name>]`, `unregister`, `pipelines`, `pause` and `resume`. The daemon stores the file's path, reads it again before every run, and notices edits.
 - **Daemon runs.** `truss trigger <name> [--follow]`, `runs`, `logs <run-id> [--follow]` and `cancel`. Runs queue up; `--max-runs` limits how many execute at once (default 4). The newest 200 runs and their logs are kept.
 - **Schedules.** `on.schedule` lists cron triggers with an optional `timezone` and a `missed` policy. A time that passed while the machine was off or asleep is skipped and recorded by default; `missed: run` starts one catch-up run.
 - **Jobs.** `jobs` groups ordered steps under a name. Jobs wait for the jobs in their `needs`. In logs a job's step is named `job/step`.
 - **Step settings.** `env` at pipeline, job and step level; `dir` and `timeout` per step. A step that exceeds its timeout fails with `timed out after <duration>`.
+- **Workdir.** `pipeline.workdir` sets the directory steps start in, relative to where the run starts or absolute. A job's or step's `dir` still wins. A missing directory fails the step with a diagnostic and no exit code. Additive: existing files keep their meaning.
+- **Data and cache folders.** Steps get `TRUSS_DATA_DIR` and `TRUSS_CACHE_DIR`: `~/.truss/pipelines/<name>/` and its `cache/` for daemon runs (kept when you unregister), `.truss/data` and `.truss/data/cache` for `truss run`. `truss cache clear <name>` empties a pipeline's cache.
 - **Overlap policy.** `pipeline.overlap` is `queue` (default), `skip` or `parallel`.
 - **`truss validate [<path>]`** checks a definition and prints its schedules and steps without running anything.
 - **TRUSS Desktop.** `truss desktop` opens a dashboard served by the daemon: counters, active and upcoming runs, pipeline controls, and a run page with the step graph and a live log.
+- **File picker for registering.** TRUSS Desktop's register form has a *Browse…* button. It uses the new `GET /api/v1/fs` endpoint, which lists directories and `*.yaml`/`*.yml` names (never content) starting at your home directory (specs/013-desktop-polish, ADR 0010).
+- Browser tests for TRUSS Desktop in `tests/ui/` (Node and Playwright, run by a new `desktop-ui` CI job). Playwright is not a dependency of the product.
+- TRUSS Desktop polish: a "Daemon unreachable" page, an error page with *Try again*, empty-log messages, a register form that keeps what you typed across refreshes, keyboard focus kept across refreshes, and keyboard access to run rows, step rows and graph nodes.
 - Runs started by the daemon set `TRUSS_RUN_ID`, `TRUSS_PIPELINE` and `TRUSS_TRIGGER`.
 - A cancelled daemon run closes its log with `summary cancelled steps <n> duration <d>`.
 - Documentation: pipeline file reference, command line reference, daemon guide, TRUSS Desktop guide and an architecture page under `docs/`.

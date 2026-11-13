@@ -358,3 +358,54 @@ func TestLog_StepStopped(t *testing.T) {
 		t.Fatalf("got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }
+
+func TestTranscript_RetryContinueAndSkippedLines(t *testing.T) {
+	t0 := time.Date(2026, 11, 12, 8, 0, 0, 0, time.Local)
+	var buf bytes.Buffer
+	log := New(&buf, clockAt(t0))
+	log.Setup("linux", "amd64", "/bin/sh", "/work")
+	one, zero := 1, 0
+	log.StepStarted("flaky")
+	log.StepFinished("flaky", &one, nil)
+	log.StepRetrying("flaky", 2, 3, 1500*time.Millisecond)
+	log.StepStarted("flaky")
+	log.StepFinished("flaky", &zero, nil)
+	log.StepStarted("lint")
+	log.StepFinished("lint", &one, nil)
+	log.StepContinued("lint")
+	log.StepSkipped("report", "step lint did not succeed")
+	log.StepSkipped("deploy", "its if condition is false")
+	log.SummarySucceeded(2)
+
+	got := occurrences(t, buf.String())[5:]
+	want := []string{
+		"step flaky started",
+		"step flaky finished duration 0.000s exit 1",
+		"step flaky retry 2 of 3 in 1.500s",
+		"step flaky started",
+		"step flaky finished duration 0.000s exit 0",
+		"step lint started",
+		"step lint finished duration 0.000s exit 1",
+		"step lint failed but the run continues (continue-on-error)",
+		"step report skipped because step lint did not succeed",
+		"step deploy skipped because its if condition is false",
+		"summary succeeded steps 2 duration 0.000s",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("lines\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestTranscript_StepsWithoutRetriesKeepTheirLines(t *testing.T) {
+	// The first attempt of a step looks exactly like a step that has no
+	// retries: only the extra lines are new.
+	var buf bytes.Buffer
+	log := New(&buf, clockAt(time.Date(2026, 11, 12, 8, 0, 0, 0, time.Local)))
+	one := 1
+	log.StepStarted("a")
+	log.StepFinished("a", &one, nil)
+	got := occurrences(t, buf.String())
+	if len(got) != 2 || got[0] != "step a started" || got[1] != "step a finished duration 0.000s exit 1" {
+		t.Fatalf("lines = %q", got)
+	}
+}

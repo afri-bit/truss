@@ -67,6 +67,8 @@ func Parse(data []byte) (Pipeline, error) {
 			parseTriggers(&p, val)
 		case "env":
 			p.Env = parseEnv(&p, val, "env")
+		case "secrets":
+			p.Secrets = parseSecrets(&p, val, "secrets")
 		case "steps":
 			p.hasSteps = true
 			if val.Kind != yaml.SequenceNode {
@@ -100,6 +102,8 @@ func parsePipelineBlock(p *Pipeline, val *yaml.Node) {
 			}
 		case "concurrency":
 			parseConcurrency(p, v)
+		case "workdir":
+			p.Workdir = parseString(p, v, "pipeline workdir")
 		case "overlap":
 			p.Overlap = Overlap(oneOf(p, v, "pipeline overlap", string(OverlapQueue), string(OverlapSkip), string(OverlapParallel)))
 		default:
@@ -140,10 +144,20 @@ func parseStep(p *Pipeline, item *yaml.Node, pos int, job string) Step {
 			parseNeeds(&step, v)
 		case "env":
 			deferred = append(deferred, func(label string) { step.Env = parseEnv(p, v, label+" env") })
+		case "secrets":
+			deferred = append(deferred, func(label string) { step.Secrets = parseSecrets(p, v, label+" secrets") })
 		case "dir":
 			deferred = append(deferred, func(label string) { step.Dir = parseString(p, v, label+" dir") })
 		case "timeout":
-			deferred = append(deferred, func(label string) { step.Timeout = parseTimeout(p, v, label) })
+			deferred = append(deferred, func(label string) { step.Timeout = parseDuration(p, v, label, "timeout") })
+		case "retries":
+			deferred = append(deferred, func(label string) { step.Retries = parseRetries(p, v, label) })
+		case "retry_delay":
+			deferred = append(deferred, func(label string) { step.RetryDelay = parseDuration(p, v, label, "retry_delay") })
+		case "continue-on-error":
+			deferred = append(deferred, func(label string) { step.ContinueOnError = parseBool(p, v, label+" continue-on-error") })
+		case "if":
+			deferred = append(deferred, func(label string) { step.If = parseCondition(p, v, label+" if") })
 		default:
 			if unknown == "" {
 				unknown = item.Content[j].Value
@@ -159,6 +173,9 @@ func parseStep(p *Pipeline, item *yaml.Node, pos int, job string) Step {
 	}
 	for _, read := range deferred {
 		read("step " + name)
+	}
+	if step.RetryDelay > 0 && step.Retries == 0 {
+		p.issue("step %s retry_delay needs retries of at least 1", name)
 	}
 	if unknown != "" {
 		p.noteUnknown(unknown, "in step "+name)
@@ -204,8 +221,12 @@ func parseJobs(p *Pipeline, val *yaml.Node) {
 				job.Needs = holder.Needs
 			case "env":
 				job.Env = parseEnv(p, v, label+" env")
+			case "secrets":
+				job.Secrets = parseSecrets(p, v, label+" secrets")
 			case "dir":
 				job.Dir = parseString(p, v, label+" dir")
+			case "if":
+				job.If = parseCondition(p, v, label+" if")
 			case "steps":
 				if v.Kind != yaml.SequenceNode {
 					p.issue("%s steps must be a list", label)
@@ -305,6 +326,31 @@ func parseEnv(p *Pipeline, val *yaml.Node, label string) map[string]string {
 	return env
 }
 
+// parseSecrets reads a list of secret names. Names follow the rule for
+// environment variable names. A message quotes an entry only when it is a
+// valid name; anything else is shown by position, because a person who pastes
+// a value where a name belongs must not see it echoed.
+func parseSecrets(p *Pipeline, val *yaml.Node, label string) []string {
+	if val.Kind != yaml.SequenceNode {
+		p.issue("%s must be a list of secret names", label)
+		return nil
+	}
+	names := make([]string, 0, len(val.Content))
+	seen := map[string]bool{}
+	for pos, entry := range val.Content {
+		switch {
+		case entry.Kind != yaml.ScalarNode || entry.Tag != "!!str" || !envName.MatchString(entry.Value):
+			p.issue("%s: entry %d is not a valid secret name (letters, digits and '_', not starting with a digit)", label, pos+1)
+		case seen[entry.Value]:
+			p.issue("%s: %q is listed twice", label, entry.Value)
+		default:
+			seen[entry.Value] = true
+			names = append(names, entry.Value)
+		}
+	}
+	return names
+}
+
 func parseString(p *Pipeline, val *yaml.Node, label string) string {
 	if val.Kind != yaml.ScalarNode || val.Tag != "!!str" || strings.TrimSpace(val.Value) == "" {
 		p.issue("%s must be a non-empty string", label)
@@ -329,16 +375,53 @@ func oneOf(p *Pipeline, val *yaml.Node, label string, allowed ...string) string 
 
 var timeoutText = regexp.MustCompile(`^([0-9]+[hms])+$`)
 
-// parseTimeout reads a duration written as whole hours, minutes and seconds,
-// such as "90s", "5m" or "1h30m".
-func parseTimeout(p *Pipeline, val *yaml.Node, label string) time.Duration {
+// parseDuration reads a duration written as whole hours, minutes and seconds,
+// such as "90s", "5m" or "1h30m". field names the key in the message.
+func parseDuration(p *Pipeline, val *yaml.Node, label, field string) time.Duration {
 	if val.Kind == yaml.ScalarNode && timeoutText.MatchString(val.Value) {
 		if d, err := time.ParseDuration(val.Value); err == nil && d > 0 {
 			return d
 		}
 	}
-	p.issue("%s timeout must be a duration such as 90s, 5m or 1h30m, got %q", label, val.Value)
+	p.issue("%s %s must be a duration such as 90s, 5m or 1h30m, got %q", label, field, val.Value)
 	return 0
+}
+
+// maxRetries is the most extra attempts a step may ask for.
+const maxRetries = 100
+
+// parseRetries reads a whole number from 0 to maxRetries.
+func parseRetries(p *Pipeline, val *yaml.Node, label string) int {
+	if val.Kind == yaml.ScalarNode && val.Tag == "!!int" && decimalDigits.MatchString(val.Value) {
+		if n, err := strconv.Atoi(val.Value); err == nil && n <= maxRetries {
+			return n
+		}
+	}
+	p.issue("%s retries must be a whole number from 0 to %d, got %q", label, maxRetries, val.Value)
+	return 0
+}
+
+// parseBool reads a YAML true or false.
+func parseBool(p *Pipeline, val *yaml.Node, label string) bool {
+	if val.Kind == yaml.ScalarNode && val.Tag == "!!bool" {
+		return val.Value == "true"
+	}
+	p.issue("%s must be true or false, got %q", label, val.Value)
+	return false
+}
+
+// parseCondition reads an if: expression.
+func parseCondition(p *Pipeline, val *yaml.Node, label string) *Condition {
+	if val.Kind != yaml.ScalarNode || val.Tag != "!!str" {
+		p.issue("%s must be an expression in a string, got %q", label, val.Value)
+		return nil
+	}
+	c, err := ParseCondition(val.Value)
+	if err != nil {
+		p.issue("%s: %s", label, err.Error())
+		return nil
+	}
+	return c
 }
 
 func (p *Pipeline) issue(format string, args ...any) {

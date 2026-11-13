@@ -6,8 +6,8 @@ import "fmt"
 //
 // Jobs are flattened: each step of a job becomes a step named "job/step" that
 // needs the step before it, and the first step of a job needs the last step
-// of every job that job needs. Environment and working directory are resolved
-// here, so the engine only sees steps.
+// of every job that job needs. Environment and working directory (step, job,
+// then pipeline workdir) are resolved here, so the engine only sees steps.
 //
 // In Steps a step is placed only after every step it needs. When several
 // steps could be placed next, the one written earliest in the definition goes
@@ -42,6 +42,10 @@ func flatten(p Pipeline) []Step {
 		steps := make([]Step, len(p.Steps))
 		for i, s := range p.Steps {
 			s.Env = mergeEnv(p.Env, s.Env)
+			s.Secrets = mergeNames(p.Secrets, s.Secrets)
+			if s.Dir == "" {
+				s.Dir = p.Workdir
+			}
 			steps[i] = s
 		}
 		return steps
@@ -58,12 +62,18 @@ func flatten(p Pipeline) []Step {
 		for _, need := range job.Needs {
 			needs = append(needs, last[need])
 		}
-		for _, s := range job.Steps {
+		for i, s := range job.Steps {
 			s.ID = joinID(job.ID, s.ID)
+			s.Job, s.JobFirst, s.JobIf = job.ID, i == 0, job.If
 			s.Needs = needs
 			s.Env = mergeEnv(p.Env, job.Env, s.Env)
+			s.Secrets = mergeNames(p.Secrets, job.Secrets, s.Secrets)
+			// The nearest setting wins: step, job, then pipeline workdir.
 			if s.Dir == "" {
 				s.Dir = job.Dir
+			}
+			if s.Dir == "" {
+				s.Dir = p.Workdir
 			}
 			steps = append(steps, s)
 			needs = []string{s.ID}
@@ -81,6 +91,21 @@ func mergeEnv(layers ...map[string]string) map[string]string {
 				out = make(map[string]string)
 			}
 			out[k] = v
+		}
+	}
+	return out
+}
+
+// mergeNames returns the names of every layer, in order, without repeats.
+func mergeNames(layers ...[]string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, layer := range layers {
+		for _, n := range layer {
+			if !seen[n] {
+				seen[n] = true
+				out = append(out, n)
+			}
 		}
 	}
 	return out

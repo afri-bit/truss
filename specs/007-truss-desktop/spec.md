@@ -47,5 +47,5 @@ history; packaging and auto-start.
 
 Exercised by hand and with a headless browser against a live daemon (every page in both
 appearances, step filter, cancel, register and unregister). `internal/daemon` tests cover that
-the page is served and that the API refuses requests without the token. There is no automated
-UI test in the repository yet; that is a known gap.
+the page is served and that the API refuses requests without the token. Automated browser tests
+and the file picker were added by [`013-desktop-polish`](../013-desktop-polish/spec.md).

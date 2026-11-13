@@ -6,11 +6,30 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/afri-bit/truss/internal/executor"
 	"github.com/afri-bit/truss/internal/pipeline"
+	"github.com/afri-bit/truss/internal/secrets"
 )
+
+// Option changes how Run works.
+type Option func(*config)
+
+type config struct {
+	loadSecrets func() (map[string]string, error)
+}
+
+// WithSecrets supplies the stored secrets, name to value. load is called once
+// per run, and only when a step declares a secret. Every value it returns is
+// removed from step output; the declared ones also become environment
+// variables of the steps that declare them.
+func WithSecrets(load func() (map[string]string, error)) Option {
+	return func(c *config) { c.loadSecrets = load }
+}
 
 // Run executes a pipeline on the host, running at most the plan's concurrency
 // of Steps at once. dir and env are captured by the caller and reused for every
@@ -22,14 +41,25 @@ import (
 // and no Exit Code.
 //
 // One scheduler goroutine owns all state. Steps start in definition order once
-// every Step they need has succeeded. On the first failure the remaining
-// running Steps are stopped, nothing more starts, and every started Step still
-// reports its own outcome.
+// every Step they need has settled. A Step with no if: condition starts only
+// when every Step it needs succeeded; otherwise it is skipped. On the first
+// failure that is not covered by continue-on-error the remaining running Steps
+// are stopped and nothing more starts, except Steps whose condition calls
+// always() or failure(). Every started Step still reports its own outcome.
+//
+// A Step may declare secrets. Before any Step starts, every declared secret
+// must be available through WithSecrets; otherwise Run returns an error that
+// names the missing secrets (never a value) and starts nothing. Secret values
+// that appear in step output are replaced by "***" before they reach events
+// or the returned run. See specs/012-secrets.
+//
+// A failed attempt of a Step with retries is run again after the Step's retry
+// delay. The Step's result is its last attempt.
 //
 // When ctx is cancelled the run is interrupted (FR-017): the error is ctx.Err()
 // itself, no later Step starts, and the returned run is partial. Callers must
 // ignore the returned run whenever err is not nil.
-func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, events StepEvents) (pipeline.PipelineRun, error) {
+func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, events StepEvents, opts ...Option) (pipeline.PipelineRun, error) {
 	if err := ctx.Err(); err != nil {
 		return pipeline.PipelineRun{}, err
 	}
@@ -41,78 +71,118 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 		return pipeline.PipelineRun{}, err
 	}
 
+	var cfg config
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	stored, err := resolveSecrets(plan, cfg)
+	if err != nil {
+		return pipeline.PipelineRun{}, err
+	}
+	hidden := make([]string, 0, len(stored))
+	for _, v := range stored {
+		hidden = append(hidden, v)
+	}
+
 	limit := max(plan.Concurrency, 1)
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	// Status is only final when Run returns a nil error.
 	run := pipeline.PipelineRun{Name: plan.Name, Status: pipeline.StatusSucceeded}
+	// outcome reports one finished attempt, or (due) that a retry delay is over.
 	type outcome struct {
-		slot int
-		id   string
-		res  executor.Result
+		slot    int
+		attempt int
+		id      string
+		res     executor.Result
+		due     bool // the retry delay elapsed; res is the previous attempt
+		aborted bool // the wait was cut short; res is the previous attempt
+		// afterFailure is true when the run had already failed as the retry
+		// was scheduled, so a later failure is not a reason to drop it.
+		afterFailure bool
 	}
 	done := make(chan outcome)
+	byID := make(map[string]pipeline.Step, len(plan.Graph))
+	for _, s := range plan.Graph {
+		byID[s.ID] = s
+	}
 	started := make(map[string]bool, len(plan.Graph))
-	succeeded := make(map[string]bool, len(plan.Graph))
-	running := 0
+	settled := make(map[string]pipeline.Status, len(plan.Graph))
+	// jobSkipped holds the jobs that will not run, with the reason the rest of
+	// their steps are skipped for.
+	type skip struct {
+		reason string
+		silent bool
+	}
+	jobSkipped := map[string]skip{}
+	running := 0 // steps with a process or a pending retry
 	failed := false
 
-	for {
-		// Start every ready Step, in definition order, while a slot is free.
-		for _, step := range plan.Graph {
-			if failed || ctx.Err() != nil || running >= limit {
-				break
+	// bypass reports whether the step may start after the run has failed.
+	bypass := func(step pipeline.Step) bool { return step.If.AfterFailure() || step.JobIf.AfterFailure() }
+	// holds evaluates a condition against the steps the step needs.
+	holds := func(c *pipeline.Condition, step pipeline.Step) bool {
+		ec := pipeline.EvalContext{Success: true, Env: envLookup(stepEnv(env, step.Env))}
+		for _, need := range step.Needs {
+			switch settled[need] {
+			case pipeline.StatusSucceeded:
+			case pipeline.StatusFailed:
+				ec.Success, ec.Failure = false, true
+			default:
+				ec.Success = false
 			}
-			if started[step.ID] || !allDone(step.Needs, succeeded) {
-				continue
-			}
-			started[step.ID] = true
-			var out io.Writer
-			if events != nil {
-				events.StepStarted(step.ID)
-				out = stepOutput{id: step.ID, events: events}
-			}
-			proc, err := executor.Start(runCtx, executor.Request{Run: step.Run, Dir: stepDir(dir, step.Dir), Env: stepEnv(env, step.Env), Out: out})
-			slot := len(run.Steps)
-			run.Steps = append(run.Steps, pipeline.StepRun{})
-			if err != nil {
-				if events != nil {
-					events.StepFinished(step.ID, nil, err)
-				}
-				run.Steps[slot] = stepResult(step.ID, executor.Result{Err: err})
-				failed = true
-				run.Status = pipeline.StatusFailed
-				run.FailedStep = step.ID
-				cancel()
-				break
-			}
-			running++
-			go func(slot int, step pipeline.Step) {
-				waitCtx := runCtx
-				if step.Timeout > 0 {
-					var release context.CancelFunc
-					waitCtx, release = context.WithTimeout(runCtx, step.Timeout)
-					defer release()
-				}
-				res := proc.Wait(waitCtx)
-				o := outcome{slot: slot, id: step.ID, res: res}
-				if res.Stopped && runCtx.Err() == nil && errors.Is(waitCtx.Err(), context.DeadlineExceeded) {
-					// The step's own limit ended it, not a failure elsewhere.
-					o.res.Stopped = false
-					o.res.ExitCode = nil
-					o.res.Err = fmt.Errorf("timed out after %s", step.Timeout)
-				}
-				done <- o
-			}(slot, step)
 		}
-		if running == 0 {
-			break
+		return c.Eval(ec)
+	}
+	// decide says whether a step whose needs have settled runs. When it does
+	// not, reason says why and silent is set for a step that only never
+	// started because the run had already failed, as before conditions existed.
+	decide := func(step pipeline.Step) (runIt bool, reason string, silent bool) {
+		if js, ok := jobSkipped[step.Job]; ok && step.Job != "" {
+			return false, js.reason, js.silent
 		}
+		// skipFirst records that a job never started, so that none of its
+		// steps run, whatever their own conditions say.
+		skipFirst := func(reason string, silent bool) (bool, string, bool) {
+			if step.JobFirst {
+				jobSkipped[step.Job] = skip{reason: fmt.Sprintf("job %q did not start", step.Job), silent: silent}
+			}
+			return false, reason, silent
+		}
+		if failed && !bypass(step) {
+			return skipFirst("", true)
+		}
+		gate := true
+		if step.JobFirst && step.JobIf != nil {
+			if !holds(step.JobIf, step) {
+				jobSkipped[step.Job] = skip{reason: fmt.Sprintf("the if condition of job %q is false", step.Job)}
+				return false, jobSkipped[step.Job].reason, false
+			}
+			gate = false // the job's condition replaces the default for its first step
+		}
+		if step.If != nil {
+			if holds(step.If, step) {
+				return true, "", false
+			}
+			return false, "its if condition is false", false
+		}
+		if gate {
+			for _, need := range step.Needs {
+				if settled[need] != pipeline.StatusSucceeded {
+					return skipFirst(fmt.Sprintf("step %s did not succeed", need), false)
+				}
+			}
+		}
+		return true, "", false
+	}
 
-		o := <-done
-		running--
-		stepRun := stepResult(o.id, o.res)
+	// finish handles one finished attempt. It reports true when a retry is
+	// pending, so the step still occupies a slot.
+	finish := func(o outcome) bool {
+		step := byID[o.id]
+		stepRun := stepResult(o.id, o.res, hidden)
+		stepRun.Attempts = o.attempt
 		if failed && o.res.Stopped && ctx.Err() == nil {
 			stepRun.StoppedBy = run.FailedStep
 		}
@@ -125,17 +195,181 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 		if ctx.Err() != nil {
 			// FR-017: an interrupt wins over however the Step ended. The
 			// check follows the events, which may be where it was cancelled.
-			continue
+			return false
+		}
+		if stepRun.Status == pipeline.StatusFailed && stepRun.StoppedBy == "" && !o.res.Stopped &&
+			o.attempt <= step.Retries && (!failed || bypass(step)) {
+			next := o.attempt + 1
+			if events != nil {
+				events.StepRetrying(o.id, next, step.Retries+1, step.RetryDelay)
+			}
+			waitCtx := runCtx
+			scheduledAfterFailure := failed
+			if failed {
+				waitCtx = ctx
+			}
+			go func() {
+				r := outcome{slot: o.slot, attempt: next, id: o.id, res: o.res, due: true, afterFailure: scheduledAfterFailure}
+				if step.RetryDelay > 0 {
+					timer := time.NewTimer(step.RetryDelay)
+					select {
+					case <-timer.C:
+					case <-waitCtx.Done():
+						r.aborted = true
+					}
+					timer.Stop()
+				}
+				done <- r
+			}()
+			return true
+		}
+		if stepRun.Status == pipeline.StatusSucceeded {
+			run.Steps[o.slot] = stepRun
+			settled[o.id] = pipeline.StatusSucceeded
+			return false
+		}
+		settled[o.id] = pipeline.StatusFailed
+		if step.ContinueOnError && stepRun.StoppedBy == "" && !failed {
+			stepRun.ContinuedOnError = true
+			run.Steps[o.slot] = stepRun
+			if events != nil {
+				events.StepContinued(o.id)
+			}
+			return false
 		}
 		run.Steps[o.slot] = stepRun
-		switch {
-		case stepRun.Status == pipeline.StatusSucceeded:
-			succeeded[o.id] = true
-		case !failed:
+		if !failed {
 			failed = true
 			run.Status = pipeline.StatusFailed
 			run.FailedStep = o.id
 			cancel()
+		}
+		return false
+	}
+
+	// abandon ends a Step whose retry wait was cut short by a failure elsewhere.
+	abandon := func(o outcome) {
+		stepRun := stepResult(o.id, o.res, hidden)
+		stepRun.Attempts = o.attempt - 1
+		stepRun.StoppedBy = run.FailedStep
+		if events != nil {
+			events.StepStopped(o.id, run.FailedStep)
+		}
+		run.Steps[o.slot] = stepRun
+		settled[o.id] = pipeline.StatusFailed
+	}
+
+	// startAttempt starts one attempt of a step. It reports true when a
+	// process is running, and false when the attempt already ended.
+	startAttempt := func(step pipeline.Step, slot, attempt int) bool {
+		// A step that may start after a failure must outlive the stop signal.
+		base := runCtx
+		if failed {
+			base = ctx
+		}
+		var out, errOut io.Writer
+		var reds []*secrets.Redactor
+		if events != nil {
+			events.StepStarted(step.ID)
+			id := step.ID
+			emit := func(b []byte) { events.StepOutput(id, append([]byte(nil), b...)) }
+			// Each stream has its own matcher: output of one stream must not
+			// release the held-back half of a value printed on the other.
+			if ro, re := secrets.NewRedactor(hidden, emit), secrets.NewRedactor(hidden, emit); ro != nil {
+				out, errOut, reds = ro, re, []*secrets.Redactor{ro, re}
+			} else {
+				out = stepOutput{id: id, events: events}
+			}
+		}
+		stepEnvironment := withSecrets(stepEnv(env, step.Env), step.Secrets, stored)
+		var proc *executor.Process
+		workDir, err := stepDir(dir, step.Dir)
+		if err == nil {
+			proc, err = executor.Start(base, executor.Request{Run: step.Run, Dir: workDir, Env: stepEnvironment, Out: out, ErrOut: errOut})
+		}
+		if err != nil {
+			return finish(outcome{slot: slot, attempt: attempt, id: step.ID, res: executor.Result{Err: err}})
+		}
+		go func() {
+			waitCtx := base
+			if step.Timeout > 0 {
+				var release context.CancelFunc
+				waitCtx, release = context.WithTimeout(base, step.Timeout)
+				defer release()
+			}
+			res := proc.Wait(waitCtx)
+			for _, red := range reds {
+				red.Flush() // release a held-back tail before the step is reported finished
+			}
+			o := outcome{slot: slot, attempt: attempt, id: step.ID, res: res}
+			if res.Stopped && base.Err() == nil && errors.Is(waitCtx.Err(), context.DeadlineExceeded) {
+				// The step's own limit ended it, not a failure elsewhere.
+				o.res.Stopped = false
+				o.res.ExitCode = nil
+				o.res.Err = fmt.Errorf("timed out after %s", step.Timeout)
+			}
+			done <- o
+		}()
+		return true
+	}
+
+	// schedule settles every step that can be skipped and starts every ready
+	// step, in definition order, while a slot is free.
+	schedule := func() {
+		for changed := true; changed; {
+			changed = false
+			for _, step := range plan.Graph {
+				if ctx.Err() != nil {
+					return
+				}
+				if started[step.ID] || !allSettled(step.Needs, settled) {
+					continue
+				}
+				runIt, reason, silent := decide(step)
+				if !runIt {
+					started[step.ID] = true
+					settled[step.ID] = pipeline.StatusSkipped
+					if events != nil && !silent {
+						events.StepSkipped(step.ID, reason)
+					}
+					changed = true
+					continue
+				}
+				if running >= limit {
+					continue
+				}
+				started[step.ID] = true
+				changed = true
+				slot := len(run.Steps)
+				run.Steps = append(run.Steps, pipeline.StepRun{})
+				running++
+				if !startAttempt(step, slot, 1) {
+					running--
+				}
+			}
+		}
+	}
+
+	for {
+		schedule()
+		if running == 0 {
+			break
+		}
+		o := <-done
+		switch {
+		case !o.due:
+			if !finish(o) {
+				running--
+			}
+		case ctx.Err() != nil:
+			running-- // interrupted while waiting to retry
+		case o.aborted || (failed && !o.afterFailure):
+			abandon(o)
+			running--
+		default:
+			if !startAttempt(byID[o.id], o.slot, o.attempt) {
+				running--
+			}
 		}
 	}
 
@@ -153,14 +387,27 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 }
 
 // stepDir resolves a step's working directory against the run directory.
-func stepDir(runDir, dir string) string {
-	if dir == "" || filepath.IsAbs(dir) {
-		if dir == "" {
-			return runDir
+// A relative path is joined to runDir. On Windows a path with a drive letter
+// must be absolute, and one that starts with a separator but no drive letter
+// is taken from the drive of runDir; "C:tmp" depends on a per-drive current
+// directory, so it is refused.
+func stepDir(runDir, dir string) (string, error) {
+	switch {
+	case dir == "":
+		return runDir, nil
+	case filepath.IsAbs(dir):
+		return dir, nil
+	case filepath.VolumeName(dir) != "":
+		return "", fmt.Errorf("working directory %q: a path with a drive letter must be absolute", dir)
+	case dir[0] == '\\' || dir[0] == '/':
+		// Rooted without a drive letter: only reachable on Windows.
+		abs, err := filepath.Abs(runDir)
+		if err != nil {
+			return "", fmt.Errorf("working directory %q: %w", dir, err)
 		}
-		return dir
+		return filepath.Join(filepath.VolumeName(abs)+string(filepath.Separator), dir), nil
 	}
-	return filepath.Join(runDir, dir)
+	return filepath.Join(runDir, dir), nil
 }
 
 // stepEnv returns the run environment with the step's variables appended.
@@ -181,13 +428,27 @@ func stepEnv(base []string, extra map[string]string) []string {
 	return env
 }
 
-func allDone(ids []string, done map[string]bool) bool {
+func allSettled(ids []string, settled map[string]pipeline.Status) bool {
 	for _, id := range ids {
-		if !done[id] {
+		if settled[id] == "" {
 			return false
 		}
 	}
 	return true
+}
+
+// envLookup returns a function that finds a variable in env, where a later
+// entry wins. Names are case-insensitive on Windows, as the host treats them.
+func envLookup(env []string) func(string) string {
+	return func(name string) string {
+		for i := len(env) - 1; i >= 0; i-- {
+			k, v, ok := strings.Cut(env[i], "=")
+			if ok && (k == name || runtime.GOOS == "windows" && strings.EqualFold(k, name)) {
+				return v
+			}
+		}
+		return ""
+	}
 }
 
 // stepOutput forwards command bytes to the step-event sink without
@@ -207,13 +468,13 @@ func (s stepOutput) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func stepResult(id string, res executor.Result) pipeline.StepRun {
+func stepResult(id string, res executor.Result, hidden []string) pipeline.StepRun {
 	step := pipeline.StepRun{
 		ID:       id,
 		Status:   pipeline.StatusSucceeded,
 		ExitCode: res.ExitCode,
-		Output:   res.Stdout,
-		Stderr:   res.Stderr,
+		Output:   secrets.Scrub(res.Stdout, hidden),
+		Stderr:   secrets.Scrub(res.Stderr, hidden),
 	}
 	if res.Err != nil {
 		step.Status = pipeline.StatusFailed
@@ -225,4 +486,55 @@ func stepResult(id string, res executor.Result) pipeline.StepRun {
 		step.Status = pipeline.StatusFailed
 	}
 	return step
+}
+
+// resolveSecrets returns the stored secrets when any step declares one, and
+// nil otherwise (the store is then never read). It fails, naming only the
+// missing names, when a declared secret is not available.
+func resolveSecrets(plan pipeline.ExecutionPlan, cfg config) (map[string]string, error) {
+	used := map[string]bool{}
+	var firstUse = map[string]string{}
+	var order []string
+	for _, step := range plan.Graph {
+		for _, name := range step.Secrets {
+			if !used[name] {
+				used[name] = true
+				firstUse[name] = step.ID
+				order = append(order, name)
+			}
+		}
+	}
+	if len(order) == 0 {
+		return nil, nil
+	}
+	stored := map[string]string{}
+	if cfg.loadSecrets != nil {
+		var err error
+		if stored, err = cfg.loadSecrets(); err != nil {
+			return nil, fmt.Errorf("cannot read secrets: %w", err)
+		}
+	}
+	var missing []string
+	for _, name := range order {
+		if _, ok := stored[name]; !ok {
+			missing = append(missing, fmt.Sprintf("%s (step %s)", name, firstUse[name]))
+		}
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("missing secrets: %s; store each with: truss secret set <name>", strings.Join(missing, ", "))
+	}
+	return stored, nil
+}
+
+// withSecrets appends the named secrets to env. Later entries win when the
+// process starts, so a secret overrides a variable of the same name.
+func withSecrets(env []string, names []string, stored map[string]string) []string {
+	if len(names) == 0 {
+		return env
+	}
+	out := append([]string(nil), env...)
+	for _, name := range names {
+		out = append(out, name+"="+stored[name])
+	}
+	return out
 }

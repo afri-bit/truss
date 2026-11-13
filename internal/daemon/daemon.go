@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/afri-bit/truss/internal/registry"
 	"github.com/afri-bit/truss/internal/runs"
 	"github.com/afri-bit/truss/internal/scheduler"
+	"github.com/afri-bit/truss/internal/secrets"
 )
 
 // DefaultAddress is where the daemon listens unless told otherwise.
@@ -123,7 +125,7 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 	if err != nil {
 		return nil, err
 	}
-	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Env: opts.Env, Now: opts.Now})
+	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Env: opts.Env, Secrets: secrets.Open(opts.Home.Secrets()).Load, Now: opts.Now, Resolve: resolver(reg), Folders: func(name string) (string, string) { return opts.Home.PipelineData(name), opts.Home.PipelineCache(name) }})
 	if err != nil {
 		return nil, err
 	}
@@ -181,6 +183,7 @@ func (d *Daemon) Serve(ctx context.Context) error {
 	server := &http.Server{Handler: d.handler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 2 * time.Minute}
 	served := make(chan error, 1)
 	go func() { served <- server.Serve(d.listener) }()
+	d.runs.Resume()
 	d.logf("daemon started on %s (pid %d, home %s)", d.endpoint.Address, d.endpoint.PID, d.opts.Home)
 
 	ticker := time.NewTicker(d.opts.Tick)
@@ -317,6 +320,18 @@ func (d *Daemon) load(e registry.Entry, since time.Time, force bool) *definition
 // these on every change and must not be made to read without limit.
 const maxDefinitionBytes = 1 << 20
 
+// resolver lets the run manager read a registered pipeline's file.
+func resolver(reg *registry.Registry) runs.Resolver {
+	return func(name string) (pipeline.Pipeline, string, error) {
+		e, ok := reg.Get(name)
+		if !ok {
+			return pipeline.Pipeline{}, "", fmt.Errorf("%w: %q", registry.ErrNotFound, name)
+		}
+		def, _, err := readDefinition(e.Path)
+		return def, filepath.Dir(e.Path), err
+	}
+}
+
 func readDefinition(path string) (pipeline.Pipeline, pipeline.ExecutionPlan, error) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -354,10 +369,20 @@ func (d *Daemon) submit(name, trigger string, scheduledFor time.Time) (api.Run, 
 		}
 		return api.Run{}, &invalidError{cur.err}
 	}
+	data, cache := d.opts.Home.PipelineData(name), d.opts.Home.PipelineCache(name)
+	if err := os.MkdirAll(cache, 0o700); err != nil {
+		err = fmt.Errorf("prepare the data folder of pipeline %s: %w", name, err)
+		if trigger != api.TriggerManual {
+			_, _ = d.runs.Record(name, trigger, scheduledFor, api.RunFailed, err.Error())
+		}
+		return api.Run{}, err
+	}
 	return d.runs.Submit(runs.Request{
 		Pipeline:     name,
 		Definition:   cur.def,
 		Dir:          filepath.Dir(e.Path),
+		DataDir:      data,
+		CacheDir:     cache,
 		Trigger:      trigger,
 		ScheduledFor: scheduledFor,
 	})
@@ -411,6 +436,19 @@ func (d *Daemon) logf(format string, args ...any) {
 }
 
 func stamp(t time.Time) string { return t.Format("2006-01-02 15:04:05") }
+
+// CheckAddress reports why address cannot be a daemon address: it is not
+// host:port with a numeric port, or not on the loopback interface.
+func CheckAddress(address string) error {
+	if err := checkLoopback(address); err != nil {
+		return err
+	}
+	_, port, _ := net.SplitHostPort(address)
+	if n, err := strconv.Atoi(port); err != nil || n < 0 || n > 65535 {
+		return fmt.Errorf("daemon address %q: the port must be a number from 0 to 65535", address)
+	}
+	return nil
+}
 
 // checkLoopback refuses addresses that would expose the API to the network.
 func checkLoopback(address string) error {
