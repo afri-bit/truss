@@ -350,6 +350,7 @@ function meter(kind, pct, label) {
 function runMeters(r) {
   if (r.status === "queued") return h("span", { class: "muted mono" }, "waiting");
   if (!isActive(r)) return h("span", { class: "muted mono" }, "exited");
+  if (r.trigger === "local") return h("span", { class: "muted", title: "the run executes in a shell outside the daemon" }, "not measured");
   if (!res.ok()) return h("span", { class: "muted", title: res.why() }, "not reported");
   const u = res.run(r.id);
   if (!u.steps) return h("span", { class: "muted mono" }, "starting");
@@ -880,7 +881,7 @@ views.run = {
         h("div", null, h("div", { class: "k" }, active ? "Running now" : "Ended"), h("div", { class: "v", title: current.join(", ") }, active ? (current.join(", ") || "waiting") : clock(run.finished_at))),
         h("div", null, h("div", { class: "k" }, "Started"), h("div", { class: "v" }, clock(run.started_at))),
         h("div", null, h("div", { class: "k" }, active ? "Elapsed" : "Duration"), h("div", { class: "v" }, took(run))),
-        h("div", null, h("div", { class: "k" }, "Processes"), h("div", { class: "v", title: res.ok() ? "processes of this run's running steps" : res.why() }, !active ? "0 live" : res.ok() ? `${usage.procs} live` : "not reported")),
+        h("div", null, h("div", { class: "k" }, "Processes"), h("div", { class: "v", title: run.trigger === "local" ? "the run executes in a shell outside the daemon" : res.ok() ? "processes of this run's running steps" : res.why() }, !active ? "0 live" : run.trigger === "local" ? "local shell" : res.ok() ? `${usage.procs} live` : "not reported")),
         h("div", null, h("div", { class: "k" }, "Supervisor PID"), h("div", { class: "v", title: run.trigger === "local" ? "the run executes in a shell outside the daemon" : "the daemon process that runs this pipeline" }, run.trigger === "local" ? "local shell" : shell.status ? shell.status.pid : "–"))),
       run.reason && h("div", { class: "callout" + (run.status === "failed" ? " bad" : ""), role: run.status === "failed" ? "alert" : null }, icon(run.status === "failed" ? "alert" : "info"), h("div", null, run.reason)),
       steps.length > 0 && panel("Workflow", { hint: "click a step to filter the log", tools: legend() },
@@ -898,7 +899,7 @@ views.run = {
                 h("span", { class: "dur" }, stepDetail(st)),
                 h("span", { class: "sub" },
                   h("span", { class: "badge s-" + stepState(st) }, stepState(st) === "tolerated" ? "failed · continued" : st.status),
-                  st.status === "running" && u && h("span", { class: "mini", title: "CPU share of the machine" }, h("span", { class: "track" }, h("i", { style: `width:${Math.min(100, u.cpu_percent * 4)}%` })), h("span", null, u.cpu_percent.toFixed(1) + "%")),
+                  st.status === "running" && u && h("span", { class: "mini", title: "CPU share of the machine" }, h("span", { class: "track" }, h("i", { style: `width:${Math.min(100, u.cpu_percent)}%` })), h("span", null, u.cpu_percent.toFixed(1) + "%")),
                   st.status === "running" && u && h("span", { class: "mono" }, bytes(u.rss_bytes)),
                   st.pid > 0 && h("span", { class: "mono", title: st.status === "running" ? "process id" : "process id of the last attempt" }, "pid " + st.pid)));
             }))),
@@ -933,6 +934,7 @@ views.run = {
 };
 
 function runResources(run) {
+  if (run.trigger === "local") return h("div", { class: "empty" }, "Not measured: this run executes in a shell outside the daemon (truss run --track).");
   if (!res.ok()) return noFigures();
   const active = isActive(run);
   if (!active) return h("div", { class: "empty" }, "Figures are kept only while a run is running.");
@@ -1044,7 +1046,7 @@ views.monitor = {
               h("td", { class: "mono" }, p.name),
               h("td", null, p.run ? h("span", { class: "id" }, `${p.run.pipeline} · ${shortId(p.run.id)}`) : h("span", { class: "muted" }, "–")),
               h("td", { class: "num", title: p.processes != null && !p.tree && !p.daemon ? "only the step's shell is measured on this OS" : "" }, p.processes == null ? "–" : p.processes + (p.tree || p.daemon ? "" : "*")),
-              h("td", null, p.cpu == null ? h("span", { class: "muted", title: res.why() }, "not reported") : meter("cpu", p.cpu, p.cpu.toFixed(1) + "%")),
+              h("td", null, p.cpu == null ? (p.run && p.run.trigger === "local" ? h("span", { class: "muted", title: "the run executes in a shell outside the daemon" }, "local shell") : h("span", { class: "muted", title: res.why() }, "not reported")) : meter("cpu", p.cpu, p.cpu.toFixed(1) + "%")),
               h("td", { class: "num" }, p.rss == null ? h("span", { class: "muted" }, "–") : bytes(p.rss)),
               h("td", { class: "num" }, p.threads || "–")))))))),
         h("div", { class: "stack" },

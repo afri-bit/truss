@@ -60,7 +60,9 @@ test("demo mode shows sample data, says so, and never calls an API", async () =>
 
     // Resource figures are sample data too, and say so.
     await page.evaluate(() => { location.hash = "#/monitor"; });
-    await page.locator("section", { hasText: "Cores" }).locator(".sim", { hasText: "sample" }).waitFor();
+    for (const title of ["CPU", "Memory", "Cores", "Processes"]) {
+      await page.locator(".panel-head", { has: page.locator("h2", { hasText: new RegExp(`^${title}$`) }) }).locator(".sim", { hasText: "sample" }).waitFor();
+    }
     assert.equal(await page.locator(".core").count(), 8);
 
     // A reload stays in demo mode for this tab.
