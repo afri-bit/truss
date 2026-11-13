@@ -210,3 +210,33 @@ test("Forget token removes the token and shows the terminal hint", async () => {
     await page.context().close();
   }
 });
+
+test("#demo on a real daemon's page shows real data; demo data exists only on the demo server", async () => {
+  const page = await b.newPage();
+  try {
+    await page.goto(d.authedUrl()); // the token is stored
+    await page.locator("h1", { hasText: "Dashboard" }).waitFor();
+    await page.goto(d.base + "/#demo");
+    await page.locator("h1", { hasText: "Dashboard" }).waitFor();
+    await page.locator("#conn", { hasText: "connected" }).waitFor();
+    assert.equal(await page.locator("#conn", { hasText: "Demo data" }).count(), 0);
+    assert.equal(await page.evaluate(() => sessionStorage.getItem("truss-demo")), null, "the demo flag is dropped");
+    const names = await page.locator(".tile", { hasText: "Pipelines registered" }).locator(".num").textContent();
+    assert.equal(names, String((await d.call("GET", "/pipelines")).length), "counts come from the daemon");
+  } finally {
+    await page.context().close();
+  }
+});
+
+test("a token link turns demo mode off in the same tab", async () => {
+  const page = await b.newPage();
+  try {
+    await page.goto(d.base + "/");
+    await page.evaluate(() => sessionStorage.setItem("truss-demo", "1")); // as if the tab had been in demo mode
+    await page.goto(d.authedUrl());
+    await page.locator("#conn", { hasText: "connected" }).waitFor();
+    assert.equal(await page.evaluate(() => sessionStorage.getItem("truss-demo")), null);
+  } finally {
+    await page.context().close();
+  }
+});

@@ -19,6 +19,7 @@ import (
 // as the daemon and, like the daemon, answers only requests addressed to this machine.
 func demoHandler() http.Handler {
 	files := http.FileServerFS(webui.Files())
+	demoFiles := http.FileServerFS(webui.DemoFiles())
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !loopbackHost(r.Host) {
 			http.Error(w, "this demo server only answers requests addressed to this machine", http.StatusForbidden)
@@ -32,6 +33,10 @@ func demoHandler() http.Handler {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = io.WriteString(w, `{"error":"demo mode has no daemon"}`+"\n")
+			return
+		}
+		if r.URL.Path == "/demo.js" { // only this server has the sample data
+			demoFiles.ServeHTTP(w, r)
 			return
 		}
 		files.ServeHTTP(w, r)
@@ -60,7 +65,7 @@ func (in invocation) desktopDemo(ctx context.Context, open bool) int {
 	if err != nil {
 		return in.fail(fmt.Errorf("start the demo server: %w", err))
 	}
-	srv := &http.Server{Handler: demoHandler(), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Handler: demoHandler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 2 * time.Minute}
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ln) }()
 	url := "http://" + ln.Addr().String() + "/#demo"
@@ -78,8 +83,11 @@ func (in invocation) desktopDemo(ctx context.Context, open bool) int {
 	}
 	shutdown, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(shutdown); err != nil && !errors.Is(err, context.DeadlineExceeded) {
-		return in.fail(fmt.Errorf("stop the demo server: %w", err))
+	if err := srv.Shutdown(shutdown); err != nil {
+		if !errors.Is(err, context.DeadlineExceeded) {
+			return in.fail(fmt.Errorf("stop the demo server: %w", err))
+		}
+		_ = srv.Close() // connections still open after the grace period are cut
 	}
 	return 0
 }

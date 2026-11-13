@@ -5,12 +5,15 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/afri-bit/truss/internal/webui"
 )
 
 func TestDemoHandler_ServesThePageWithTheDaemonsHeaders(t *testing.T) {
@@ -20,7 +23,7 @@ func TestDemoHandler_ServesThePageWithTheDaemonsHeaders(t *testing.T) {
 		t.Fatalf("status = %d", rec.Code)
 	}
 	body, _ := io.ReadAll(rec.Body)
-	for _, want := range []string{`src="app.js"`, `src="demo.js"`} {
+	for _, want := range []string{`src="app.js"`} {
 		if !strings.Contains(string(body), want) {
 			t.Errorf("index.html lacks %s", want)
 		}
@@ -30,6 +33,22 @@ func TestDemoHandler_ServesThePageWithTheDaemonsHeaders(t *testing.T) {
 	}
 	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 		t.Errorf("nosniff = %q", got)
+	}
+}
+
+func TestDemoHandler_ServesTheSampleData(t *testing.T) {
+	rec := httptest.NewRecorder()
+	demoHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://127.0.0.1:9/demo.js", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "window.TrussDemo") {
+		t.Fatalf("GET /demo.js: %d %.80q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDaemonFiles_HaveNoSampleData(t *testing.T) {
+	// The daemon serves webui.Files(); demo.js must not be among them, so #demo
+	// on a real daemon's page cannot switch to sample data.
+	if _, err := fs.Stat(webui.Files(), "demo.js"); err == nil {
+		t.Fatal("webui.Files() contains demo.js")
 	}
 }
 

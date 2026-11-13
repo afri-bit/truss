@@ -51,9 +51,21 @@ const store = {
   set(v) { try { localStorage.setItem("truss-token", v); } catch { /* private mode */ } },
 };
 let token = store.get();
-// Demo mode (`truss desktop --demo`, or #demo in the address): sample data from demo.js, no daemon.
+(function takeTokenFromAddress() {
+  const m = /^#token=([0-9a-f]+)$/.exec(location.hash);
+  if (!m) return;
+  token = m[1];
+  store.set(token);
+  // A token link always means the real daemon, even in a tab that was in demo mode.
+  try { sessionStorage.removeItem("truss-demo"); } catch { /* private mode */ }
+  history.replaceState(null, "", location.pathname + "#/");
+})();
+
+// Demo mode (`truss desktop --demo`): sample data from demo.js, no daemon. Only the demo
+// server has demo.js; on a daemon's page the script is missing and the page stays real.
 // It lasts for this browser tab only.
-const demo = (() => {
+let demo = null;
+const demoWanted = (() => {
   let on = false;
   try { on = sessionStorage.getItem("truss-demo") === "1"; } catch { /* private mode */ }
   if (location.hash === "#demo") {
@@ -61,20 +73,23 @@ const demo = (() => {
     try { sessionStorage.setItem("truss-demo", "1"); } catch { /* still on for this page */ }
     history.replaceState(null, "", location.pathname + "#/");
   }
-  return on && window.TrussDemo ? window.TrussDemo : null;
+  return on;
 })();
+function loadDemo() {
+  return new Promise((resolve) => {
+    const off = () => { try { sessionStorage.removeItem("truss-demo"); } catch { /* private mode */ } resolve(null); };
+    const el = document.createElement("script");
+    el.src = "demo.js";
+    el.onload = () => (window.TrussDemo ? resolve(window.TrussDemo) : off());
+    el.onerror = off;
+    document.head.append(el);
+  });
+}
 function leaveDemo() {
   try { sessionStorage.removeItem("truss-demo"); } catch { /* private mode */ }
   location.hash = "#/";
   location.reload();
 }
-(function takeTokenFromAddress() {
-  const m = /^#token=([0-9a-f]+)$/.exec(location.hash);
-  if (!m) return;
-  token = m[1];
-  store.set(token);
-  history.replaceState(null, "", location.pathname + "#/");
-})();
 
 // ---------- small helpers ----------
 
@@ -1485,7 +1500,11 @@ function paintDaemon(up) {
 }
 
 applySettings();
-window.addEventListener("hashchange", () => route());
+window.addEventListener("hashchange", () => {
+  // A token or demo link pasted into an open tab only changes the hash; start over so it takes effect.
+  if (/^#token=/.test(location.hash) || location.hash === "#demo") { location.reload(); return; }
+  route();
+});
 let ticker = 0;
 function schedule() {
   clearTimeout(ticker);
@@ -1494,6 +1513,10 @@ function schedule() {
     schedule();
   }, settings.refresh);
 }
-pollShell().then(() => paintDaemon(shell.up !== false));
-route();
-schedule();
+(async function start() {
+  if (demoWanted) demo = await loadDemo();
+  paintMenu();
+  pollShell().then(() => paintDaemon(shell.up !== false));
+  route();
+  schedule();
+})();
