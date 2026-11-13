@@ -74,8 +74,14 @@ jobs:
         shell: bash
         run: go test ${{ steps.race.outputs.flag }} -count=20 -run 'Concurren|Stop|Tree' ./internal/engine ./internal/executor ./internal/runlog ./cmd/truss
 
+      # CGO_ENABLED=0 as in release.yml: the test steps above link with cgo
+      # (-race needs it), so this is the only run of a release-style binary.
+      # On macOS it proves that every libSystem function internal/metrics
+      # imports resolves at start-up (ADR 0013).
       - name: Build and end-to-end script
         shell: bash
+        env:
+          CGO_ENABLED: "0"
         run: |
           bin="bin/truss$(go env GOEXE)"
           go build -o "$bin" ./cmd/truss
