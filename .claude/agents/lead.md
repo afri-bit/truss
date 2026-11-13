@@ -33,7 +33,7 @@ except through the workflow.
 3. Classify the work (`CLAUDE.md`, "Risk classes") and record it: chore (tier 0), feature (tier 1) or
    contract/execution-safety (tier 2). When unsure take the higher one. A work item outside
    `docs/MILESTONE.md` is a blocker, not a task.
-4. Branch `feature/<NNN-name>` (spec work), `feature/<name>`, `bugfix/<name>` or `hotfix/<name>`
+4. Branch `feature/<NNN-name>` (spec work) or `<type>/<name>` with type bugfix, feature, hotfix, release, task or chore
    from `develop`. Initialize or resume the state: `python3 scripts/memory.py state init <work-id> ...`.
 
 ## The pipeline

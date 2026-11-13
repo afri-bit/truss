@@ -6,7 +6,9 @@
 #   - any push that targets develop, main or master (for example `git push origin HEAD:develop`)
 #   - force pushes, remote branch deletes, mirror and all-branch pushes
 #   - pushing tags (a v* tag publishes a release; that is the maintainer's step)
-#   - creating a branch whose name lacks feature/, bugfix/ or hotfix/ (constitution, Branching)
+#   - creating a branch whose name lacks an allowed prefix: bugfix/, feature/, hotfix/, release/,
+#     task/ or chore/ (constitution, Branching; the rule lives in .github/scripts/branch-name-check.sh)
+#   - committing when the author identity is not afri-bit (git config user.name / user.email)
 #   - skipped hooks or signing (--no-verify, --no-gpg-sign, commit -n)
 #
 # This is a convenience guard for agent sessions, not a security boundary: a shell wrapper
@@ -31,11 +33,13 @@ is_protected() {
   [ "$ref" = main ] || [ "$ref" = master ] || [ "$ref" = develop ]
 }
 
-# True when a new branch name follows the constitution. The cloud runner names its own session
-# branches claude/..., and those are created by the harness, not by a command checked here.
+# True when a new branch name follows the constitution. One rule, shared with CI:
+# .github/scripts/branch-name-check.sh. There is no exemption for harness branches (claude/...).
 valid_branch_name() {
-  [[ "$1" =~ ^(feature|bugfix|hotfix)/[a-z0-9][a-z0-9._-]*$ ]]
+  bash "${CLAUDE_PROJECT_DIR:-.}/.github/scripts/branch-name-check.sh" "$1" >/dev/null 2>&1
 }
+
+BRANCH_RULE="must be <type>/<name> with <type> one of bugfix, feature, hotfix, release, task, chore (constitution, Branching)."
 
 # Drop heredoc bodies so words inside a commit message are not mistaken for options.
 stripped=$(printf '%s\n' "$command" | awk -v q="'" '
@@ -87,7 +91,7 @@ while IFS= read -r segment; do
         case "${args[n]}" in
           -c | -C | -b | -B)
             name=${args[n + 1]:-}
-            [ -n "$name" ] && ! valid_branch_name "$name" && deny "branch '$name' must start with feature/, bugfix/ or hotfix/ (constitution, Branching)."
+            [ -n "$name" ] && ! valid_branch_name "$name" && deny "branch '$name' $BRANCH_RULE"
             ;;
         esac
       done
@@ -101,7 +105,7 @@ while IFS= read -r segment; do
           *) [ -z "$newname" ] && newname=$a ;;
         esac
       done
-      [ -n "$newname" ] && ! valid_branch_name "$newname" && deny "branch '$newname' must start with feature/, bugfix/ or hotfix/ (constitution, Branching)."
+      [ -n "$newname" ] && ! valid_branch_name "$newname" && deny "branch '$newname' $BRANCH_RULE"
       continue ;;
   esac
 
@@ -120,6 +124,15 @@ while IFS= read -r segment; do
       -n) [ "$sub" = commit ] && deny "do not skip hooks (commit -n)." ;;
     esac
   done
+
+  if [ "$sub" = commit ]; then
+    ident=$(git -C "${CLAUDE_PROJECT_DIR:-.}" var GIT_AUTHOR_IDENT 2>/dev/null || true)
+    ident_name=${ident%% <*}
+    ident_email=${ident#*<}; ident_email=${ident_email%%>*}
+    if [ "$ident_name" != "afri-bit" ] || [[ "$ident_email" == *@anthropic.com ]]; then
+      deny "commits are authored by afri-bit (got '$ident_name <$ident_email>'). Run: git config user.name afri-bit && git config user.email <afri-bit email>. Co-authored-by trailers are allowed."
+    fi
+  fi
 
   if [ "$sub" = push ]; then
     for a in "${args[@]}"; do

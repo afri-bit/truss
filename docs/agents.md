@@ -125,6 +125,8 @@ the log, memory or an ADR.
 | End to end | `.github/scripts/e2e-test.sh` | built-binary behavior differs |
 | Memory | CI `agent-tooling` | invalid memory, state or log; stale index; secret-like content |
 | Spec analysis | `/speckit-analyze` | CRITICAL or HIGH finding |
+| Repository rules | CI `repo-rules` (every push and PR), `guard-git.sh` | a branch outside the allowed prefixes; a commit not authored by `afri-bit` (`Co-authored-by` is fine) |
+| Release check | `release.yml` on a `v*` tag | tag, `go.mod`, `cmd/truss` `Version`, `internal/webui/VERSION` (Desktop) and the latest `CHANGELOG.md` section disagree |
 | Agent gate | `agent-gate` (placeholder, not running; `python3 scripts/agent_gate.py` still runs locally) | branch name, missing spec artifacts, code before specs, missing work state, guardrail paths touched, missing `Open tasks:` line |
 | Independent review | `/review` | open blocker from any reviewer |
 | Human | pull request | the maintainer alone merges |
@@ -154,7 +156,7 @@ Hooks are a safety net for agent sessions, not a security boundary. GitHub branc
 
 | Hook | Event | Effect |
 |---|---|---|
-| `guard-git.sh` | PreToolUse Bash | Blocks commits/pushes on `develop`/`main`, pushes to them, force pushes, tag pushes, `--no-verify`, remote deletes, new branches without `feature/`, `bugfix/` or `hotfix/` |
+| `guard-git.sh` | PreToolUse Bash | Blocks commits/pushes on `develop`/`main`, pushes to them, force pushes, tag pushes, `--no-verify`, remote deletes, new branches without a `bugfix/`, `feature/`, `hotfix/`, `release/`, `task/` or `chore/` prefix (`claude/` included), commits not authored by `afri-bit` |
 | `guard-destructive.sh` | PreToolUse Bash | Blocks `rm -rf` outside build dirs, `git reset --hard`, `git clean`, `gh pr merge`, `gh release`, `sudo`, `curl \| sh`, reading `.env` and key files |
 | `guard-secrets.sh` | PreToolUse Write/Edit | Blocks private keys, well-known credential formats and `.env` files |
 | `format-on-edit.sh` | PostToolUse Write/Edit | Runs `gofmt` on edited `.go` files |
@@ -188,7 +190,7 @@ repeats the constitution or a spec.
 | `/verify` | Quality gate via `check-runner` |
 | `/review` | Independent parallel review |
 | `/adr` | Numbered decision record |
-| `/git-commit` | Clustered conventional commits, no attribution |
+| `/git-commit` | Clustered conventional commits authored by afri-bit; `Co-authored-by` allowed |
 | `/pr-description` | Short phone-readable PR text |
 | `/recall`, `/remember`, `/handoff`, `/memory-review` | Shared memory and state |
 

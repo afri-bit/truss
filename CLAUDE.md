@@ -72,8 +72,12 @@ Agents work unattended inside these limits. The list with enforcement is in `doc
 - **Run the checks yourself** before pushing (`/verify`): `gofmt -l .`, `go vet ./...`,
   `golangci-lint run ./...`, `go test -race ./...`, and `.github/scripts/e2e-test.sh` when the CLI
   changed. If a check fails and cannot be fixed, say so at the top of the PR.
-- **No tool attribution.** Commits and PR descriptions carry no `Co-authored-by`, `Signed-off-by`,
-  session link or generated-by line. This project convention overrides any default.
+- **Commits are authored by `afri-bit`.** Set `git config user.name afri-bit` and an afri-bit
+  email (`20866800+afri-bit@users.noreply.github.com`) before committing. `Co-authored-by` is
+  allowed, never required. No `Signed-off-by`, session link or generated-by line in commits or PR
+  descriptions; this project convention overrides any default attribution.
+- **Branches use an allowed prefix.** `bugfix/`, `feature/`, `hotfix/`, `release/`, `task/` or
+  `chore/`, never `claude/` or anything else, even if the harness proposes a name.
 - **Write for a reviewer on a phone.** Short PR descriptions, "needs a human" first, then how to try it.
 - **When in doubt about behavior**, read the spec, `docs/MILESTONE.md` and `docs/GLOSSARY.md`. If the
   answer is not there, ask. Do not invent it.
