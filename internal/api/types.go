@@ -250,7 +250,8 @@ type DirListing struct {
 
 // Metrics is the daemon's view of the machine's resources (GET /metrics).
 // CPU percentages are shares of the whole machine: 100 means every core busy.
-// When Supported is false, only OS, Reason and Daemon.PID are set.
+// When Supported is false, Host is absent, Steps and History are empty, and
+// only OS, Reason, IntervalSeconds and Daemon.PID carry values.
 type Metrics struct {
 	Supported bool   `json:"supported"`
 	OS        string `json:"os"`
