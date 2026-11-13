@@ -2,22 +2,32 @@ package metrics
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 )
 
 // fakeSource returns scripted readings, one per call to host.
 type fakeSource struct {
-	hosts  []hostRaw
-	groupR []map[int]procRaw
-	self   []procRaw
-	call   int
+	hostErr []bool // per call: host() fails
+	hosts   []hostRaw
+	groupR  []map[int]procRaw
+	self    []procRaw
+	call    int
 }
 
-func (f *fakeSource) host() (hostRaw, error) { return f.hosts[min(f.call, len(f.hosts)-1)], nil }
+func (f *fakeSource) host() (hostRaw, error) {
+	if f.call < len(f.hostErr) && f.hostErr[f.call] {
+		return hostRaw{}, errors.New("read failed")
+	}
+	return f.hosts[min(f.call, len(f.hosts)-1)], nil
+}
 func (f *fakeSource) groups([]int) map[int]procRaw {
 	return f.groupR[min(f.call, len(f.groupR)-1)]
 }
@@ -175,5 +185,79 @@ func TestNew_ReadsThisMachine(t *testing.T) {
 		if m.Supported || m.Reason == "" {
 			t.Fatalf("snapshot = %+v", m)
 		}
+	}
+}
+
+func TestSampler_HistoryStaysBoundedWhenTheClockGoesBack(t *testing.T) {
+	c := &clock{t: time.Unix(100_000, 0)}
+	src := &fakeSource{hosts: []hostRaw{{}}, groupR: []map[int]procRaw{{}}, self: []procRaw{{}}}
+	s := newSampler(Options{Interval: time.Second, Keep: 5 * time.Second, Now: c.now}, src, "")
+	s.Sample()
+	c.t = c.t.Add(-time.Hour) // the wall clock is set back
+	for i := 0; i < 50; i++ {
+		c.t = c.t.Add(time.Second)
+		s.Sample()
+	}
+	if n := len(s.Snapshot().History); n > 6 {
+		t.Fatalf("history has %d points after a clock step, want at most 6", n)
+	}
+}
+
+func TestSampler_DeltasNeedTwoGoodReadingsOfTheSameThing(t *testing.T) {
+	c := &clock{t: time.Unix(1_000, 0)}
+	targets := []Target{{RunID: "r1", StepID: "a", PID: 42}}
+	src := &fakeSource{
+		hostErr: []bool{false, true, false, false},
+		hosts: []hostRaw{
+			{all: cpuTimes{busy: 0, total: 100}, cores: []cpuTimes{{0, 50}, {0, 50}}},
+			{}, // failed read
+			{all: cpuTimes{busy: 50, total: 200}, cores: []cpuTimes{{25, 100}, {25, 100}}},
+			{all: cpuTimes{busy: 100, total: 300}, cores: []cpuTimes{{50, 150}, {50, 150}}},
+		},
+		groupR: []map[int]procRaw{
+			{42: {cpuSeconds: 10}},
+			{42: {cpuSeconds: 12}},
+			{42: {cpuSeconds: 1}}, // pid 42 now belongs to another step: counters went back
+			{42: {cpuSeconds: 3}},
+		},
+		self: []procRaw{{cpuSeconds: 1}, {cpuSeconds: 2}, {cpuSeconds: 3}, {cpuSeconds: 4}},
+	}
+	s := newSampler(Options{Now: c.now, Targets: func() []Target { return targets }}, src, "")
+	step := func() float64 { m := s.Snapshot(); return m.Steps[0].CPUPercent }
+
+	s.Sample() // baseline
+	c.t = c.t.Add(time.Second)
+	s.Sample() // host read fails: no host, no history; the step still has a delta
+	if m := s.Snapshot(); m.Host != nil || len(m.History) != 0 {
+		t.Fatalf("a failed host read must show no host figures: %+v", m.Host)
+	}
+	near(t, "step cpu after 2 s of CPU in 1 s on 2 cores", step(), 100)
+
+	targets = []Target{{RunID: "r2", StepID: "b", PID: 42}} // the pid was reused
+	c.t = c.t.Add(time.Second)
+	s.Sample() // the host has no good previous reading; the step is new
+	m := s.Snapshot()
+	if m.Host == nil || m.Host.CPUPercent != 0 || len(m.History) != 0 {
+		t.Fatalf("host after a failed read must start afresh: %+v", m.Host)
+	}
+	if step() != 0 {
+		t.Fatalf("a reused pid in another step must not reuse the old counters: %v", step())
+	}
+	c.t = c.t.Add(time.Second)
+	s.Sample()
+	near(t, "host cpu", s.Snapshot().Host.CPUPercent, 50)
+	near(t, "step cpu of the new step", step(), 100)
+}
+
+// writeStat writes a /proc/<pid>/stat line in dir.
+func writeStat(t *testing.T, dir string, pid, pgrp int, utime, cutime int) {
+	t.Helper()
+	d := filepath.Join(dir, strconv.Itoa(pid))
+	if err := os.MkdirAll(d, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := fmt.Sprintf("%d (x) S 1 %d %d 0 -1 0 0 0 0 0 %d 0 %d 0 20 0 1 0 1 0 10 0\n", pid, pgrp, pgrp, utime, cutime)
+	if err := os.WriteFile(filepath.Join(d, "stat"), []byte(line), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }

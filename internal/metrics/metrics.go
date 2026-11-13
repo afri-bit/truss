@@ -73,11 +73,17 @@ type Sampler struct {
 	src  source
 	why  string // why src is nil
 
-	mu      sync.Mutex
-	at      time.Time
+	mu sync.Mutex
+	at time.Time
+	// The previous readings, for deltas. A delta needs two good readings of the
+	// same thing: the host, the daemon, or one attempt of one step (a reused pid
+	// in another step or run starts afresh).
 	host    hostRaw
-	procs   map[int]procRaw // by pid, from the previous sample, for deltas
+	hostOK  bool
+	procs   map[Target]procRaw
 	self    procRaw
+	selfOK  bool
+	cores   int // logical cores in the last good host reading
 	snap    api.Metrics
 	history []api.HostPoint
 }
@@ -152,14 +158,20 @@ func (s *Sampler) Sample() {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	first := s.at.IsZero()
 	wall := now.Sub(s.at).Seconds()
+	// Shares are of the whole machine: use this reading's core count, else the last good one.
 	cores := len(host.cores)
+	if err != nil || cores == 0 {
+		cores = s.cores
+	}
 	if cores == 0 {
 		cores = runtime.NumCPU()
 	}
+	if err == nil && len(host.cores) > 0 {
+		s.cores = len(host.cores)
+	}
 	share := func(prev, cur procRaw, had bool) float64 {
-		if first || !had || wall <= 0 || cur.cpuSeconds < prev.cpuSeconds {
+		if !had || wall <= 0 || cur.cpuSeconds < prev.cpuSeconds {
 			return 0
 		}
 		return clamp((cur.cpuSeconds - prev.cpuSeconds) / wall / float64(cores) * 100)
@@ -170,40 +182,46 @@ func (s *Sampler) Sample() {
 	snap.SampledAt = &stamp
 	if err == nil {
 		h := &api.HostMetrics{MemoryTotalBytes: host.memTotal, MemoryUsedBytes: host.memUsed, Load: host.load, Cores: make([]float64, len(host.cores))}
-		if !first {
+		if s.hostOK {
 			h.CPUPercent = busy(s.host.all, host.all)
 			for i, c := range host.cores {
 				if i < len(s.host.cores) {
 					h.Cores[i] = busy(s.host.cores[i], c)
 				}
 			}
-		}
-		snap.Host = h
-		if !first {
 			s.history = append(s.history, api.HostPoint{At: stamp, CPUPercent: h.CPUPercent, MemoryUsedBytes: host.memUsed})
 			cut := 0
 			for cut < len(s.history) && now.Sub(s.history[cut].At) > s.opts.Keep {
 				cut++
 			}
+			// Also bound the length: a wall clock set back would otherwise keep every point.
+			if most := int(s.opts.Keep/s.opts.Interval) + 1; len(s.history)-cut > most {
+				cut = len(s.history) - most
+			}
 			s.history = s.history[cut:]
 		}
-		s.host = host
+		snap.Host = h
 	}
+	s.host, s.hostOK = host, err == nil
+
 	snap.Daemon = api.ProcessMetrics{PID: s.opts.Self}
 	if selfOK {
-		snap.Daemon = processMetrics(s.opts.Self, self, share(s.self, self, true))
-		s.self = self
+		snap.Daemon = processMetrics(s.opts.Self, self, share(s.self, self, s.selfOK))
 	}
+	s.self, s.selfOK = self, selfOK
+
+	seen := map[Target]procRaw{}
 	for _, t := range targets {
 		cur, ok := groups[t.PID]
 		if !ok {
 			continue
 		}
-		prev, had := s.procs[t.PID]
+		prev, had := s.procs[t]
+		seen[t] = cur
 		snap.Steps = append(snap.Steps, api.StepMetrics{RunID: t.RunID, StepID: t.StepID, ProcessMetrics: processMetrics(t.PID, cur, share(prev, cur, had))})
 	}
 	sort.SliceStable(snap.Steps, func(i, j int) bool { return snap.Steps[i].RunID < snap.Steps[j].RunID })
-	s.procs = groups
+	s.procs = seen
 	s.at = now
 	snap.History = append([]api.HostPoint(nil), s.history...)
 	s.snap = snap

@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"runtime"
 	"syscall"
 	"unsafe"
 )
@@ -13,13 +14,17 @@ var (
 	procGetProcessMemoryInfo  = kernel32.NewProc("K32GetProcessMemoryInfo")
 	procNtQuerySystemInfo     = ntdll.NewProc("NtQuerySystemInformation")
 	processQueryLimitedInfo   = uint32(0x1000)
+	processVMRead             = uint32(0x0010)
 	systemProcessorPerfInfo   = uintptr(8)
 	processorPerfInfoByteSize = 48
+	statusInfoLengthMismatch  = uint32(0xC0000004)
 )
 
 func newSource() (source, string) {
-	if err := procGetSystemTimes.Find(); err != nil {
-		return nil, "GetSystemTimes is not available"
+	for _, p := range []*syscall.LazyProc{procGetSystemTimes, procGlobalMemoryStatusEx, procGetProcessMemoryInfo} {
+		if err := p.Find(); err != nil {
+			return nil, p.Name + " is not available"
+		}
 	}
 	return winSource{}, ""
 }
@@ -43,17 +48,26 @@ func (winSource) host() (hostRaw, error) {
 	h.all = cpuTimes{busy: total - filetime(idle), total: total}
 
 	if err := procNtQuerySystemInfo.Find(); err == nil {
-		buf := make([]byte, 256*processorPerfInfoByteSize)
+		// Start with room for every processor Go sees; grow once if Windows asks for more.
+		buf := make([]byte, max(1, runtime.NumCPU())*processorPerfInfoByteSize)
 		var got uint32
-		status, _, _ := procNtQuerySystemInfo.Call(systemProcessorPerfInfo, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), uintptr(unsafe.Pointer(&got)))
-		if status == 0 {
-			for off := 0; off+processorPerfInfoByteSize <= int(got); off += processorPerfInfoByteSize {
-				// IdleTime, KernelTime, UserTime: three LARGE_INTEGERs at the start.
-				idle := float64(*(*int64)(unsafe.Pointer(&buf[off])))
-				kern := float64(*(*int64)(unsafe.Pointer(&buf[off+8])))
-				usr := float64(*(*int64)(unsafe.Pointer(&buf[off+16])))
-				h.cores = append(h.cores, cpuTimes{busy: kern + usr - idle, total: kern + usr})
+		for try := 0; try < 2; try++ {
+			status, _, _ := procNtQuerySystemInfo.Call(systemProcessorPerfInfo, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), uintptr(unsafe.Pointer(&got)))
+			if uint32(status) == statusInfoLengthMismatch && int(got) > len(buf) {
+				buf = make([]byte, got)
+				continue
 			}
+			if uint32(status) != 0 {
+				got = 0
+			}
+			break
+		}
+		for off := 0; off+processorPerfInfoByteSize <= int(got) && off+processorPerfInfoByteSize <= len(buf); off += processorPerfInfoByteSize {
+			// IdleTime, KernelTime, UserTime: three LARGE_INTEGERs at the start.
+			idle := float64(*(*int64)(unsafe.Pointer(&buf[off])))
+			kern := float64(*(*int64)(unsafe.Pointer(&buf[off+8])))
+			usr := float64(*(*int64)(unsafe.Pointer(&buf[off+16])))
+			h.cores = append(h.cores, cpuTimes{busy: kern + usr - idle, total: kern + usr})
 		}
 	}
 
@@ -88,7 +102,11 @@ func (winSource) process(pid int) (procRaw, bool) {
 	if pid <= 0 {
 		return procRaw{}, false
 	}
-	h, err := syscall.OpenProcess(processQueryLimitedInfo, false, uint32(pid)) //nolint:gosec // G115: a Windows pid is a DWORD
+	// Memory counters may need PROCESS_VM_READ on older Windows; fall back to times only.
+	h, err := syscall.OpenProcess(processQueryLimitedInfo|processVMRead, false, uint32(pid)) //nolint:gosec // G115: a Windows pid is a DWORD
+	if err != nil {
+		h, err = syscall.OpenProcess(processQueryLimitedInfo, false, uint32(pid)) //nolint:gosec // G115: a Windows pid is a DWORD
+	}
 	if err != nil {
 		return procRaw{}, false
 	}

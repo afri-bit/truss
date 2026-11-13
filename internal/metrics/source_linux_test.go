@@ -1,6 +1,10 @@
 package metrics
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func fixture() procfs { return procfs{root: "testdata/proc", page: 4096} }
 
@@ -46,5 +50,22 @@ func TestProcfs_Process(t *testing.T) {
 	}
 	if _, ok := fixture().process(999); ok {
 		t.Error("a missing process is reported")
+	}
+}
+
+func TestProcfs_GroupKeepsTheCPUOfChildrenThatExited(t *testing.T) {
+	dir := t.TempDir()
+	p := procfs{root: dir, page: 4096}
+	writeStat(t, dir, 300, 300, 10, 0) // the step's shell
+	writeStat(t, dir, 301, 300, 50, 0) // a compiler it started
+	before := p.groups([]int{300})[300].cpuSeconds
+	// The compiler exits; the shell waits for it and its time moves into cutime.
+	if err := os.RemoveAll(filepath.Join(dir, "301")); err != nil {
+		t.Fatal(err)
+	}
+	writeStat(t, dir, 300, 300, 11, 50)
+	after := p.groups([]int{300})[300].cpuSeconds
+	if before != 0.6 || after != 0.61 {
+		t.Fatalf("group cpu %v then %v, want 0.6 then 0.61: an exited child must stay counted", before, after)
 	}
 }

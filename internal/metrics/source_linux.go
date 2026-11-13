@@ -87,6 +87,7 @@ func (p procfs) host() (hostRaw, error) {
 type stat struct {
 	pgrp    int
 	ticks   float64 // utime + stime
+	reaped  float64 // cutime + cstime: CPU of children this process has waited for
 	threads int
 	rssPage uint64
 }
@@ -111,6 +112,9 @@ func (p procfs) readStat(dir string) (stat, bool) {
 	ut, _ := strconv.ParseFloat(f[11], 64)
 	st, _ := strconv.ParseFloat(f[12], 64)
 	s.ticks = ut + st
+	cut, _ := strconv.ParseFloat(f[13], 64)
+	cst, _ := strconv.ParseFloat(f[14], 64)
+	s.reaped = cut + cst
 	s.threads, _ = strconv.Atoi(f[17])
 	s.rssPage, _ = strconv.ParseUint(f[21], 10, 64)
 	return s, true
@@ -140,7 +144,10 @@ func (p procfs) groups(pids []int) map[int]procRaw {
 			continue
 		}
 		g := out[s.pgrp]
-		g.cpuSeconds += s.ticks / clockTicks
+		// A child's CPU moves into its parent's reaped time when it exits, so the
+		// group total keeps short-lived children (compilers, test binaries) and
+		// does not fall when one of them ends.
+		g.cpuSeconds += (s.ticks + s.reaped) / clockTicks
 		g.rss += s.rssPage * p.page
 		g.threads += s.threads
 		g.processes++
