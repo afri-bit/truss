@@ -34,7 +34,7 @@ theme toggle, settings menu) and the content.
 ![A live run](images/desktop-run.png)
 
 **Resource figures** (CPU, memory, step processes) come from the daemon, which measures them on
-Linux and Windows. On macOS the page says the daemon does not collect them yet. A run's own chart
+Linux, macOS and Windows. On any other system the page says the daemon does not collect them. A run's own chart
 starts when you open its page; the machine's charts show the last ten minutes. See
 [spec 015](../specs/015-resource-metrics/spec.md).
 

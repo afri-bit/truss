@@ -24,5 +24,6 @@ maintainer asked for real figures: the machine, the daemon, and each running ste
 ## Consequences
 
 - No new module. The figures are honest about their limits (`tree`, `supported`, `reason`).
-- macOS shows no figures until someone adds a reader; the page says so.
+- macOS shows no figures until someone adds a reader; the page says so. (Added by
+  [ADR 0013](0013-macos-resource-figures-through-libsystem.md).)
 - Sampling scans `/proc` every 2 seconds on Linux, a few milliseconds of work on a typical machine.

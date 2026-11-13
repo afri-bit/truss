@@ -8,7 +8,8 @@ Replaces the simulated figures of [`014-desktop-redesign`](../014-desktop-redesi
 [ADR 0012](../../docs/decisions/0012-daemon-samples-resources-with-the-standard-library.md).
 Risk class: tier 2 (daemon API addition, reads other processes' state). Scope decided by the
 maintainer on 2026-11-13: resource metrics API; standard library only, Linux and Windows; history
-kept by the daemon.
+kept by the daemon. Extended the same day at the maintainer's request to macOS (FR-009,
+[ADR 0013](../../docs/decisions/0013-macos-resource-figures-through-libsystem.md)).
 
 ## User stories
 
@@ -28,7 +29,7 @@ kept by the daemon.
 - **FR-002** `GET /api/v1/metrics` (token required, like every call) answers
   `{supported, os, reason, interval_seconds, sampled_at, host, daemon, steps, history}`:
   - `host`: `cpu_percent`, `cores[]` (busy percent per logical core), `memory_total_bytes`,
-    `memory_used_bytes`, `load[]` (1, 5, 15 minutes; Linux only).
+    `memory_used_bytes`, `load[]` (1, 5, 15 minutes; Linux and macOS).
   - `daemon` and each of `steps[]` (`run_id`, `step_id` plus the process fields): `pid`,
     `cpu_percent`, `rss_bytes`, `threads`, `processes`, `tree`.
   - `history[]`: `{at, cpu_percent, memory_used_bytes}`, oldest first, at most ten minutes.
@@ -42,19 +43,24 @@ kept by the daemon.
   children that already exited is kept, through their parent's reaped time.
 - **FR-005** Windows: figures come from system calls. A step is measured by its shell process only
   (`tree: false`), without `threads`, and the host has no `load`.
-- **FR-006** Other systems (macOS today): `supported: false`, `reason` says why, `daemon.pid` is
+- **FR-006** Other systems: `supported: false`, `reason` says why, `daemon.pid` is
   set, `steps` and `history` are empty, no `host`. The page shows the reason where figures would be.
 - **FR-007** Desktop shows only the daemon's figures; nothing is simulated outside demo mode.
   Spec 014's *Simulated metrics* setting is removed. In demo mode, demo.js answers `/metrics` with
   sample figures, and resource panels carry a *sample* label.
 - **FR-008** A run's chart on its page is built from the samples the page has seen while the run
   was running; the host charts use the daemon's history.
+- **FR-009** macOS: figures come from system calls into libSystem, with no helper process and no
+  cgo. A step is measured with its whole process group (`tree: true`), with the CPU of children
+  that already exited, as on Linux. Memory used is app, wired and compressed memory, the figure
+  Activity Monitor calls *Memory Used*. The host has `load`.
 
 ## Compatibility
 
-Additive to API v1: a new endpoint and a new optional `pid` field on steps. Clients that ignore
+Additive to API v1: a new endpoint and a new optional `pid` field on steps. FR-009 changes only
+the values on macOS: `supported` becomes `true` and the figures are filled in. Clients that ignore
 unknown fields are unaffected. The run log and the pipeline file are unchanged.
 
 ## Not in scope
 
-macOS figures, per-step history kept by the daemon, disk and network figures, limits or alerts.
+Per-step history kept by the daemon, disk and network figures, limits or alerts.
