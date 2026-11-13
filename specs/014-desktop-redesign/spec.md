@@ -56,8 +56,11 @@ Written alongside the implementation (constitution 2.0.0, principle I).
   `--no-open`, and stops on Ctrl-C with exit 0. The page then uses sample data generated in the
   browser: runs progress in real time, and Run now, Cancel, pause, resume, register and unregister
   work on that data. It makes no API request. The header and sidebar say *Demo data*; the
-  settings menu offers *Leave demo*. `#demo` in the address turns demo mode on for that browser
-  tab only.
+  settings menu offers *Leave demo*. Demo mode lasts for that browser tab only.
+- **FR-011** Sample data exists only on the demo server: the daemon does not serve it, so `#demo`
+  on a daemon's page leaves the page on real data. Opening a `#token=` link always means real
+  mode, also in a tab that was in demo mode, and a token or demo link pasted into an open tab
+  takes effect without a manual reload.
 
 ## Compatibility
 

@@ -60,7 +60,8 @@ Press Ctrl-C to stop.
 ten pipelines, runs that progress while you watch, a failure, a tolerated failure, a queued run,
 a paused schedule, an invalid file and a long name, plus a day of history. Run now, Cancel,
 pause, resume, register and unregister work on that data. Nothing is saved and no request leaves
-the page. The header says **Demo data**; **Leave demo** in the settings menu ends it. Use it to
+the page. The header says **Demo data**; **Leave demo** in the settings menu ends it. Only the server
+that `--demo` starts has the sample data; a daemon's page always shows real data. Use it to
 try Desktop or to review its design. The demo server is tested in-process on Linux, macOS and Windows; the
 browser tests of demo mode run on Linux.
 
