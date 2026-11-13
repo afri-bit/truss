@@ -584,7 +584,7 @@ views.dashboard = {
               ? h("table", null, h("tbody", null, upcoming.slice(0, 8).map((p) => h("tr", { class: "link", onclick: () => go(href.pipeline(p.name)) },
                 h("td", null, h("a", { class: "pipe", href: href.pipeline(p.name), onclick: (e) => e.stopPropagation() }, p.name)),
                 h("td", null, h("code", null, p.schedules[0].cron)),
-                h("td", { class: "mono" }, clock(nextOf(p)).slice(-8)), h("td", { class: "num" }, "in " + compact(new Date(nextOf(p)) - new Date()))))))
+                h("td", { class: "mono" }, clock(nextOf(p)).slice(-8)), h("td", { class: "num" }, new Date(nextOf(p)) <= new Date() ? "now" : "in " + compact(new Date(nextOf(p)) - new Date()))))))
               : h("div", { class: "empty" }, h("div", { class: "empty-title" }, "No schedules."), "Add ", h("code", null, "on.schedule"), " to a pipeline file.")))),
     ];
   },
@@ -636,7 +636,7 @@ views.pipelines = {
         h("p", { class: "sub" }, "Pipeline files this daemon knows. The file stays where it is and is read again before every run."))),
       panel("Register a pipeline", { hint: "absolute path to a truss.yaml" }, form),
       h("div", { class: "toolbar" },
-        h("input", { type: "search", class: "filter", placeholder: "Filter by name or path", "aria-label": "Filter pipelines", value: ui.pipeQuery, oninput: (e) => { ui.pipeQuery = e.target.value; filterInPlace(".cards > .card", ui.pipeQuery, "pipe-count", pipelines.length); } }),
+        h("input", { type: "search", id: "pipe-filter", class: "filter", placeholder: "Filter by name or path", "aria-label": "Filter pipelines", value: ui.pipeQuery, oninput: (e) => { ui.pipeQuery = e.target.value; filterInPlace(".cards > .card", ui.pipeQuery, "pipe-count", pipelines.length); } }),
         h("span", { class: "muted", id: "pipe-count", style: "font-size:12px" }, `${shown.length} of ${pipelines.length}`),
         h("span", { class: "spacer" }),
         states.map(([st, n]) => h("span", { class: "muted", style: "font-size:12px;display:inline-flex;gap:6px;align-items:center" }, badge(st), n))),
@@ -735,7 +735,7 @@ views.runs = {
       h("div", { class: "toolbar" },
         groups.filter((g) => g === "all" || n(g) > 0).map((g) => h("button", { class: "chip", "aria-pressed": String(ui.runFilter === g), onclick: () => { ui.runFilter = g; route(true); } }, g, h("span", { class: "n" }, n(g)))),
         h("span", { class: "spacer" }),
-        h("input", { type: "search", class: "filter", placeholder: "Filter by pipeline, id or trigger", "aria-label": "Filter runs", value: ui.runQuery, oninput: (e) => { ui.runQuery = e.target.value; filterInPlace("#runs-table tbody tr", ui.runQuery); } })),
+        h("input", { type: "search", id: "runs-filter", class: "filter", placeholder: "Filter by pipeline, id or trigger", "aria-label": "Filter runs", value: ui.runQuery, oninput: (e) => { ui.runQuery = e.target.value; filterInPlace("#runs-table tbody tr", ui.runQuery); } })),
       h("div", { class: "panel", id: "runs-table" }, h("div", { class: "table-wrap tall" }, runsTable(byStatus, { empty: runs.length ? "No run has this status." : null, hide: (r) => !shown.includes(r) }))),
     ];
   },
@@ -882,7 +882,7 @@ views.run = {
             logState.step ? h("span", { class: "filterchip" }, `step ${logState.step}`, h("button", { onclick: () => select(logState.step), "aria-label": "Show all" }, "Show all")) : h("span", null, "whole run"),
             h("span", { id: "log-count", class: "mono" }),
             h("span", { class: "spacer" }),
-            h("input", { type: "search", placeholder: "Find in log", "aria-label": "Find in log", value: logState.query, oninput: (e) => { logState.query = e.target.value; paintLog(); } }),
+            h("input", { type: "search", id: "log-find", placeholder: "Find in log", "aria-label": "Find in log", value: logState.query, oninput: (e) => { logState.query = e.target.value; paintLog(); } }),
             h("button", { type: "button", "aria-pressed": String(settings.logWrap), title: "Wrap long lines", onclick: () => setSetting("logWrap", !settings.logWrap) }, icon("wrap", "sm")),
             h("button", { type: "button", id: "follow", "aria-pressed": String(logState.follow), title: "Follow the end of the log", onclick: () => { logState.follow = true; paintLog(); route(true); } }, icon("follow", "sm")),
             active ? h("span", { class: "live" }, "live") : h("span", { class: "done" }, "complete")),
@@ -1209,6 +1209,7 @@ function finderPaint() {
       else if (e.key === "ArrowUp") { e.preventDefault(); finder.sel = Math.max(0, finder.sel - 1); finderPaint(); }
       else if (e.key === "Enter") { e.preventDefault(); const it = finder.items[finder.sel]; if (it) { dlg.close(); go(it.to); } }
     } });
+  if (finder.items.length) input.setAttribute("aria-activedescendant", "finder-opt-" + finder.sel);
   dlg.replaceChildren(input, list, h("div", { class: "finder-foot" }, h("span", null, h("kbd", null, "↑"), " ", h("kbd", null, "↓"), " move"), h("span", null, h("kbd", null, "↵"), " open"), h("span", null, h("kbd", null, "esc"), " close")));
 }
 function openFinder() {
@@ -1401,6 +1402,8 @@ async function route(force) {
     const caret = main.contains(active) && active.tagName === "INPUT" && active.type !== "checkbox" ? [active.selectionStart, active.selectionEnd] : null;
     if (picker.open || (typing && !force && lastHash === location.hash)) return;
     const kept = lastHash === location.hash ? focusIndex(main) : -1;
+    // Controls above a field can come and go between repaints; an id outlives that, a position does not.
+    const keptId = lastHash === location.hash && main.contains(active) && active.id ? active.id : "";
     const scroll = document.getElementById("log") ? document.getElementById("log").scrollTop : null;
     const pageScroll = lastHash === location.hash ? main.scrollTop : 0;
     paintCrumbs(view, arg, data);
@@ -1410,7 +1413,7 @@ async function route(force) {
       queueMicrotask(() => { document.getElementById("log").scrollTop = scroll; });
     }
     if (kept >= 0) {
-      const target = main.querySelectorAll(FOCUSABLE)[kept];
+      const target = (keptId && document.getElementById(keptId)) || main.querySelectorAll(FOCUSABLE)[kept];
       if (target) {
         target.focus({ preventScroll: true });
         if (caret && target.tagName === "INPUT") try { target.setSelectionRange(caret[0], caret[1]); } catch { /* not a text field */ }

@@ -105,8 +105,27 @@ test("the run page keeps refreshing while Find in log has focus", async () => {
     await d.waitRun(run.id);
     await page.locator(".head .badge.s-cancelled").waitFor();
     assert.equal(await find.inputValue(), "first");
-    assert.equal(await active(page), "", "focus stays in the find field"); // the field has no id or text
+    assert.equal(await active(page), "log-find", "focus stays in the find field");
     assert.ok(await find.evaluate((el) => el === document.activeElement));
+  } finally {
+    await page.context().close();
+  }
+});
+
+test("typing in the Runs filter keeps focus when a new status chip appears", async () => {
+  const page = await b.newPage();
+  try {
+    await page.goto(d.authedUrl());
+    await page.evaluate(() => { location.hash = "#/runs"; });
+    await page.locator("h1", { hasText: "Runs" }).waitFor();
+    const filter = page.locator("#runs-filter");
+    await filter.fill("o");
+    const run = await d.call("POST", "/pipelines/ok/runs"); // brings in or updates status chips above the field
+    await d.waitRun(run.id);
+    await sleep(3500);
+    assert.ok(await filter.evaluate((el) => el === document.activeElement), "focus left the filter");
+    await page.keyboard.type("k");
+    assert.equal(await filter.inputValue(), "ok");
   } finally {
     await page.context().close();
   }
