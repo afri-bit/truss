@@ -67,7 +67,7 @@ through [`secrets`](pipeline-reference.md#secrets).
 | `truss daemon run` | Runs the service in the terminal, logging to standard error. For debugging and for service managers. |
 | `truss daemon install` | Makes the daemon start at login: a systemd user unit (Linux), a launchd agent (macOS) or a Task Scheduler task (Windows). Needs no root or administrator rights. Refuses a binary in a temporary directory. See [Starting at login](daemon.md#starting-at-login). |
 | `truss daemon uninstall` | Removes what `install` created, and nothing else. |
-| `truss desktop` | Opens [TRUSS Desktop](desktop.md). `--no-open` only prints the address. |
+| `truss desktop` | Opens [TRUSS Desktop](desktop.md). `--no-open` only prints the address. `--demo` needs no daemon and shows sample data, for trying or reviewing the design; Ctrl-C stops it. |
 
 Options of `daemon start`, `daemon run` and `daemon install`:
 

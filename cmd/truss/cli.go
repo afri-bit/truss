@@ -26,7 +26,8 @@ The daemon:
   daemon run                          run the service in this terminal
   daemon install [--address <host:port>] [--max-runs <n>]
   daemon uninstall                    start the daemon at login, or stop doing so
-  desktop [--no-open]                 open TRUSS Desktop in the browser
+  desktop [--no-open] [--demo]        open TRUSS Desktop in the browser
+                                      --demo shows sample data and needs no daemon
 
 Secrets (no daemon needed; values come from standard input, never an argument):
   secret set <name>                   store a secret

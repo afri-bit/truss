@@ -25,13 +25,13 @@ for (const scheme of ["light", "dark"]) {
     await d.waitRun(run.id);
     const page = await b.newPage({ colorScheme: scheme });
     await page.goto(d.authedUrl());
-    for (const [hash, heading] of [["#/", "Dashboard"], ["#/pipelines", "Pipelines"], ["#/pipelines/ok", "ok"], ["#/runs", "Runs"], ["#/runs/" + run.id, run.id]]) {
+    for (const [hash, heading] of [["#/", "Dashboard"], ["#/pipelines", "Pipelines"], ["#/pipelines/ok", "ok"], ["#/runs", "Runs"], ["#/runs/" + run.id, run.id], ["#/monitor", "Monitor"], ["#/settings", "Settings"]]) {
       await page.evaluate((h) => { location.hash = h; }, hash);
       await page.locator("h1", { hasText: heading }).first().waitFor();
       await page.waitForTimeout(300);
     }
     const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-    assert.equal(bg, scheme === "dark" ? "rgb(15, 20, 23)" : "rgb(244, 242, 238)");
+    assert.equal(bg, scheme === "dark" ? "rgb(12, 14, 18)" : "rgb(243, 244, 246)");
     assert.deepEqual(page.problems, []);
     await page.context().close();
   });

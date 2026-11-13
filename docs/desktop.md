@@ -15,22 +15,55 @@ the address instead.
 
 ## What is on screen
 
+One page: a sidebar on the left (pages, active runs, daemon status; collapse it with the button
+at the bottom left or `[`), a header (breadcrumbs, **Jump to…** with `/`, connection and latency,
+theme toggle, settings menu) and the content.
+
 | Page | Shows | You can |
 |---|---|---|
-| **Dashboard** | Counters for today, active runs, the next scheduled runs, recent runs. | Jump to any run or pipeline. |
-| **Pipelines** | Every registered file with its state, schedules, next and last run. | Register a file (type its path or press **Browse…**), run it now, pause or resume its schedules, unregister it. |
-| **Pipeline** | Its settings, its step graph colored by the last run, its run history. | The same actions. |
-| **Runs** | Every run the daemon started or skipped, and every run tracked from a shell, newest first. | Open one. |
-| **Run** | The step graph, each step's result and duration, and the run log, live while it runs. | Cancel the run, run it again, click a step to see only its log lines. |
+| **Dashboard** | Counters for today, active runs with progress, runs per hour, system load, health, the next scheduled runs, recent runs. | Jump to any run or pipeline. |
+| **Pipelines** | Every registered file as a card: state, schedule, next and last run, shape of its step graph. | Register a file (type its path or press **Browse…**), filter, run it now, pause or resume its schedules, unregister it. |
+| **Pipeline** | Its step graph colored by the last run, success rate, configuration, run history. | The same actions. |
+| **Runs** | Every run the daemon started or skipped, and every run tracked from a shell, newest first. | Filter by status or text, open one. |
+| **Run** | Progress, the running steps, elapsed time, the step graph with the running step highlighted, step results, the live log, resources and configuration. | Cancel the run, run it again, click a step to see only its log lines, find in the log, wrap, follow. |
+| **Monitor** | Health checks, CPU and memory, cores, the daemon's process and every live step. | Open the run behind a process. |
+| **Settings** | Theme, density, sidebar, motion, refresh interval, log options, daemon facts. | Change them (kept in this browser), forget the access token. |
 
-![A failed run](images/desktop-run.png)
+![Pipelines](images/desktop-pipelines.png)
+
+![A live run](images/desktop-run.png)
+
+**Simulated figures.** The daemon does not report CPU, memory or per-step processes yet. Where
+Desktop shows them (resource meters, Monitor charts, step process ids) the numbers are simulated
+and labeled **simulated**. Turn them off in **Settings → Simulated metrics**. Everything else
+(runs, steps, logs, schedules, the daemon's pid, address and uptime) comes from the daemon.
+See [spec 014](../specs/014-desktop-redesign/spec.md).
+
+![Monitor](images/desktop-monitor.png)
 
 Runs started with `truss run --track` appear next to the daemon's own, with a **local** badge
 in the Trigger column and on the run's page. They show their steps and log live, like any run.
 Cancel works (the CLI notices within a second and stops); **Run again** is not offered, because
 nothing registered stands behind a local run.
 
-The pages refresh on their own about every second and a half.
+The pages refresh on their own about every second and a half (change it in Settings).
+
+## Demo mode
+
+```console
+$ truss desktop --demo
+TRUSS Desktop (demo, sample data, no daemon): http://127.0.0.1:53817/#demo
+Press Ctrl-C to stop.
+```
+
+`--demo` needs no daemon. It serves Desktop with sample data that the page generates itself:
+ten pipelines, runs that progress while you watch, a failure, a tolerated failure, a queued run,
+a paused schedule, an invalid file and a long name, plus a day of history. Run now, Cancel,
+pause, resume, register and unregister work on that data. Nothing is saved and no request leaves
+the page. The header says **Demo data**; **Leave demo** in the settings menu ends it. Only the server
+that `--demo` starts has the sample data; a daemon's page always shows real data. Use it to
+try Desktop or to review its design. The demo server is tested in-process on Linux, macOS and Windows; the
+browser tests of demo mode run on Linux.
 
 ## Registering with the file picker
 
@@ -51,7 +84,8 @@ playwright install chromium && npm test`. CI runs them on Linux.
 
 TRUSS Desktop is a small web application inside the `truss` binary. The daemon serves it; it
 uses the same [HTTP API](daemon.md#http-api) as the CLI. There is nothing extra to install and
-no build step: plain HTML, CSS and JavaScript in `internal/webui/assets/`.
+no build step: plain HTML, CSS and JavaScript in `internal/webui/assets/`, with the IBM Plex
+fonts (SIL Open Font License) served from the binary.
 
 The address `truss desktop` opens carries the access token after a `#`. Browsers never send
 that part to a server; the page keeps it in the browser's local storage and sends it as a
