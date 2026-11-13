@@ -4,7 +4,7 @@
 
 Extends [`007-truss-desktop`](../007-truss-desktop/spec.md) and
 [`013-desktop-polish`](../013-desktop-polish/spec.md). User docs: [`docs/desktop.md`](../../docs/desktop.md).
-Risk class: tier 1 (UI behavior; no change to the daemon, its API, the CLI or the run log).
+Risk class: tier 2 since FR-010 adds a CLI switch (additive; no change to the daemon, its API or the run log).
 Written alongside the implementation (constitution 2.0.0, principle I).
 
 ## User stories
@@ -13,7 +13,9 @@ Written alongside the implementation (constitution 2.0.0, principle I).
    is, its step graph with the running step highlighted, the live log, and its configuration.
 2. **Keep an eye on the machine** (P2). A Monitor page shows the daemon's health and the
    processes it runs.
-3. **Make it mine** (P2). I pick light or dark, density, refresh rate and log options, and
+3. **Review the design without a daemon** (P2). I run `truss desktop --demo` and see every page
+   filled with sample data that moves, including failures, a queue and odd names.
+4. **Make it mine** (P2). I pick light or dark, density, refresh rate and log options, and
    collapse the sidebar.
 
 ## Requirements
@@ -47,6 +49,20 @@ Written alongside the implementation (constitution 2.0.0, principle I).
 - **FR-009** Everything in `013-desktop-polish` keeps working: the register form and file picker,
   keyboard order, refresh without losing typed text or focus, empty and error states, and the
   daemon's Content Security Policy (no inline scripts or style attributes).
+
+- **FR-010** `truss desktop --demo` (off by default) needs no daemon. It serves Desktop from the
+  binary on a free loopback port with the same security headers as the daemon, prints
+  `TRUSS Desktop (demo, sample data, no daemon): <address>#demo`, opens the browser unless
+  `--no-open`, and stops on Ctrl-C with exit 0. The page then uses sample data generated in the
+  browser: runs progress in real time, and Run now, Cancel, pause, resume, register and unregister
+  work on that data. It makes no API request. The header and sidebar say *Demo data*; the
+  settings menu offers *Leave demo*. `#demo` in the address turns demo mode on for that browser
+  tab only.
+
+## Compatibility
+
+FR-010 adds a switch to `truss desktop`; the command without it behaves as before. The demo
+server has no API and answers `/api/` with `404`.
 
 ## Not in scope
 

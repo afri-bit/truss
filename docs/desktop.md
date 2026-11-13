@@ -48,6 +48,21 @@ nothing registered stands behind a local run.
 
 The pages refresh on their own about every second and a half (change it in Settings).
 
+## Demo mode
+
+```console
+$ truss desktop --demo
+TRUSS Desktop (demo, sample data, no daemon): http://127.0.0.1:53817/#demo
+Press Ctrl-C to stop.
+```
+
+`--demo` needs no daemon. It serves Desktop with sample data that the page generates itself:
+ten pipelines, runs that progress while you watch, a failure, a tolerated failure, a queued run,
+a paused schedule, an invalid file and a long name, plus a day of history. Run now, Cancel,
+pause, resume, register and unregister work on that data. Nothing is saved and no request leaves
+the page. The header says **Demo data**; **Leave demo** in the settings menu ends it. Use it to
+try Desktop or to review its design.
+
 ## Registering with the file picker
 
 Browsers cannot show a file's full path, so **Browse…** asks the daemon to list folders for
