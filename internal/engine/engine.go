@@ -119,7 +119,11 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 				}
 			}
 			stepEnvironment := withSecrets(stepEnv(env, step.Env), step.Secrets, stored)
-			proc, err := executor.Start(runCtx, executor.Request{Run: step.Run, Dir: stepDir(dir, step.Dir), Env: stepEnvironment, Out: out, ErrOut: errOut})
+			var proc *executor.Process
+			workDir, err := stepDir(dir, step.Dir)
+			if err == nil {
+				proc, err = executor.Start(runCtx, executor.Request{Run: step.Run, Dir: workDir, Env: stepEnvironment, Out: out, ErrOut: errOut})
+			}
 			slot := len(run.Steps)
 			run.Steps = append(run.Steps, pipeline.StepRun{})
 			if err != nil {
@@ -202,14 +206,27 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 }
 
 // stepDir resolves a step's working directory against the run directory.
-func stepDir(runDir, dir string) string {
-	if dir == "" || filepath.IsAbs(dir) {
-		if dir == "" {
-			return runDir
+// A relative path is joined to runDir. On Windows a path with a drive letter
+// must be absolute, and one that starts with a separator but no drive letter
+// is taken from the drive of runDir; "C:tmp" depends on a per-drive current
+// directory, so it is refused.
+func stepDir(runDir, dir string) (string, error) {
+	switch {
+	case dir == "":
+		return runDir, nil
+	case filepath.IsAbs(dir):
+		return dir, nil
+	case filepath.VolumeName(dir) != "":
+		return "", fmt.Errorf("working directory %q: a path with a drive letter must be absolute", dir)
+	case dir[0] == '\\' || dir[0] == '/':
+		// Rooted without a drive letter: only reachable on Windows.
+		abs, err := filepath.Abs(runDir)
+		if err != nil {
+			return "", fmt.Errorf("working directory %q: %w", dir, err)
 		}
-		return dir
+		return filepath.Join(filepath.VolumeName(abs)+string(filepath.Separator), dir), nil
 	}
-	return filepath.Join(runDir, dir)
+	return filepath.Join(runDir, dir), nil
 }
 
 // stepEnv returns the run environment with the step's variables appended.

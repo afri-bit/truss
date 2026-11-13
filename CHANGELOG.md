@@ -31,6 +31,8 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 - **Schedules.** `on.schedule` lists cron triggers with an optional `timezone` and a `missed` policy. A time that passed while the machine was off or asleep is skipped and recorded by default; `missed: run` starts one catch-up run.
 - **Jobs.** `jobs` groups ordered steps under a name. Jobs wait for the jobs in their `needs`. In logs a job's step is named `job/step`.
 - **Step settings.** `env` at pipeline, job and step level; `dir` and `timeout` per step. A step that exceeds its timeout fails with `timed out after <duration>`.
+- **Workdir.** `pipeline.workdir` sets the directory steps start in, relative to where the run starts or absolute. A job's or step's `dir` still wins. A missing directory fails the step with a diagnostic and no exit code. Additive: existing files keep their meaning.
+- **Data and cache folders.** Steps get `TRUSS_DATA_DIR` and `TRUSS_CACHE_DIR`: `~/.truss/pipelines/<name>/` and its `cache/` for daemon runs (kept when you unregister), `.truss/data` and `.truss/data/cache` for `truss run`. `truss cache clear <name>` empties a pipeline's cache.
 - **Overlap policy.** `pipeline.overlap` is `queue` (default), `skip` or `parallel`.
 - **`truss validate [<path>]`** checks a definition and prints its schedules and steps without running anything.
 - **TRUSS Desktop.** `truss desktop` opens a dashboard served by the daemon: counters, active and upcoming runs, pipeline controls, and a run page with the step graph and a live log.

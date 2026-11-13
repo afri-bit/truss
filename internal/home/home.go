@@ -55,6 +55,29 @@ func (d Dir) Secrets() string { return d.Path("secrets.json") }
 // Runs is the directory that holds one folder per run.
 func (d Dir) Runs() string { return d.Path("runs") }
 
+// Pipelines is the directory that holds one data folder per pipeline name.
+func (d Dir) Pipelines() string { return d.Path("pipelines") }
+
+// PipelineData is the data folder of the registered pipeline called name. The
+// caller must have checked that name is a valid registry name.
+func (d Dir) PipelineData(name string) string { return d.Path("pipelines", name) }
+
+// PipelineCache is the cache folder inside PipelineData.
+func (d Dir) PipelineCache(name string) string { return d.Path("pipelines", name, "cache") }
+
+// ClearPipelineCache removes the cache folder of the pipeline called name and
+// reports whether there was one. The rest of the data folder stays.
+func (d Dir) ClearPipelineCache(name string) (existed bool, err error) {
+	dir := d.PipelineCache(name)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return false, nil
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return true, fmt.Errorf("clear the cache of %s: %w", name, err)
+	}
+	return true, nil
+}
+
 // DaemonLog is the daemon's own log file.
 func (d Dir) DaemonLog() string { return d.Path("daemon.log") }
 

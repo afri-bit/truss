@@ -272,6 +272,21 @@ stays the source of truth.
 What happens when a run is requested while another run of the same pipeline is active:
 `queue`, `skip`, or `parallel`.
 
+### Workdir
+
+`pipeline.workdir`: the directory steps start in, relative to where the run starts or absolute.
+A job's or step's `dir` replaces it.
+
+### Data Folder
+
+A folder per pipeline that outlives runs and is never cleaned by TRUSS: `~/.truss/pipelines/<name>/`
+for the daemon, `.truss/data` for `truss run`. Steps find it in `TRUSS_DATA_DIR`.
+
+### Cache Folder
+
+The `cache` folder inside the Data Folder, found in `TRUSS_CACHE_DIR`. A plain directory for
+steps to keep reusable files in. TRUSS does not save, restore or key it.
+
 ### TRUSS Home
 
 The directory where the daemon keeps its state: `~/.truss`, or `TRUSS_HOME`.

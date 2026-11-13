@@ -16,7 +16,7 @@ TRUSS is one Go module. The engine is independent of the CLI (constitution princ
 | `internal/engine` | Run a validated plan through the executor, return a result | Print, read flags, know the daemon |
 | `internal/executor` | Run one step command on the host shell, report exit code and output | Decide ordering |
 | `internal/runlog` | Format and write the run log | Execute steps |
-| `internal/home` | Locate the TRUSS home, read and write its JSON files | Hold state |
+| `internal/home` | Locate the TRUSS home and its per-pipeline data folders, read and write its JSON files | Hold state |
 | `internal/secrets` | Keep named secret values in a private file; remove values from output | Know pipelines or the engine |
 | `internal/registry` | Remember registered pipeline files | Read pipeline content |
 | `internal/scheduler` | Decide which schedules fire or were missed at a given time | Own a timer or start runs |

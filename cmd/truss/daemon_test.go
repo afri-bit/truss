@@ -220,7 +220,7 @@ jobs:
 }
 
 func TestUsage_NamesEveryCommand(t *testing.T) {
-	for _, cmd := range []string{"run", "validate", "daemon start", "daemon stop", "daemon run", "desktop", "register", "unregister", "pipelines", "pause", "resume", "trigger", "runs", "logs", "cancel", "help", "version"} {
+	for _, cmd := range []string{"run", "validate", "daemon start", "daemon stop", "daemon run", "desktop", "register", "unregister", "pipelines", "pause", "resume", "trigger", "runs", "logs", "cancel", "cache clear", "help", "version"} {
 		if !strings.Contains(usageText, cmd) {
 			t.Errorf("usage does not mention %q", cmd)
 		}
