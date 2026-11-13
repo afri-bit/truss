@@ -1,8 +1,10 @@
 package metrics
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -67,5 +69,18 @@ func TestProcfs_GroupKeepsTheCPUOfChildrenThatExited(t *testing.T) {
 	after := p.groups([]int{300})[300].cpuSeconds
 	if before != 0.6 || after != 0.61 {
 		t.Fatalf("group cpu %v then %v, want 0.6 then 0.61: an exited child must stay counted", before, after)
+	}
+}
+
+// writeStat writes a /proc/<pid>/stat line in dir.
+func writeStat(t *testing.T, dir string, pid, pgrp int, utime, cutime int) {
+	t.Helper()
+	d := filepath.Join(dir, strconv.Itoa(pid))
+	if err := os.MkdirAll(d, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := fmt.Sprintf("%d (x) S 1 %d %d 0 -1 0 0 0 0 0 %d 0 %d 0 20 0 1 0 1 0 10 0\n", pid, pgrp, pgrp, utime, cutime)
+	if err := os.WriteFile(filepath.Join(d, "stat"), []byte(line), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }

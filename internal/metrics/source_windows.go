@@ -51,16 +51,16 @@ func (winSource) host() (hostRaw, error) {
 		// Start with room for every processor Go sees; grow once if Windows asks for more.
 		buf := make([]byte, max(1, runtime.NumCPU())*processorPerfInfoByteSize)
 		var got uint32
-		for try := 0; try < 2; try++ {
+		ok := false
+		for try := 0; try < 2 && !ok; try++ {
 			status, _, _ := procNtQuerySystemInfo.Call(systemProcessorPerfInfo, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), uintptr(unsafe.Pointer(&got)))
-			if uint32(status) == statusInfoLengthMismatch && int(got) > len(buf) {
+			ok = uint32(status) == 0
+			if !ok && uint32(status) == statusInfoLengthMismatch && int(got) > len(buf) {
 				buf = make([]byte, got)
-				continue
 			}
-			if uint32(status) != 0 {
-				got = 0
-			}
-			break
+		}
+		if !ok {
+			got = 0 // no per-core figures rather than a zeroed buffer read as idle cores
 		}
 		for off := 0; off+processorPerfInfoByteSize <= int(got) && off+processorPerfInfoByteSize <= len(buf); off += processorPerfInfoByteSize {
 			// IdleTime, KernelTime, UserTime: three LARGE_INTEGERs at the start.

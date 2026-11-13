@@ -3,12 +3,9 @@ package metrics
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"os"
-	"path/filepath"
 	"runtime"
-	"strconv"
 	"testing"
 	"time"
 )
@@ -247,17 +244,4 @@ func TestSampler_DeltasNeedTwoGoodReadingsOfTheSameThing(t *testing.T) {
 	s.Sample()
 	near(t, "host cpu", s.Snapshot().Host.CPUPercent, 50)
 	near(t, "step cpu of the new step", step(), 100)
-}
-
-// writeStat writes a /proc/<pid>/stat line in dir.
-func writeStat(t *testing.T, dir string, pid, pgrp int, utime, cutime int) {
-	t.Helper()
-	d := filepath.Join(dir, strconv.Itoa(pid))
-	if err := os.MkdirAll(d, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	line := fmt.Sprintf("%d (x) S 1 %d %d 0 -1 0 0 0 0 0 %d 0 %d 0 20 0 1 0 1 0 10 0\n", pid, pgrp, pgrp, utime, cutime)
-	if err := os.WriteFile(filepath.Join(d, "stat"), []byte(line), 0o600); err != nil {
-		t.Fatal(err)
-	}
 }
