@@ -655,7 +655,8 @@ func TestDaemon_MetricsReportTheHostAndARunningStep(t *testing.T) {
 	if m.OS != runtime.GOOS || m.Daemon.PID != os.Getpid() || m.Steps == nil || m.History == nil {
 		t.Fatalf("metrics = %+v", m)
 	}
-	if runtime.GOOS != "linux" && runtime.GOOS != "windows" {
+	measured := map[string]bool{"linux": true, "darwin": true, "windows": true}
+	if !measured[runtime.GOOS] {
 		if m.Supported || m.Reason == "" {
 			t.Fatalf("an unsupported OS must say why: %+v", m)
 		}
@@ -707,8 +708,8 @@ func TestDaemon_MetricsReportTheHostAndARunningStep(t *testing.T) {
 	if st.RunID != run.ID || st.StepID != "wait" || st.RSSBytes == 0 || st.Processes < 1 {
 		t.Errorf("step metrics = %+v", st)
 	}
-	if runtime.GOOS == "linux" && !st.Tree {
-		t.Error("on Linux a step's whole process group is measured")
+	if runtime.GOOS != "windows" && !st.Tree {
+		t.Errorf("on %s a step's whole process group is measured", runtime.GOOS)
 	}
 	if m.Host.MemoryTotalBytes == 0 || len(m.Host.Cores) == 0 || m.Daemon.RSSBytes == 0 {
 		t.Errorf("host %+v daemon %+v", m.Host, m.Daemon)
