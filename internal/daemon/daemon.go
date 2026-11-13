@@ -173,15 +173,11 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 	return d, nil
 }
 
-// metricTargets lists the running steps the daemon started, for the sampler.
+// metricTargets lists the step attempts running now, for the sampler.
 func (d *Daemon) metricTargets() []metrics.Target {
 	var out []metrics.Target
-	for _, run := range d.runs.Active() {
-		for _, st := range run.Steps {
-			if st.Status == api.StepRunning && st.PID > 0 {
-				out = append(out, metrics.Target{RunID: run.ID, StepID: st.ID, PID: st.PID})
-			}
-		}
+	for _, p := range d.runs.LiveProcesses() {
+		out = append(out, metrics.Target{RunID: p.RunID, StepID: p.StepID, PID: p.PID})
 	}
 	return out
 }
@@ -200,9 +196,10 @@ func (d *Daemon) Serve(ctx context.Context) error {
 	served := make(chan error, 1)
 	go func() { served <- server.Serve(d.listener) }()
 	d.runs.Resume()
-	sampling, stopSampling := context.WithCancel(context.WithoutCancel(ctx))
-	defer stopSampling()
-	go d.metrics.Run(sampling)
+	sampling, stopSampling := context.WithCancel(ctx)
+	sampled := make(chan struct{})
+	go func() { d.metrics.Run(sampling); close(sampled) }()
+	defer func() { stopSampling(); <-sampled }() // no sample after Serve returns
 	d.logf("daemon started on %s (pid %d, home %s)", d.endpoint.Address, d.endpoint.PID, d.opts.Home)
 
 	ticker := time.NewTicker(d.opts.Tick)

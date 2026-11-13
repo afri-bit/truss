@@ -675,7 +675,15 @@ func TestDaemon_MetricsReportTheHostAndARunningStep(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _, _ = c.Cancel(ctx, run.ID) }()
+	defer func() {
+		// Wait for the step to be gone: on Windows its shell would still hold dir open.
+		_, _ = c.Cancel(ctx, run.ID)
+		for end := time.Now().Add(20 * time.Second); time.Now().Before(end); time.Sleep(50 * time.Millisecond) {
+			if r, err := c.Run(ctx, run.ID); err != nil || !r.Active() {
+				return
+			}
+		}
+	}()
 
 	deadline := time.Now().Add(20 * time.Second)
 	for {

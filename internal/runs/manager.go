@@ -97,6 +97,10 @@ type record struct {
 	stopped   map[string]bool // steps TRUSS stopped after a failure
 	waiting   map[string]bool // steps waiting between two attempts
 	attempts  map[string]int  // attempts started per step
+	// live holds the process id of each step whose attempt is running now. It is
+	// cleared as soon as the attempt ends, so a reused process id is never measured
+	// for a step that waits to retry or has finished (spec 015).
+	live map[string]int
 }
 
 // Manager queues, executes and remembers runs. It is safe for concurrent use.
@@ -315,6 +319,27 @@ func (m *Manager) List(name string, limit int) []api.Run {
 	return list
 }
 
+// LiveProcess is a step attempt that is running now, with its process id.
+type LiveProcess struct {
+	RunID, StepID string
+	PID           int
+}
+
+// LiveProcesses lists the processes of step attempts running now. A step that
+// waits to retry, or has ended, is not listed even though its Step.PID stays.
+func (m *Manager) LiveProcesses() []LiveProcess {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []LiveProcess
+	for _, id := range m.order {
+		rec := m.records[id]
+		for step, pid := range rec.live {
+			out = append(out, LiveProcess{RunID: id, StepID: step, PID: pid})
+		}
+	}
+	return out
+}
+
 // Active returns the queued and running runs, oldest first.
 func (m *Manager) Active() []api.Run {
 	m.mu.Lock()
@@ -413,7 +438,7 @@ func (m *Manager) Close() {
 
 // newEmptyRecord returns a record whose per-run bookkeeping maps are ready.
 func newEmptyRecord() *record {
-	return &record{stopped: map[string]bool{}, waiting: map[string]bool{}, attempts: map[string]int{}}
+	return &record{stopped: map[string]bool{}, waiting: map[string]bool{}, attempts: map[string]int{}, live: map[string]int{}}
 }
 
 // newRecord creates a record with a fresh id. The caller holds m.mu.
@@ -658,6 +683,7 @@ func (f *follower) StepStarted(id string) {
 	f.step(id, func(s *api.Step) {
 		// Times and result describe the current attempt (spec 009, FR-022).
 		s.Status, s.ExitCode, s.Error, s.FinishedAt, s.StartedAt = api.StepRunning, nil, "", nil, &now
+		s.PID = 0 // set by StepProcess once this attempt's process has started
 		if attempt > 1 {
 			s.Attempts = attempt
 		}
@@ -667,6 +693,7 @@ func (f *follower) StepStarted(id string) {
 // StepRetrying keeps the step running while it waits for its next attempt.
 // Its exit code and error stay those of the last attempt until the next starts.
 func (f *follower) StepRetrying(id string, attempt, attempts int, delay time.Duration) {
+	f.ended(id)
 	f.log.StepRetrying(id, attempt, attempts, delay)
 	f.step(id, func(s *api.Step) { s.Status, s.FinishedAt = api.StepRunning, nil })
 	f.m.mu.Lock()
@@ -689,7 +716,17 @@ func (f *follower) StepOutput(id string, chunk []byte) { f.log.StepOutput(id, ch
 
 // StepProcess records the process id of the step's current attempt.
 func (f *follower) StepProcess(id string, pid int) {
+	f.m.mu.Lock()
+	f.rec.live[id] = pid
+	f.m.mu.Unlock()
 	f.step(id, func(s *api.Step) { s.PID = pid })
+}
+
+// ended forgets the live process of a step whose attempt is over.
+func (f *follower) ended(id string) {
+	f.m.mu.Lock()
+	delete(f.rec.live, id)
+	f.m.mu.Unlock()
 }
 
 func (f *follower) StepStopped(id, failedID string) {
@@ -706,6 +743,7 @@ func (f *follower) StepStopped(id, failedID string) {
 }
 
 func (f *follower) StepFinished(id string, exitCode *int, startErr error) {
+	f.ended(id)
 	f.log.StepFinished(id, exitCode, startErr)
 	now := f.m.opts.Now()
 	f.step(id, func(s *api.Step) {
