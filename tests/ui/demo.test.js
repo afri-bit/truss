@@ -12,6 +12,7 @@ const TRUSS_BIN = path.resolve(process.env.TRUSS_BIN || path.join(__dirname, "..
 let child, url, b;
 before(async () => {
   child = spawn(TRUSS_BIN, ["desktop", "--demo", "--no-open"], { stdio: ["ignore", "pipe", "pipe"] });
+  let timer;
   url = await new Promise((resolve, reject) => {
     let out = "";
     child.stdout.on("data", (d) => {
@@ -20,13 +21,15 @@ before(async () => {
       if (m) resolve(m[1]);
     });
     child.on("exit", (code) => reject(new Error("truss desktop --demo exited with " + code)));
-    setTimeout(() => reject(new Error("no address printed")), 10000);
-  });
+    timer = setTimeout(() => reject(new Error("no address printed")), 10000);
+  }).finally(() => clearTimeout(timer));
   b = await openBrowser();
 });
 after(async () => {
   await b?.close();
-  child?.kill("SIGINT");
+  // A plain kill: on Windows Node cannot send Ctrl-C. The graceful Ctrl-C path is covered by
+  // TestDesktopDemo_ServesWithoutADaemonUntilCancelled in cmd/truss.
+  child?.kill();
 });
 
 test("demo mode shows sample data, says so, and never calls an API", async () => {

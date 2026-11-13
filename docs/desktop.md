@@ -61,7 +61,8 @@ ten pipelines, runs that progress while you watch, a failure, a tolerated failur
 a paused schedule, an invalid file and a long name, plus a day of history. Run now, Cancel,
 pause, resume, register and unregister work on that data. Nothing is saved and no request leaves
 the page. The header says **Demo data**; **Leave demo** in the settings menu ends it. Use it to
-try Desktop or to review its design.
+try Desktop or to review its design. The demo server is tested in-process on Linux, macOS and Windows; the
+browser tests of demo mode run on Linux.
 
 ## Registering with the file picker
 
