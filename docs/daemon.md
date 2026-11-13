@@ -165,6 +165,9 @@ The daemon runs your commands, so it is careful about who may ask.
 - Requests whose `Host` header does not name this machine are refused, which stops web pages
   from reaching the API through DNS tricks.
 
+- `GET /fs` lists names only, rejects `..`, NUL bytes and (on Windows) UNC and drive-relative
+  paths, and reports symbolic links at their real location.
+
 Anyone who can read your home directory can control the daemon. That is the same trust
 boundary as your shell.
 
@@ -257,6 +260,7 @@ The CLI and TRUSS Desktop use this API; you can too. Base path `/api/v1`, JSON b
 | `DELETE /pipelines/{name}` | Unregisters it. |
 | `POST /pipelines/{name}/pause`, `/resume` | Stops or restarts its schedules. |
 | `POST /pipelines/{name}/runs` | Requests a run; answers `202` with the run. |
+| `GET /fs?path=&hidden=` | Lists one directory for the register dialog: names of folders and `.yaml`/`.yml` files, never content. Empty `path` is your home. Answers `{path, parent, roots, entries[{name, kind, link}], truncated}`. See [decision 0010](decisions/0010-desktop-file-picker-lists-names-only.md). |
 | `GET /runs?pipeline=&limit=` | Runs, newest first. |
 | `GET /runs/{id}` | One run with its steps. |
 | `POST /runs/{id}/cancel` | Cancels it. |

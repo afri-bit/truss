@@ -40,6 +40,9 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 - **Overlap policy.** `pipeline.overlap` is `queue` (default), `skip` or `parallel`.
 - **`truss validate [<path>]`** checks a definition and prints its schedules and steps without running anything.
 - **TRUSS Desktop.** `truss desktop` opens a dashboard served by the daemon: counters, active and upcoming runs, pipeline controls, and a run page with the step graph and a live log.
+- **File picker for registering.** TRUSS Desktop's register form has a *Browse…* button. It uses the new `GET /api/v1/fs` endpoint, which lists directories and `*.yaml`/`*.yml` names (never content) starting at your home directory (specs/013-desktop-polish, ADR 0010).
+- Browser tests for TRUSS Desktop in `tests/ui/` (Node and Playwright, run by a new `desktop-ui` CI job). Playwright is not a dependency of the product.
+- TRUSS Desktop polish: a "Daemon unreachable" page, an error page with *Try again*, empty-log messages, a register form that keeps what you typed across refreshes, keyboard focus kept across refreshes, and keyboard access to run rows, step rows and graph nodes.
 - Runs started by the daemon set `TRUSS_RUN_ID`, `TRUSS_PIPELINE` and `TRUSS_TRIGGER`.
 - A cancelled daemon run closes its log with `summary cancelled steps <n> duration <d>`.
 - Documentation: pipeline file reference, command line reference, daemon guide, TRUSS Desktop guide and an architecture page under `docs/`.

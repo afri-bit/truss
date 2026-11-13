@@ -52,6 +52,7 @@ func (d *Daemon) handler() http.Handler {
 	route("POST /pipelines/{name}/pause", d.pausePipeline(true))
 	route("POST /pipelines/{name}/resume", d.pausePipeline(false))
 	route("POST /pipelines/{name}/runs", d.triggerRun)
+	route("GET /fs", d.browse)
 	route("GET /runs", d.listRuns)
 	route("GET /runs/{id}", d.getRun)
 	route("POST /runs/{id}/cancel", d.cancelRun)
@@ -99,6 +100,7 @@ func localHost(hostport string) bool {
 func statusFor(err error) int {
 	var invalid *invalidError
 	var bad *badRequestError
+	var coded *statusError
 	var tooBig *http.MaxBytesError
 	switch {
 	case errors.Is(err, registry.ErrNotFound), errors.Is(err, runs.ErrNotFound):
@@ -117,6 +119,8 @@ func statusFor(err error) int {
 		return http.StatusUnprocessableEntity
 	case errors.As(err, &bad):
 		return http.StatusBadRequest
+	case errors.As(err, &coded):
+		return coded.code
 	}
 	return http.StatusInternalServerError
 }

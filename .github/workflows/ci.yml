@@ -81,6 +81,37 @@ jobs:
           go build -o "$bin" ./cmd/truss
           bash .github/scripts/e2e-test.sh "$bin"
 
+  # Browser tests for TRUSS Desktop (specs/013-desktop-polish). Linux only: the
+  # suite is portable Node, but Chromium on three runners costs more than it
+  # finds while the page is plain DOM code. Playwright is pinned in
+  # tests/ui/package-lock.json and is not a dependency of the product.
+  desktop-ui:
+    name: Desktop UI (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/ui/package-lock.json
+
+      - name: Build truss
+        run: go build -o bin/truss ./cmd/truss
+
+      - name: Install Playwright and Chromium
+        working-directory: tests/ui
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Run the browser tests
+        working-directory: tests/ui
+        run: npm test
+
   agent-tooling:
     name: Agent tooling
     runs-on: ubuntu-latest
