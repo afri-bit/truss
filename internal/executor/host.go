@@ -123,16 +123,16 @@ func Start(ctx context.Context, req Request) (*Process, error) {
 	return p, nil
 }
 
+// PID returns the operating-system process id of the Step's shell. On Linux and
+// macOS it is also the id of the Step's process group.
+func (p *Process) PID() int { return p.cmd.Process.Pid }
+
 // Wait blocks until the shell exits, or ctx is done, in which case the whole
 // tree is force-ended first. Either way it ends leftover processes, waits for
 // them to be gone and returns the Result.
 //
 // Wait must be called exactly once, and always: it collects the reaper's
 // result and releases the tree. A second call would block forever.
-// PID returns the operating-system process id of the Step's shell. On Linux and
-// macOS it is also the id of the Step's process group.
-func (p *Process) PID() int { return p.cmd.Process.Pid }
-
 func (p *Process) Wait(ctx context.Context) Result {
 	var err error
 	killed := false
