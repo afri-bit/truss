@@ -1,6 +1,6 @@
 // Package metrics samples the machine's CPU and memory, and the processes of
 // running steps, for the daemon's GET /metrics. It reads what the operating
-// system already exposes and starts no process. Linux and Windows are
+// system already exposes and starts no process. Linux, macOS and Windows are
 // supported; elsewhere Snapshot says so and reports nothing.
 package metrics
 
