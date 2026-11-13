@@ -33,11 +33,10 @@ theme toggle, settings menu) and the content.
 
 ![A live run](images/desktop-run.png)
 
-**Simulated figures.** The daemon does not report CPU, memory or per-step processes yet. Where
-Desktop shows them (resource meters, Monitor charts, step process ids) the numbers are simulated
-and labeled **simulated**. Turn them off in **Settings → Simulated metrics**. Everything else
-(runs, steps, logs, schedules, the daemon's pid, address and uptime) comes from the daemon.
-See [spec 014](../specs/014-desktop-redesign/spec.md).
+**Resource figures** (CPU, memory, step processes) come from the daemon, which measures them on
+Linux and Windows. On macOS the page says the daemon does not collect them yet. A run's own chart
+starts when you open its page; the machine's charts show the last ten minutes. See
+[spec 015](../specs/015-resource-metrics/spec.md).
 
 ![Monitor](images/desktop-monitor.png)
 
@@ -58,7 +57,7 @@ Press Ctrl-C to stop.
 
 `--demo` needs no daemon. It serves Desktop with sample data that the page generates itself:
 ten pipelines, runs that progress while you watch, a failure, a tolerated failure, a queued run,
-a paused schedule, an invalid file and a long name, plus a day of history. Run now, Cancel,
+a paused schedule, an invalid file and a long name, plus a day of history, and sample CPU and memory figures. Run now, Cancel,
 pause, resume, register and unregister work on that data. Nothing is saved and no request leaves
 the page. The header says **Demo data**; **Leave demo** in the settings menu ends it. Only the server
 that `--demo` starts has the sample data; a daemon's page always shows real data. Use it to
