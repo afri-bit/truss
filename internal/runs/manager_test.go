@@ -664,3 +664,37 @@ func TestSubmit_StepsSeeTheDataFoldersAndEnvCanOverrideThem(t *testing.T) {
 		t.Fatalf("cache folder not recreated: %v", err)
 	}
 }
+
+func TestManager_RecordsTheStepProcessAndListsActiveRuns(t *testing.T) {
+	m := open(t, Options{})
+	gate := filepath.Join(t.TempDir(), "gate")
+	run := submit(t, m, "p", def("p", "", pipeline.Step{ID: "wait", Run: waitFor(gate)}))
+	var pid int
+	for deadline := time.Now().Add(20 * time.Second); pid == 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the step never reported a process")
+		}
+		got, _ := m.Get(run.ID)
+		if got.Steps[0].Status == api.StepRunning {
+			pid = got.Steps[0].PID
+		}
+	}
+	if pid <= 0 {
+		t.Fatalf("pid = %d", pid)
+	}
+	if active := m.Active(); len(active) != 1 || active[0].ID != run.ID || active[0].Steps[0].PID != pid {
+		t.Fatalf("Active = %+v", active)
+	}
+	if err := os.WriteFile(gate, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(20 * time.Second); len(m.Active()) > 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the run did not end")
+		}
+	}
+	done, _ := m.Get(run.ID)
+	if done.Steps[0].PID != pid {
+		t.Errorf("finished step pid = %d, want the last attempt's %d", done.Steps[0].PID, pid)
+	}
+}

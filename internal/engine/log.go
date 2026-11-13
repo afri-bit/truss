@@ -19,6 +19,13 @@ import "time"
 // StepSkipped reports a Step that will not run and says why, as a phrase such
 // as "step a did not succeed". It is not called for a Step that was never
 // started only because an earlier failure ended the run.
+// ProcessEvents is an optional extension of StepEvents. When the StepEvents
+// value implements it, StepProcess is called after each attempt's process has
+// started, with that process's operating-system id.
+type ProcessEvents interface {
+	StepProcess(id string, pid int)
+}
+
 type StepEvents interface {
 	StepStarted(id string)
 	StepOutput(id string, chunk []byte)

@@ -315,6 +315,19 @@ func (m *Manager) List(name string, limit int) []api.Run {
 	return list
 }
 
+// Active returns the queued and running runs, oldest first.
+func (m *Manager) Active() []api.Run {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var list []api.Run
+	for _, id := range m.order {
+		if run := m.records[id].run; run.Active() {
+			list = append(list, run.Copy())
+		}
+	}
+	return list
+}
+
 // Summary returns the number of active runs of a pipeline and its newest
 // run that actually executed or is about to, if any.
 func (m *Manager) Summary(name string) (active int, last *api.Run) {
@@ -673,6 +686,11 @@ func (f *follower) StepSkipped(id, reason string) {
 }
 
 func (f *follower) StepOutput(id string, chunk []byte) { f.log.StepOutput(id, chunk) }
+
+// StepProcess records the process id of the step's current attempt.
+func (f *follower) StepProcess(id string, pid int) {
+	f.step(id, func(s *api.Step) { s.PID = pid })
+}
 
 func (f *follower) StepStopped(id, failedID string) {
 	f.log.StepStopped(id, failedID)
