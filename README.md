@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/afri-bit/truss/actions/workflows/ci.yml"><img src="https://github.com/afri-bit/truss/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="go.mod"><img src="https://img.shields.io/badge/go-1.27.3-00ADD8?logo=go" alt="Go"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License: Apache 2.0"></a>
 </p>
 
 <p align="center">
@@ -345,4 +345,4 @@ Branches are named `<type>/<name>` with type `bugfix`, `feature`, `hotfix`, `rel
 
 ## License
 
-TRUSS is released under the [MIT License](LICENSE).
+TRUSS is released under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE).

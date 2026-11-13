@@ -11,6 +11,7 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 ### Changed
 
+- License: TRUSS is now released under the Apache License 2.0 (was MIT). Nothing was tagged under MIT. A `NOTICE` file ships in every release archive.
 - Release process: the release check also compares the tag with `truss version` and with TRUSS Desktop's own version (`internal/webui/VERSION`), and accepts only the Keep a Changelog headings. Branches must start with `bugfix/`, `feature/`, `hotfix/`, `release/`, `task/` or `chore/`, and commits must be authored by `afri-bit`; CI and the agent hooks enforce both (ADR 0014, constitution 2.1.0).
 - Queued runs survive a daemon restart. They stay `queued` when the daemon stops and start in request order when it starts again, instead of being cancelled. A queued run whose pipeline can no longer be loaded is closed as `failed`. Runs that were running are cancelled on a graceful stop, or closed as `failed` after a crash, as before.
 - `truss help` and usage errors print the full command list. The first usage line is now `usage: truss <command> [arguments]`.
