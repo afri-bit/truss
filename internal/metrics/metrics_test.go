@@ -157,7 +157,7 @@ func TestSampler_RunStopsWithItsContext(t *testing.T) {
 }
 
 // TestNew_ReadsThisMachine is a smoke test of the real source for the OS the
-// tests run on: Linux and Windows report figures, others report why not.
+// tests run on: Linux, macOS and Windows report figures, others report why not.
 func TestNew_ReadsThisMachine(t *testing.T) {
 	s := New(Options{Self: os.Getpid(), Interval: 50 * time.Millisecond})
 	s.Sample()
@@ -165,7 +165,7 @@ func TestNew_ReadsThisMachine(t *testing.T) {
 	s.Sample()
 	m := s.Snapshot()
 	switch runtime.GOOS {
-	case "linux", "windows":
+	case "linux", "darwin", "windows":
 		if !m.Supported || m.Host == nil {
 			t.Fatalf("snapshot = %+v", m)
 		}
