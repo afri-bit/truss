@@ -22,7 +22,9 @@ reached through `//go:linkname`, which the runtime keeps for this use (go.dev/is
   `vm.loadavg`.
 - A step: its whole process group through `proc_listpids`, each process through `proc_pidinfo`
   (CPU, resident size, threads) and `proc_pid_rusage` (CPU of children it waited for), like Linux.
-- CPU times come in Mach absolute units and are converted with `mach_timebase_info`.
+- CPU times come in Mach absolute units and are converted with `mach_timebase_info`. Page
+  counts are in the kernel's page size (`host_page_size`), which is not the task's page size
+  when an amd64 build runs under Rosetta.
 - Struct decoding is plain Go with no build constraint, so it is tested on every system.
 
 Rejected: `golang.org/x/sys/unix` (a new module, and it wraps none of these calls); cgo (breaks
@@ -34,5 +36,7 @@ cross-compiled releases); `ps` or `top` (a process every sample, already rejecte
 - Bad: about 150 lines of low-level code tied to C struct layouts and to a runtime linkname. A
   future Go release that removed `syscall.syscall` would break the macOS build, loudly; x/sys
   would break with it.
-- Follow-ups: verified by tests on the `macos-latest` CI runner (Apple silicon); no Intel Mac
-  runs in CI.
+- A function missing from libSystem would stop every `truss` command from starting on macOS,
+  not only the figures. CI therefore builds the end-to-end binary with `CGO_ENABLED=0`, as the
+  release does, and its daemon samples on the `macos-latest` runner.
+- Follow-ups: CI runs Apple silicon only; no Intel Mac and no Rosetta run is tested.

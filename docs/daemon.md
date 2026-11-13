@@ -305,7 +305,8 @@ process and writes nothing to do so. `GET /metrics` answers:
 - **Windows** uses system calls and counts the step's shell only (`tree: false`); it has no `load`
   and no `threads`.
 - **macOS** uses system calls. Like Linux, a step counts its whole process group (`tree: true`)
-  and the host has `load`. Memory used is what Activity Monitor calls *Memory Used*.
+  and the host has `load`. Memory used is what Activity Monitor calls *Memory Used*. Processes
+  of another user (a step that runs `sudo`) cannot be read and are left out.
 - **Other systems**: `supported` is `false` and `reason` says why. There is no `host`,
   `steps` and `history` are empty, and `daemon` has only its `pid`.
 - Only steps whose attempt is running now are listed. Tracked local runs are not measured.
