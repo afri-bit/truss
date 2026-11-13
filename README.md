@@ -147,6 +147,10 @@ RUN                     PIPELINE  STATUS     TRIGGER  CREATED              DURAT
 20261112-090110-a3f9c1  hello     succeeded  manual   2026-11-12 09:01:10  0s
 ```
 
+The daemon does not start by itself after a reboot. To have your schedules keep working, run
+`truss daemon install` once; it starts the daemon at every login and needs no admin rights
+(`truss daemon uninstall` takes it back). Details in [the daemon docs](docs/daemon.md#starting-at-login).
+
 ### 3. Put it on a schedule
 
 Add a trigger to the file and save. The daemon picks the change up by itself.
@@ -173,7 +177,7 @@ $ truss desktop
 
 | | You start | You use | Tracked by the daemon? |
 |---|---|---|---|
-| **1. Alone** | nothing | `truss run`, `truss validate` | No. The log is `.truss/run.log` in the project. |
+| **1. Alone** | nothing | `truss run`, `truss validate` | No. The log is `.truss/run.log` in the project. Add `--track` (needs the daemon) to also record the run. |
 | **2. With the daemon** | `truss daemon start` | the CLI: `register`, `trigger`, `runs`, `logs`, `cancel`, ... | Yes: schedules, queue, history. |
 | **3. With the daemon and Desktop** | `truss daemon start`, then `truss desktop` | the same runs, seen and controlled in the browser | Yes, same state as path 2. |
 
@@ -183,7 +187,9 @@ nothing, and neither client starts or stops it.
 
 Path 1 is deliberately separate. `truss run` executes in your shell with your environment, needs
 no server, and behaves the same in CI. If you want a run to appear in the history and in Desktop,
-register the file and use `truss trigger`.
+either register the file and use `truss trigger` (the daemon runs it, with the daemon's environment),
+or keep running in your shell and add `--track`: `truss run --track` still uses your environment and
+only reports to the daemon, which shows it as a `local` run.
 
 Pipelines are written in files, with your editor. Desktop watches and controls them; it does not edit them.
 
@@ -234,9 +240,11 @@ fails the run and stops the rest. Every field is described in the
 
 | | Command | |
 |---|---|---|
-| **Run here** | `truss run [<path>]` | Run a file now, without the daemon |
+| **Run here** | `truss run [<path>] [--track]` | Run a file now; `--track` also reports it to the daemon |
 | | `truss validate [<path>]` | Check a file and show its steps |
+| **Secrets** | `truss secret set <name>` \| `list` \| `remove <name>` | Store credentials for `secrets:` in a file (value from stdin) |
 | **Daemon** | `truss daemon start` \| `stop` \| `status` | Manage the background service |
+| | `truss daemon install` \| `uninstall` | Start the daemon at login, or stop doing so |
 | | `truss desktop` | Open TRUSS Desktop |
 | **Pipelines** | `truss register [<path>] [--name <name>]` | Make a file known to the daemon |
 | | `truss unregister <name>` | Forget it; the file and history stay |
@@ -295,7 +303,7 @@ The full map is in [docs/architecture.md](docs/architecture.md).
 After v0.1.0, roughly in this order. Scope and order may change.
 
 - **Desktop:** a packaged window with tray icon, notifications and start at login
-- **Pipelines:** conditions, retries, matrix builds, artifacts, a secret store
+- **Pipelines:** conditions, retries, matrix builds, artifacts
 - **Triggers:** file changes and webhooks
 - **Execution:** containers, then remote workers
 - **Ecosystem:** SDKs and CI-provider bridges, so the same file runs in CI

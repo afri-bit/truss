@@ -86,7 +86,10 @@ Three limits work together:
 | Overlap | `pipeline.overlap` in the file | `queue` | Whether two runs of the *same* pipeline may overlap, wait, or the second is skipped. |
 | Steps at once | `pipeline.concurrency` in the file | 1 | How many steps of one run execute in parallel. |
 
-Runs that cannot start yet are `queued` and start in the order they were requested.
+Runs that cannot start yet are `queued` and start in the order they were requested. The queue
+survives a restart: stop the daemon and start it again, and the queued runs start, still in
+order. A queued run whose pipeline was unregistered or no longer loads in the meantime is closed
+as `failed` with the reason.
 
 ## Run states
 
@@ -96,8 +99,11 @@ Runs that cannot start yet are `queued` and start in the order they were request
 | `running` | Steps are executing. |
 | `succeeded` | Every step succeeded. |
 | `failed` | A step failed; the note names it. |
-| `cancelled` | You cancelled it, or the daemon stopped. |
+| `cancelled` | You cancelled it, or the daemon stopped while it was running. |
 | `skipped` | Requested but never started: a missed schedule, or `overlap: skip`. |
+
+The trigger says why a run exists: `manual`, `schedule`, `catch-up`, or `local` (started in your
+shell with `truss run --track`, only recorded by the daemon).
 
 Steps are `pending`, `running`, `succeeded`, `failed`, `stopped` (ended because another step
 failed), `cancelled`, or `skipped` (the run ended before they started).
@@ -105,8 +111,10 @@ failed), `cancelled`, or `skipped` (the run ended before they started).
 ## What runs see
 
 Steps start from the environment the daemon was started with, plus the file's `env`, plus
-`TRUSS_RUN_ID`, `TRUSS_PIPELINE`, `TRUSS_TRIGGER`, `TRUSS_DATA_DIR` and `TRUSS_CACHE_DIR`. If a pipeline needs a variable from your
-shell profile, start the daemon from a shell that has it, or set it in the file.
+`TRUSS_RUN_ID`, `TRUSS_PIPELINE`, `TRUSS_TRIGGER`, `TRUSS_DATA_DIR` and `TRUSS_CACHE_DIR`.
+If a pipeline needs a variable from your
+shell profile, start the daemon from a shell that has it, or set it in the file. A daemon
+[started at login](#starting-at-login) has the login environment instead of a shell's.
 
 ## Data and cache folders
 
@@ -130,6 +138,7 @@ directory is private to your user.
 |---|---|
 | `daemon.json` | Address, process id and access token of the running daemon. Removed on stop. |
 | `registry.json` | Registered pipelines. |
+| `secrets.json` | Stored secrets, plain text, `0600` (see [`truss secret`](cli.md#secrets)). Read at the start of each run that declares secrets. |
 | `clock.json` | When the scheduler last looked at the clock. |
 | `runs/<run-id>/run.json` | One run: status, times, steps. |
 | `runs/<run-id>/run.log` | Its run log, the same format `truss run` prints. |
@@ -137,8 +146,8 @@ directory is private to your user.
 | `pipelines/<name>/cache/` | Its cache folder, `TRUSS_CACHE_DIR`. |
 | `daemon.log` | The daemon's own log when started with `daemon start`. |
 
-The newest 200 runs are kept. A run that was active when the daemon died is closed as `failed`
-on the next start.
+The newest 200 runs are kept. A run that was *running* when the daemon died is closed as
+`failed` on the next start. Runs that were only *queued* are kept and start again.
 
 ## Security
 
@@ -155,15 +164,76 @@ boundary as your shell.
 
 ## Starting at login
 
-`truss daemon start` does not survive a reboot. To have schedules work after login, let your
-system start `truss daemon run`:
+`truss daemon start` does not survive a reboot. One command makes your system start the daemon
+at every login, with no root or administrator rights:
 
-- **Linux (systemd user unit)**: `ExecStart=/path/to/truss daemon run`, `Restart=on-failure`,
-  `WantedBy=default.target`.
-- **macOS (launchd agent)**: `ProgramArguments` = `truss`, `daemon`, `run`; `RunAtLoad` = true.
-- **Windows (Task Scheduler)**: a task "At log on" that runs `truss.exe daemon start`.
+```console
+$ truss daemon install
+login start installed: /home/me/.config/systemd/user/truss.service
+the daemon is running under systemd and starts at every login
+to run it without a login session, once: loginctl enable-linger
 
-An installer for these is on the roadmap.
+$ truss daemon status
+...
+  at login   installed (remove with: truss daemon uninstall)
+
+$ truss daemon uninstall
+login start removed: /home/me/.config/systemd/user/truss.service
+```
+
+`install` accepts the options of `daemon run` (`--address`, `--max-runs`) and builds them into
+the login item. Run it from the `truss` you want to keep: the path of that binary is what gets
+recorded. It refuses a binary in a temporary directory (a `go run` build, `/tmp`, `AppData\Local\Temp`),
+because the login item would stop working when the file is cleaned up. Run it again after you
+move or upgrade the binary or to change the options. If a daemon is already running, a reinstall
+keeps it as it is (except under systemd, which restarts it); to apply new options now, run
+`truss daemon stop` and then `truss daemon install` again.
+
+| System | What `install` creates | Restarts after a crash | Output of the daemon |
+|---|---|---|---|
+| Linux | systemd user unit `~/.config/systemd/user/truss.service`, enabled with `systemctl --user` | `Restart=on-failure` | the journal: `journalctl --user -u truss` |
+| macOS | launchd agent `~/Library/LaunchAgents/io.github.afri-bit.truss.plist`, loaded into your `gui/<uid>` domain | `KeepAlive` on failure only | `daemon.log` in the TRUSS home |
+| Windows | Task Scheduler task `truss-daemon-<user>`, at logon of your user, least privilege | up to 3 times, a minute apart | not captured; a console window stays open |
+
+Things to know:
+
+- A daemon you started with `truss daemon start` keeps running and is not duplicated. `install`
+  then leaves the login item for the next login. `truss daemon stop` stops the daemon for now;
+  on Linux and macOS the service manager does not restart it after a clean stop.
+- `uninstall` removes only what `install` created, recognised by the text "Managed by truss
+  daemon install" in the file or task. A unit, plist or task with that name that you wrote yourself is
+  left alone and reported. It stops the daemon that the login item started, not one you started by hand.
+- If `TRUSS_HOME` is set when you install, the login item uses it (Linux and macOS). A Windows
+  task cannot carry it: the daemon uses the user variable of that name (`setx TRUSS_HOME ...`)
+  or the default home, and `install` says so.
+- Do not run `install` with `sudo` or as administrator; it refuses. The login item belongs to
+  your own account.
+- On Windows the task is named `truss-daemon-<your user>`, and `uninstall` ends its daemon
+  without cancelling runs gracefully: run `truss daemon stop` first.
+- If a unit, plist or task with the same name exists and `install` did not create it, `install`
+  and `uninstall` stop with an error and leave it alone.
+- On Windows the daemon runs in a console window that stays open, and its output is not saved.
+  Some Windows setups only let administrators create a task that runs at logon; if `install`
+  reports "access denied", TRUSS does not work around it.
+- Linux runs the daemon only while you have a session. To have schedules fire without logging
+  in, run `loginctl enable-linger` once.
+
+### The environment of a login-started daemon
+
+A daemon started at login has the login environment, **not** what your interactive shell profile
+(`.bashrc`, `.zshrc`, PowerShell profile) sets up. `PATH` is shorter and variables you export in
+the profile are missing. Steps inherit this environment. Prefer putting what a pipeline needs in
+the file's `env` ([reference](pipeline-reference.md)). To give the daemon more:
+
+- **Linux.** A drop-in survives re-running `install`:
+  `systemctl --user edit truss.service`, then
+  `[Service]` and `Environment="PATH=/home/me/.local/bin:/usr/local/bin:/usr/bin:/bin"`
+  (one `Environment=` line per variable), then `systemctl --user restart truss.service`.
+- **macOS.** Add the variables to the `EnvironmentVariables` dictionary of the plist, then reload
+  it: `launchctl bootout gui/$(id -u)/io.github.afri-bit.truss`, then
+  `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.afri-bit.truss.plist`.
+  Running `truss daemon install` again regenerates the file and drops your additions.
+- **Windows.** Set a user variable with `setx NAME value`; the task sees it at the next logon.
 
 ## HTTP API
 
@@ -184,7 +254,26 @@ The CLI and TRUSS Desktop use this API; you can too. Base path `/api/v1`, JSON b
 | `GET /runs?pipeline=&limit=` | Runs, newest first. |
 | `GET /runs/{id}` | One run with its steps. |
 | `POST /runs/{id}/cancel` | Cancels it. |
+| `POST /runs` | Opens a *tracked local run* (see below): `{"pipeline": "name", "steps": [{"id": "a", "needs": []}]}`. Answers `201` with the run in state `running`. |
+| `POST /runs/{id}/steps` | Reports a step of a local run: `{"id", "status", "exit_code", "error"}`. |
+| `POST /runs/{id}/log?offset=` | Appends text to a local run's log at its current end; answers `204` with the headers below. Max 256 KiB. |
+| `POST /runs/{id}/finish` | Closes a local run: `{"status": "succeeded" \| "failed" \| "cancelled", "reason"}`. |
 | `GET /runs/{id}/log?offset=` | Log text from a byte offset. `X-Truss-Log-Offset` is the next offset, `X-Truss-Run-Status` the run status; an empty body for a finished run means the log is complete. |
+
+### Tracked local runs
+
+`truss run --track` runs a pipeline in your shell, as `truss run` does, and reports it through
+the four `POST /runs...` endpoints above, so it appears in `truss runs` and Desktop with the
+trigger `local`. The daemon never starts it and it does not use a slot of `--max-runs` or block
+the overlap policy of a pipeline of the same name. Only a `local` run that is `running` accepts
+reports; anything else answers `409`. Bodies over the limits answer `413`; a log append must start
+where the log ends (`409`), and repeating one the log already holds is harmless.
+
+Cancelling a local run (Desktop, `truss cancel`, `POST /runs/{id}/cancel`) closes its record at
+once and asks the CLI to stop: it notices within a fraction of a second and ends the run's
+processes like an interrupt. If the daemon stops while a local run is `running`, the run is
+closed as `failed`; the process in your shell carries on and stops reporting. See
+[ADR 0007](decisions/0007-tracked-local-runs.md).
 
 ```console
 $ TOKEN=$(jq -r .token ~/.truss/daemon.json)

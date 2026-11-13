@@ -25,6 +25,10 @@ type Step struct {
 	// Env holds the variables this step adds to the run environment. In an
 	// ExecutionPlan it is already merged: pipeline, then job, then step.
 	Env map[string]string
+	// Secrets names the stored secrets this step receives as environment
+	// variables. In an ExecutionPlan it is already merged: pipeline, then job,
+	// then step, without repeats. Only names are held here, never values.
+	Secrets []string
 	// Dir is the step's working directory. A relative Dir is resolved against
 	// the directory the run starts in. Empty means that directory itself.
 	Dir string
@@ -37,11 +41,12 @@ type Step struct {
 // Job is a named, ordered list of steps. The steps of a job run one after
 // another; jobs wait for the jobs they need.
 type Job struct {
-	ID    string
-	Needs []string
-	Env   map[string]string
-	Dir   string
-	Steps []Step
+	ID      string
+	Needs   []string
+	Env     map[string]string
+	Secrets []string
+	Dir     string
+	Steps   []Step
 }
 
 // Overlap says what happens when a run is requested while another run of the
@@ -93,6 +98,7 @@ type Pipeline struct {
 	// directory the run starts in, or absolute. Empty means that directory.
 	Workdir   string
 	Env       map[string]string
+	Secrets   []string
 	Schedules []Schedule
 
 	nonStringVersion bool

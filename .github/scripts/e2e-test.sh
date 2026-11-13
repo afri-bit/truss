@@ -464,6 +464,26 @@ else
 	else
 		pass "runs"
 	fi
+	# A tracked run executes here, in this shell, and is recorded by the daemon (spec 010).
+	run_truss "$work/project" run --track
+	tracked_id="$(printf '%s' "$err" | sed -n 's/^tracking as run \([^ ]*\) .*/\1/p')"
+	if [ "$code" -ne 0 ] || [ -z "$tracked_id" ] || ! has_line "summary succeeded steps 3 duration *"; then
+		fail "run --track" "want exit 0, the run log on stdout and the run id on stderr"
+	else
+		pass "run --track"
+		run_truss "$work/project" runs jobs
+		if [ "$code" -ne 0 ] || [[ "$out" != *"$tracked_id"*"succeeded"*"local"* ]]; then
+			fail "run --track history" "want the local run in the history"
+		else
+			pass "run --track history"
+		fi
+		run_truss "$work/project" logs "$tracked_id"
+		if [ "$code" -ne 0 ] || ! has_line "step ship/publish | publishing" || ! has_line "summary succeeded steps 3 duration *"; then
+			fail "run --track log" "want the run log in the daemon"
+		else
+			pass "run --track log"
+		fi
+	fi
 	run_truss "$work/project" unregister jobs
 	run_truss "$work/project" pipelines
 	if [ "$code" -ne 0 ] || [[ "$out" != "no pipelines registered"* ]]; then
@@ -483,6 +503,72 @@ if [ "$code" -ne 1 ]; then
 	fail "daemon status" "want exit 1 when no daemon runs"
 else
 	pass "daemon status"
+fi
+run_truss "$work/project" run --track
+if [ "$code" -ne 1 ] || [ -n "$out" ] || [[ "$err" != *"truss daemon start"* ]]; then
+	fail "run --track without a daemon" "want exit 1, no output and the start hint"
+else
+	pass "run --track without a daemon"
+fi
+# Secrets: stored from standard input, passed to a step, redacted in the log.
+mkdir -p "$work/secrets"
+show_cmd='echo token=$E2E_TOKEN'
+if [ "$windows" = true ]; then
+	show_cmd='echo token=%E2E_TOKEN%' # the step runs under cmd.exe
+fi
+cat >"$work/secrets/truss.yaml" <<EOF_SECRETS
+version: "1"
+pipeline:
+  name: secrets
+steps:
+  - id: show
+    run: '$show_cmd'
+    secrets: [E2E_TOKEN]
+EOF_SECRETS
+run_truss "$work/secrets" run
+if [ "$code" -ne 1 ] || [[ "$err" != *"missing secrets: E2E_TOKEN"* ]] || [[ "$out" == *"started"* ]]; then
+	fail "secret missing" "want exit 1 before any step"
+else
+	pass "secret missing"
+fi
+(cd "$work/secrets" && printf %s "e2e-canary-value" | "$truss" secret set E2E_TOKEN >"$work/.stdout" 2>"$work/.stderr")
+code=$?
+out="$(cat "$work/.stdout")"
+err="$(cat "$work/.stderr")"
+if [ "$code" -ne 0 ] || [ "$out" != "secret E2E_TOKEN saved" ]; then
+	fail "secret set" "want exit 0 and the saved line"
+else
+	pass "secret set"
+fi
+run_truss "$work/secrets" secret list
+if [ "$code" -ne 0 ] || [ "$out" != "E2E_TOKEN" ]; then
+	fail "secret list" "want the name only"
+else
+	pass "secret list"
+fi
+run_truss "$work/secrets" run
+if [ "$code" -ne 0 ] || [[ "$out" == *"e2e-canary-value"* ]] || ! has_line "step show | token=***"; then
+	fail "secret redaction" "want exit 0 and the value replaced by ***"
+else
+	pass "secret redaction"
+fi
+
+# Start at login: a binary in a temporary directory must be refused before
+# anything is installed. HOME and USERPROFILE point at an empty directory so a
+# regression would not write into the real home; the refusal itself is what
+# keeps systemctl, launchctl and schtasks from being run.
+mkdir -p "$work/copy" "$work/fakehome"
+ext=""
+$windows && ext=".exe"
+cp "$truss" "$work/copy/truss-copy$ext"
+(cd "$work/project" && HOME="$work/fakehome" USERPROFILE="$work/fakehome" "$work/copy/truss-copy$ext" daemon install >"$work/.stdout" 2>"$work/.stderr")
+code=$?
+out="$(cat "$work/.stdout")"
+err="$(cat "$work/.stderr")"
+if [ "$code" -ne 1 ] || [[ "$err" != *"looks temporary"* ]]; then
+	fail "daemon install refuses a temporary binary" "want exit 1 and the reason"
+else
+	pass "daemon install refuses a temporary binary"
 fi
 unset TRUSS_HOME
 rm -rf "$work"

@@ -20,10 +20,15 @@ the address instead.
 | **Dashboard** | Counters for today, active runs, the next scheduled runs, recent runs. | Jump to any run or pipeline. |
 | **Pipelines** | Every registered file with its state, schedules, next and last run. | Register a file, run it now, pause or resume its schedules, unregister it. |
 | **Pipeline** | Its settings, its step graph colored by the last run, its run history. | The same actions. |
-| **Runs** | Every run the daemon started or skipped, newest first. | Open one. |
+| **Runs** | Every run the daemon started or skipped, and every run tracked from a shell, newest first. | Open one. |
 | **Run** | The step graph, each step's result and duration, and the run log, live while it runs. | Cancel the run, run it again, click a step to see only its log lines. |
 
 ![A failed run](images/desktop-run.png)
+
+Runs started with `truss run --track` appear next to the daemon's own, with a **local** badge
+in the Trigger column and on the run's page. They show their steps and log live, like any run.
+Cancel works (the CLI notices within a second and stops); **Run again** is not offered, because
+nothing registered stands behind a local run.
 
 The pages refresh on their own about every second and a half.
 

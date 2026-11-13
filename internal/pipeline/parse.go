@@ -67,6 +67,8 @@ func Parse(data []byte) (Pipeline, error) {
 			parseTriggers(&p, val)
 		case "env":
 			p.Env = parseEnv(&p, val, "env")
+		case "secrets":
+			p.Secrets = parseSecrets(&p, val, "secrets")
 		case "steps":
 			p.hasSteps = true
 			if val.Kind != yaml.SequenceNode {
@@ -142,6 +144,8 @@ func parseStep(p *Pipeline, item *yaml.Node, pos int, job string) Step {
 			parseNeeds(&step, v)
 		case "env":
 			deferred = append(deferred, func(label string) { step.Env = parseEnv(p, v, label+" env") })
+		case "secrets":
+			deferred = append(deferred, func(label string) { step.Secrets = parseSecrets(p, v, label+" secrets") })
 		case "dir":
 			deferred = append(deferred, func(label string) { step.Dir = parseString(p, v, label+" dir") })
 		case "timeout":
@@ -206,6 +210,8 @@ func parseJobs(p *Pipeline, val *yaml.Node) {
 				job.Needs = holder.Needs
 			case "env":
 				job.Env = parseEnv(p, v, label+" env")
+			case "secrets":
+				job.Secrets = parseSecrets(p, v, label+" secrets")
 			case "dir":
 				job.Dir = parseString(p, v, label+" dir")
 			case "steps":
@@ -305,6 +311,31 @@ func parseEnv(p *Pipeline, val *yaml.Node, label string) map[string]string {
 		}
 	}
 	return env
+}
+
+// parseSecrets reads a list of secret names. Names follow the rule for
+// environment variable names. A message quotes an entry only when it is a
+// valid name; anything else is shown by position, because a person who pastes
+// a value where a name belongs must not see it echoed.
+func parseSecrets(p *Pipeline, val *yaml.Node, label string) []string {
+	if val.Kind != yaml.SequenceNode {
+		p.issue("%s must be a list of secret names", label)
+		return nil
+	}
+	names := make([]string, 0, len(val.Content))
+	seen := map[string]bool{}
+	for pos, entry := range val.Content {
+		switch {
+		case entry.Kind != yaml.ScalarNode || entry.Tag != "!!str" || !envName.MatchString(entry.Value):
+			p.issue("%s: entry %d is not a valid secret name (letters, digits and '_', not starting with a digit)", label, pos+1)
+		case seen[entry.Value]:
+			p.issue("%s: %q is listed twice", label, entry.Value)
+		default:
+			seen[entry.Value] = true
+			names = append(names, entry.Value)
+		}
+	}
+	return names
 }
 
 func parseString(p *Pipeline, val *yaml.Node, label string) string {

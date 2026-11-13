@@ -1,0 +1,13 @@
+# Managed by truss daemon install. Remove it with "truss daemon uninstall".
+[Unit]
+Description=TRUSS daemon
+
+[Service]
+Type=simple
+ExecStart="/home/me/my tools/truss" daemon run --address 127.0.0.1:9000 --max-runs 2
+Environment="TRUSS_HOME=/home/me/truss $HOME %%h"
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
