@@ -4,7 +4,7 @@
   "tier": 2,
   "branch": "claude/dazzling-wozniak-83puxa",
   "status": "in_review",
-  "step": "review",
+  "step": "reviewed-fixes-pushed",
   "steps_done": [],
   "requirements": [
     "specs/015-resource-metrics/spec.md"
@@ -16,5 +16,5 @@
   "next_actions": [],
   "pr": null,
   "created": "2026-11-13T09:32:19Z",
-  "updated": "2026-11-13T09:32:19Z"
+  "updated": "2026-11-13T09:36:04Z"
 }
