@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/afri-bit/truss/internal/pipeline"
 )
@@ -37,8 +38,11 @@ func (s *sink) StepOutput(id string, c []byte) {
 	s.out[id] += string(c)
 	s.mu.Unlock()
 }
-func (s *sink) StepStopped(string, string)       {}
-func (s *sink) StepFinished(string, *int, error) {}
+func (s *sink) StepStopped(string, string)                   {}
+func (s *sink) StepFinished(string, *int, error)             {}
+func (s *sink) StepRetrying(string, int, int, time.Duration) {}
+func (s *sink) StepContinued(string)                         {}
+func (s *sink) StepSkipped(string, string)                   {}
 
 func secretPipeline(steps ...pipeline.Step) pipeline.Pipeline {
 	return pipeline.Pipeline{Version: "1", Name: "secrets", Steps: steps}

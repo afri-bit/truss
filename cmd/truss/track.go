@@ -216,20 +216,49 @@ func (t *tracker) fail(ctx context.Context, err error) {
 
 // trackedEvents forwards step events to the run log and reports step states.
 type trackedEvents struct {
-	log     *runlog.Log
-	t       *tracker
-	runCtx  context.Context
-	mu      sync.Mutex
-	stopped map[string]bool
+	log      *runlog.Log
+	t        *tracker
+	runCtx   context.Context
+	mu       sync.Mutex
+	stopped  map[string]bool
+	waiting  map[string]bool // steps waiting between two attempts
+	attempts map[string]int  // attempts started per step
 }
 
 func newTrackedEvents(log *runlog.Log, t *tracker, runCtx context.Context) *trackedEvents {
-	return &trackedEvents{log: log, t: t, runCtx: runCtx, stopped: map[string]bool{}}
+	return &trackedEvents{log: log, t: t, runCtx: runCtx, stopped: map[string]bool{}, waiting: map[string]bool{}, attempts: map[string]int{}}
 }
 
 func (e *trackedEvents) StepStarted(id string) {
 	e.log.StepStarted(id)
-	e.t.step(api.StepUpdate{ID: id, Status: api.StepRunning})
+	e.mu.Lock()
+	e.attempts[id]++
+	attempt := e.attempts[id]
+	delete(e.waiting, id)
+	e.mu.Unlock()
+	u := api.StepUpdate{ID: id, Status: api.StepRunning}
+	if attempt > 1 {
+		u.Attempts = attempt
+	}
+	e.t.step(u)
+}
+
+// StepRetrying only writes the log line: the next StepStarted reports the step running again.
+func (e *trackedEvents) StepRetrying(id string, attempt, attempts int, delay time.Duration) {
+	e.log.StepRetrying(id, attempt, attempts, delay)
+	e.mu.Lock()
+	e.waiting[id] = true
+	e.mu.Unlock()
+}
+
+func (e *trackedEvents) StepContinued(id string) {
+	e.log.StepContinued(id)
+	e.t.step(api.StepUpdate{ID: id, Status: api.StepFailed, ContinuedOnError: true})
+}
+
+func (e *trackedEvents) StepSkipped(id, reason string) {
+	e.log.StepSkipped(id, reason)
+	e.t.step(api.StepUpdate{ID: id, Status: api.StepSkipped, Reason: reason})
 }
 
 func (e *trackedEvents) StepOutput(id string, chunk []byte) { e.log.StepOutput(id, chunk) }
@@ -238,7 +267,12 @@ func (e *trackedEvents) StepStopped(id, failedID string) {
 	e.log.StepStopped(id, failedID)
 	e.mu.Lock()
 	e.stopped[id] = true
+	waiting := e.waiting[id]
 	e.mu.Unlock()
+	if waiting {
+		// Stopped between attempts: no StepFinished follows.
+		e.t.step(api.StepUpdate{ID: id, Status: api.StepStopped})
+	}
 }
 
 func (e *trackedEvents) StepFinished(id string, exitCode *int, startErr error) {

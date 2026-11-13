@@ -120,7 +120,7 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 	if err != nil {
 		return nil, err
 	}
-	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Env: opts.Env, Secrets: secrets.Open(opts.Home.Secrets()).Load, Now: opts.Now, Resolve: resolver(reg)})
+	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Env: opts.Env, Secrets: secrets.Open(opts.Home.Secrets()).Load, Now: opts.Now, Resolve: resolver(reg), Folders: func(name string) (string, string) { return opts.Home.PipelineData(name), opts.Home.PipelineCache(name) }})
 	if err != nil {
 		return nil, err
 	}
@@ -341,10 +341,20 @@ func (d *Daemon) submit(name, trigger string, scheduledFor time.Time) (api.Run, 
 		}
 		return api.Run{}, &invalidError{cur.err}
 	}
+	data, cache := d.opts.Home.PipelineData(name), d.opts.Home.PipelineCache(name)
+	if err := os.MkdirAll(cache, 0o700); err != nil {
+		err = fmt.Errorf("prepare the data folder of pipeline %s: %w", name, err)
+		if trigger != api.TriggerManual {
+			_, _ = d.runs.Record(name, trigger, scheduledFor, api.RunFailed, err.Error())
+		}
+		return api.Run{}, err
+	}
 	return d.runs.Submit(runs.Request{
 		Pipeline:     name,
 		Definition:   cur.def,
 		Dir:          filepath.Dir(e.Path),
+		DataDir:      data,
+		CacheDir:     cache,
 		Trigger:      trigger,
 		ScheduledFor: scheduledFor,
 	})

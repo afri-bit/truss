@@ -189,7 +189,7 @@ succeeded
 failed
 ```
 
-A step that is stopped because another step failed is `failed`. A step that never started is omitted from the run log, not reported as `skipped`. An interrupted run reports no status. `cancelled` is not a status in v0.1.0.
+A step that is stopped because another step failed is `failed`. A step that never started only because an earlier failure ended the run is omitted from the run log, not reported as `skipped`. A step skipped by an `if` condition, or because a step it needs did not succeed, is logged and shown as `skipped` with the reason (spec 009). A step with `retries` has one attempt per run of its command; its result is the last attempt. A step that failed under `continue-on-error` is `failed` and does not fail the run (a tolerated failure). An interrupted run reports no status. `cancelled` is not a status in v0.1.0.
 
 ### Exit Code
 
@@ -271,6 +271,21 @@ stays the source of truth.
 
 What happens when a run is requested while another run of the same pipeline is active:
 `queue`, `skip`, or `parallel`.
+
+### Workdir
+
+`pipeline.workdir`: the directory steps start in, relative to where the run starts or absolute.
+A job's or step's `dir` replaces it.
+
+### Data Folder
+
+A folder per pipeline that outlives runs and is never cleaned by TRUSS: `~/.truss/pipelines/<name>/`
+for the daemon, `.truss/data` for `truss run`. Steps find it in `TRUSS_DATA_DIR`.
+
+### Cache Folder
+
+The `cache` folder inside the Data Folder, found in `TRUSS_CACHE_DIR`. A plain directory for
+steps to keep reusable files in. TRUSS does not save, restore or key it.
 
 ### TRUSS Home
 

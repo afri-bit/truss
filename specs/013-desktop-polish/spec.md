@@ -3,7 +3,7 @@
 **Spec**: `013-desktop-polish` | **Created**: 2026-11-12 | **Status**: Implemented
 
 Extends [`007-truss-desktop`](../007-truss-desktop/spec.md). User docs: [`docs/desktop.md`](../../docs/desktop.md),
-[`docs/daemon.md`](../../docs/daemon.md). Decision: [ADR 0009](../../docs/decisions/0009-desktop-file-picker-lists-names-only.md).
+[`docs/daemon.md`](../../docs/daemon.md). Decision: [ADR 0010](../../docs/decisions/0010-desktop-file-picker-lists-names-only.md).
 Written alongside the implementation (constitution 2.0.0, principle I).
 
 ## User stories

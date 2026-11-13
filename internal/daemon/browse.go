@@ -34,7 +34,7 @@ type statusError struct {
 func (e *statusError) Error() string { return e.msg }
 
 // browse lists one directory for the register dialog: names of directories
-// and of .yaml/.yml files, never content, size or time. See ADR 0009.
+// and of .yaml/.yml files, never content, size or time. See ADR 0010.
 func (d *Daemon) browse(w http.ResponseWriter, r *http.Request) error {
 	if !loopbackPeer(r.RemoteAddr) {
 		return &statusError{http.StatusForbidden, "the directory listing is only available to this machine"}

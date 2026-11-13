@@ -31,7 +31,9 @@ const (
 	// StepStopped marks a step TRUSS ended because another step failed.
 	StepStopped   = "stopped"
 	StepCancelled = "cancelled"
-	// StepSkipped marks a step that never started because the run ended first.
+	// StepSkipped marks a step that never started: its if condition was false,
+	// a step it needs did not succeed, or the run ended first. Reason says
+	// which when a condition or a needed step caused it.
 	StepSkipped = "skipped"
 )
 
@@ -75,6 +77,14 @@ type Step struct {
 	Error      string     `json:"error,omitempty"`
 	StartedAt  *time.Time `json:"started_at,omitempty"`
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
+	// Attempts is the number of the current or last attempt. It is present
+	// only for a step that was run again after a failure; ExitCode, Error and
+	// the times describe that attempt.
+	Attempts int `json:"attempts,omitempty"`
+	// ContinuedOnError marks a failed step whose continue-on-error let the run go on.
+	ContinuedOnError bool `json:"continued_on_error,omitempty"`
+	// Reason says why a step was skipped by a condition or by a step it needs.
+	Reason string `json:"reason,omitempty"`
 }
 
 // Schedule is one cron trigger of a pipeline and when it fires next.
@@ -172,12 +182,20 @@ type CreateRunRequest struct {
 }
 
 // StepUpdate reports the state of one step of a tracked run. The daemon
-// stamps the times. Status is running, succeeded, failed, stopped or cancelled.
+// stamps the times. Status is running, succeeded, failed, stopped, cancelled or
+// skipped. A failed step may be reported running again (a retry), and a
+// failed step may be reported failed once more with ContinuedOnError set.
 type StepUpdate struct {
 	ID       string `json:"id"`
 	Status   string `json:"status"`
 	ExitCode *int   `json:"exit_code,omitempty"`
 	Error    string `json:"error,omitempty"`
+	// Attempts is the number of the attempt that is starting, when above 1.
+	Attempts int `json:"attempts,omitempty"`
+	// ContinuedOnError marks a failed step whose continue-on-error let the run go on.
+	ContinuedOnError bool `json:"continued_on_error,omitempty"`
+	// Reason says why a step was skipped.
+	Reason string `json:"reason,omitempty"`
 }
 
 // FinishRequest closes a tracked run. Status is succeeded, failed or

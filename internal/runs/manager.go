@@ -63,6 +63,10 @@ type Options struct {
 	Secrets func() (map[string]string, error)
 	// Now is the clock. Nil means time.Now.
 	Now func() time.Time
+	// Folders returns the data and cache folder of a registered pipeline. It
+	// gives restored runs the folders a fresh submit would have passed.
+	// Nil means restored runs get none.
+	Folders func(pipeline string) (data, cache string)
 	// Resolve brings queued runs back after a restart. Without it, they are
 	// closed as failed.
 	Resolve Resolver
@@ -75,8 +79,12 @@ type Request struct {
 	// Definition is the validated definition to run, read when the run was requested.
 	Definition pipeline.Pipeline
 	// Dir is the directory the run starts in.
-	Dir     string
-	Trigger string
+	Dir string
+	// DataDir and CacheDir, when set, are handed to steps as TRUSS_DATA_DIR
+	// and TRUSS_CACHE_DIR. The caller creates them.
+	DataDir  string
+	CacheDir string
+	Trigger  string
 	// ScheduledFor is the time a schedule named; zero for manual runs.
 	ScheduledFor time.Time
 }
@@ -87,6 +95,8 @@ type record struct {
 	cancel    context.CancelFunc
 	cancelled bool            // someone asked for the run to end
 	stopped   map[string]bool // steps TRUSS stopped after a failure
+	waiting   map[string]bool // steps waiting between two attempts
+	attempts  map[string]int  // attempts started per step
 }
 
 // Manager queues, executes and remembers runs. It is safe for concurrent use.
@@ -131,7 +141,8 @@ func Open(opts Options) (*Manager, error) {
 		if !d.IsDir() || home.ReadJSON(filepath.Join(opts.Dir, d.Name(), "run.json"), &run) != nil || run.ID != d.Name() {
 			continue
 		}
-		rec := &record{run: run, stopped: map[string]bool{}}
+		rec := newEmptyRecord()
+		rec.run = run
 		switch run.Status {
 		case api.RunRunning:
 			m.finish(rec, api.RunFailed, "the daemon stopped while this run was active")
@@ -189,6 +200,9 @@ func (m *Manager) restore(rec *record) error {
 	rec.req = Request{Pipeline: rec.run.Pipeline, Definition: def, Dir: dir, Trigger: rec.run.Trigger}
 	if rec.run.ScheduledFor != nil {
 		rec.req.ScheduledFor = *rec.run.ScheduledFor
+	}
+	if m.opts.Folders != nil {
+		rec.req.DataDir, rec.req.CacheDir = m.opts.Folders(rec.run.Pipeline)
 	}
 	return nil
 }
@@ -384,6 +398,11 @@ func (m *Manager) Close() {
 	m.wg.Wait()
 }
 
+// newEmptyRecord returns a record whose per-run bookkeeping maps are ready.
+func newEmptyRecord() *record {
+	return &record{stopped: map[string]bool{}, waiting: map[string]bool{}, attempts: map[string]int{}}
+}
+
 // newRecord creates a record with a fresh id. The caller holds m.mu.
 func (m *Manager) newRecord(name, trigger string, scheduledFor time.Time) *record {
 	// A coarse clock (Windows) can return the same instant twice; the history
@@ -393,7 +412,7 @@ func (m *Manager) newRecord(name, trigger string, scheduledFor time.Time) *recor
 		now = m.lastCreated.Add(time.Nanosecond)
 	}
 	m.lastCreated = now
-	rec := &record{stopped: map[string]bool{}}
+	rec := newEmptyRecord()
 	rec.run = api.Run{Pipeline: name, Trigger: trigger, CreatedAt: now, Steps: []api.Step{}}
 	if !scheduledFor.IsZero() {
 		rec.run.ScheduledFor = &scheduledFor
@@ -526,6 +545,16 @@ func (m *Manager) execute(ctx context.Context, rec *record) {
 
 	env := append(append([]string(nil), m.opts.Env...),
 		"TRUSS_RUN_ID="+id, "TRUSS_PIPELINE="+req.Pipeline, "TRUSS_TRIGGER="+req.Trigger)
+	if req.CacheDir != "" {
+		// A cache clear may have run while this run was queued.
+		_ = os.MkdirAll(req.CacheDir, 0o700)
+	}
+	if req.DataDir != "" {
+		env = append(env, "TRUSS_DATA_DIR="+req.DataDir)
+	}
+	if req.CacheDir != "" {
+		env = append(env, "TRUSS_CACHE_DIR="+req.CacheDir)
+	}
 	result, err := engine.Run(ctx, req.Definition, req.Dir, env, &follower{m: m, rec: rec, log: log},
 		engine.WithSecrets(m.opts.Secrets))
 
@@ -602,7 +631,39 @@ func (f *follower) step(id string, change func(*api.Step)) {
 func (f *follower) StepStarted(id string) {
 	f.log.StepStarted(id)
 	now := f.m.opts.Now()
-	f.step(id, func(s *api.Step) { s.Status, s.StartedAt = api.StepRunning, &now })
+	f.m.mu.Lock()
+	f.rec.attempts[id]++
+	attempt := f.rec.attempts[id]
+	delete(f.rec.waiting, id)
+	f.m.mu.Unlock()
+	f.step(id, func(s *api.Step) {
+		// Times and result describe the current attempt (spec 009, FR-022).
+		s.Status, s.ExitCode, s.Error, s.FinishedAt, s.StartedAt = api.StepRunning, nil, "", nil, &now
+		if attempt > 1 {
+			s.Attempts = attempt
+		}
+	})
+}
+
+// StepRetrying keeps the step running while it waits for its next attempt.
+// Its exit code and error stay those of the last attempt until the next starts.
+func (f *follower) StepRetrying(id string, attempt, attempts int, delay time.Duration) {
+	f.log.StepRetrying(id, attempt, attempts, delay)
+	f.step(id, func(s *api.Step) { s.Status, s.FinishedAt = api.StepRunning, nil })
+	f.m.mu.Lock()
+	f.rec.waiting[id] = true
+	f.m.mu.Unlock()
+}
+
+func (f *follower) StepContinued(id string) {
+	f.log.StepContinued(id)
+	f.step(id, func(s *api.Step) { s.ContinuedOnError = true })
+}
+
+func (f *follower) StepSkipped(id, reason string) {
+	f.log.StepSkipped(id, reason)
+	now := f.m.opts.Now()
+	f.step(id, func(s *api.Step) { s.Status, s.Reason, s.FinishedAt = api.StepSkipped, reason, &now })
 }
 
 func (f *follower) StepOutput(id string, chunk []byte) { f.log.StepOutput(id, chunk) }
@@ -611,7 +672,13 @@ func (f *follower) StepStopped(id, failedID string) {
 	f.log.StepStopped(id, failedID)
 	f.m.mu.Lock()
 	f.rec.stopped[id] = true
+	waiting := f.rec.waiting[id]
 	f.m.mu.Unlock()
+	if waiting {
+		// Stopped between attempts: no StepFinished follows.
+		now := f.m.opts.Now()
+		f.step(id, func(s *api.Step) { s.Status, s.FinishedAt = api.StepStopped, &now })
+	}
 }
 
 func (f *follower) StepFinished(id string, exitCode *int, startErr error) {

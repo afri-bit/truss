@@ -49,9 +49,11 @@ Your pipeline files live in your projects. The daemon cannot guess where, so you
 
 - The file stays where it is and stays the source of truth. The daemon reads it again before
   every run and notices edits within a second: change the cron line, save, done.
-- A run starts in the directory of the file, like `truss run` there.
+- A run starts in the directory of the file, like `truss run` there, unless the file sets
+  `pipeline.workdir`.
 - A file that becomes invalid is shown as `invalid` with the reason. It does not run until fixed.
-- `truss unregister <name>` removes the registration. Nothing is deleted; old runs stay visible.
+- `truss unregister <name>` removes the registration. Nothing is deleted; old runs and the
+  [data folder](#data-and-cache-folders) stay.
 - The same file may be registered under several names with `--name`.
 
 ## Schedules
@@ -95,7 +97,7 @@ as `failed` with the reason.
 |---|---|
 | `queued` | Waiting for a free slot or for an earlier run of the same pipeline. |
 | `running` | Steps are executing. |
-| `succeeded` | Every step succeeded. |
+| `succeeded` | No step failed the run. A step with `continue-on-error` can fail and the run still succeeds. |
 | `failed` | A step failed; the note names it. |
 | `cancelled` | You cancelled it, or the daemon stopped while it was running. |
 | `skipped` | Requested but never started: a missed schedule, or `overlap: skip`. |
@@ -104,14 +106,34 @@ The trigger says why a run exists: `manual`, `schedule`, `catch-up`, or `local` 
 shell with `truss run --track`, only recorded by the daemon).
 
 Steps are `pending`, `running`, `succeeded`, `failed`, `stopped` (ended because another step
-failed), `cancelled`, or `skipped` (the run ended before they started).
+failed), `cancelled`, or `skipped` (never started: the run ended first, an `if` condition was false, or a step it
+needs did not succeed).
+
+A step also carries, only where they apply: `attempts` (the number of the current or last
+attempt, once a step was run again after a failure), `continued_on_error` (a failed step whose
+`continue-on-error` let the run go on) and `reason` (why a step was skipped). While a step waits
+to retry it is `running` and keeps the exit code of its last attempt.
 
 ## What runs see
 
 Steps start from the environment the daemon was started with, plus the file's `env`, plus
-`TRUSS_RUN_ID`, `TRUSS_PIPELINE` and `TRUSS_TRIGGER`. If a pipeline needs a variable from your
+`TRUSS_RUN_ID`, `TRUSS_PIPELINE`, `TRUSS_TRIGGER`, `TRUSS_DATA_DIR` and `TRUSS_CACHE_DIR`.
+If a pipeline needs a variable from your
 shell profile, start the daemon from a shell that has it, or set it in the file. A daemon
 [started at login](#starting-at-login) has the login environment instead of a shell's.
+
+## Data and cache folders
+
+The daemon creates `~/.truss/pipelines/<name>/` and its `cache/` folder before a run starts, and
+gives their paths to every step as `TRUSS_DATA_DIR` and `TRUSS_CACHE_DIR`. Nothing in them is
+ever deleted by TRUSS: not when a run ends, not when you unregister the pipeline. Registering
+the same name again finds the old contents.
+
+To empty a cache run `truss cache clear <name>`. It needs no daemon and works for a name that
+is no longer registered. Do it while no run of that pipeline is active. To remove all of a
+pipeline's data, delete `~/.truss/pipelines/<name>` yourself; nothing else refers to it.
+`truss run` keeps its folders in `.truss/data` of the current directory; delete that folder
+to clear them.
 
 ## Where state lives
 
@@ -126,6 +148,8 @@ directory is private to your user.
 | `clock.json` | When the scheduler last looked at the clock. |
 | `runs/<run-id>/run.json` | One run: status, times, steps. |
 | `runs/<run-id>/run.log` | Its run log, the same format `truss run` prints. |
+| `pipelines/<name>/` | The pipeline's data folder, `TRUSS_DATA_DIR`. |
+| `pipelines/<name>/cache/` | Its cache folder, `TRUSS_CACHE_DIR`. |
 | `daemon.log` | The daemon's own log when started with `daemon start`. |
 
 The newest 200 runs are kept. A run that was *running* when the daemon died is closed as
@@ -236,7 +260,7 @@ The CLI and TRUSS Desktop use this API; you can too. Base path `/api/v1`, JSON b
 | `DELETE /pipelines/{name}` | Unregisters it. |
 | `POST /pipelines/{name}/pause`, `/resume` | Stops or restarts its schedules. |
 | `POST /pipelines/{name}/runs` | Requests a run; answers `202` with the run. |
-| `GET /fs?path=&hidden=` | Lists one directory for the register dialog: names of folders and `.yaml`/`.yml` files, never content. Empty `path` is your home. Answers `{path, parent, roots, entries[{name, kind, link}], truncated}`. See [decision 0009](decisions/0009-desktop-file-picker-lists-names-only.md). |
+| `GET /fs?path=&hidden=` | Lists one directory for the register dialog: names of folders and `.yaml`/`.yml` files, never content. Empty `path` is your home. Answers `{path, parent, roots, entries[{name, kind, link}], truncated}`. See [decision 0010](decisions/0010-desktop-file-picker-lists-names-only.md). |
 | `GET /runs?pipeline=&limit=` | Runs, newest first. |
 | `GET /runs/{id}` | One run with its steps. |
 | `POST /runs/{id}/cancel` | Cancels it. |

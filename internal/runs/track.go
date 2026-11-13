@@ -90,11 +90,11 @@ func (m *Manager) Track(name string, steps []api.PlanStep) (api.Run, error) {
 // TrackStep records the state of one step of a tracked run.
 func (m *Manager) TrackStep(id string, u api.StepUpdate) (api.Run, error) {
 	switch u.Status {
-	case api.StepRunning, api.StepSucceeded, api.StepFailed, api.StepStopped, api.StepCancelled:
+	case api.StepRunning, api.StepSucceeded, api.StepFailed, api.StepStopped, api.StepCancelled, api.StepSkipped:
 	default:
-		return api.Run{}, invalid("step status %q is not one of running, succeeded, failed, stopped, cancelled", u.Status)
+		return api.Run{}, invalid("step status %q is not one of running, succeeded, failed, stopped, cancelled, skipped", u.Status)
 	}
-	if len(u.Error) > api.MaxReason {
+	if len(u.Error) > api.MaxReason || len(u.Reason) > api.MaxReason {
 		return api.Run{}, ErrTooLarge
 	}
 	m.mu.Lock()
@@ -109,15 +109,29 @@ func (m *Manager) TrackStep(id string, u api.StepUpdate) (api.Run, error) {
 		if step.ID != u.ID {
 			continue
 		}
-		if step.Status != api.StepPending && step.Status != api.StepRunning {
+		// A failed step may start again (a retry) or be marked as tolerated.
+		again := step.Status == api.StepFailed && (u.Status == api.StepRunning || u.Status == api.StepFailed && u.ContinuedOnError)
+		if step.Status != api.StepPending && step.Status != api.StepRunning && !again {
 			return api.Run{}, conflict("step %s already %s", step.ID, step.Status)
 		}
-		step.Status = u.Status
-		if step.StartedAt == nil {
-			step.StartedAt = &now
-		}
-		if u.Status != api.StepRunning {
+		switch {
+		case u.Status == api.StepRunning:
+			// Times and result describe the current attempt (spec 009, FR-022).
+			step.Status, step.StartedAt, step.FinishedAt, step.ExitCode, step.Error = u.Status, &now, nil, nil, ""
+			if u.Attempts > 1 {
+				step.Attempts = u.Attempts
+			}
+		case u.Status == api.StepSkipped:
+			step.Status, step.FinishedAt, step.Reason = u.Status, &now, plain(u.Reason)
+		case again:
+			step.ContinuedOnError = true // the failure itself was already recorded
+		default:
+			step.Status = u.Status
+			if step.StartedAt == nil {
+				step.StartedAt = &now
+			}
 			step.FinishedAt, step.ExitCode, step.Error = &now, u.ExitCode, plain(u.Error)
+			step.ContinuedOnError = u.ContinuedOnError
 		}
 		if err := m.save(rec); err != nil {
 			return api.Run{}, err

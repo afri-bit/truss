@@ -43,6 +43,9 @@ Registered pipelines (these need the daemon):
   logs <run-id> [--follow]            show a run log
   cancel <run-id>                     end a queued or running run
 
+Files only (no daemon needed):
+  cache clear <name>                  remove a pipeline's cache folder; the next run recreates it
+
   help | version
 `
 
@@ -130,6 +133,8 @@ func RunWithInput(ctx context.Context, args []string, cwd string, env []string, 
 		return in.logs(ctx)
 	case "cancel":
 		return in.cancel(ctx)
+	case "cache":
+		return in.cache()
 	}
 	return in.usage()
 }

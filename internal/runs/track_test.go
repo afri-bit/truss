@@ -368,3 +368,56 @@ func TestTrack_RunningLocalRunCountsAsRunning(t *testing.T) {
 		t.Fatalf("counts = %d running, %d queued", running, queued)
 	}
 }
+
+func TestTrack_RetriesTolerantFailuresAndSkippedSteps(t *testing.T) {
+	m := open(t, Options{})
+	run, err := m.Track("local-rich", graph("flaky", "lint", "gated", "after"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	step := func(u api.StepUpdate) api.Step {
+		t.Helper()
+		got, err := m.TrackStep(run.ID, u)
+		if err != nil {
+			t.Fatalf("%+v: %v", u, err)
+		}
+		for _, s := range got.Steps {
+			if s.ID == u.ID {
+				return s
+			}
+		}
+		t.Fatalf("no step %s", u.ID)
+		return api.Step{}
+	}
+	// A failed attempt may start again; the step then describes the new attempt.
+	step(api.StepUpdate{ID: "flaky", Status: api.StepRunning})
+	if s := step(api.StepUpdate{ID: "flaky", Status: api.StepFailed, ExitCode: exit(1)}); s.ExitCode == nil || *s.ExitCode != 1 {
+		t.Fatalf("first attempt = %+v", s)
+	}
+	if s := step(api.StepUpdate{ID: "flaky", Status: api.StepRunning, Attempts: 2}); s.Status != api.StepRunning || s.Attempts != 2 || s.ExitCode != nil || s.FinishedAt != nil {
+		t.Fatalf("retry = %+v", s)
+	}
+	if s := step(api.StepUpdate{ID: "flaky", Status: api.StepSucceeded, ExitCode: exit(0)}); s.Status != api.StepSucceeded || s.Attempts != 2 {
+		t.Fatalf("last attempt = %+v", s)
+	}
+	// A tolerated failure keeps its exit code and gains the flag.
+	step(api.StepUpdate{ID: "lint", Status: api.StepRunning})
+	step(api.StepUpdate{ID: "lint", Status: api.StepFailed, ExitCode: exit(3)})
+	if s := step(api.StepUpdate{ID: "lint", Status: api.StepFailed, ContinuedOnError: true}); !s.ContinuedOnError || s.ExitCode == nil || *s.ExitCode != 3 {
+		t.Fatalf("tolerated = %+v", s)
+	}
+	// A skipped step carries its reason and never started.
+	if s := step(api.StepUpdate{ID: "gated", Status: api.StepSkipped, Reason: "its if condition is false"}); s.Status != api.StepSkipped || s.Reason == "" || s.StartedAt != nil {
+		t.Fatalf("skipped = %+v", s)
+	}
+	// Other transitions of a finished step are still conflicts.
+	for _, u := range []api.StepUpdate{
+		{ID: "flaky", Status: api.StepRunning},
+		{ID: "lint", Status: api.StepSucceeded},
+		{ID: "gated", Status: api.StepRunning},
+	} {
+		if _, err := m.TrackStep(run.ID, u); !errors.Is(err, ErrConflict) {
+			t.Errorf("%+v: err = %v, want a conflict", u, err)
+		}
+	}
+}

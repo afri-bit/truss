@@ -233,7 +233,8 @@ jobs:
 ```
 
 `lint` and `test` run side by side; `release` starts when both succeeded. The first failed step
-fails the run and stops the rest. Every field is described in the
+fails the run and stops the rest, unless you opt into retries, `continue-on-error` or `if`
+conditions. Every field is described in the
 [pipeline file reference](docs/pipeline-reference.md).
 
 ## Commands
@@ -303,7 +304,7 @@ The full map is in [docs/architecture.md](docs/architecture.md).
 After v0.1.0, roughly in this order. Scope and order may change.
 
 - **Desktop:** a packaged window with tray icon, notifications and start at login
-- **Pipelines:** conditions, retries, matrix builds, artifacts
+- **Pipelines:** matrix builds, artifacts
 - **Triggers:** file changes and webhooks
 - **Execution:** containers, then remote workers
 - **Ecosystem:** SDKs and CI-provider bridges, so the same file runs in CI

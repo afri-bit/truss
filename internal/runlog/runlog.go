@@ -108,6 +108,31 @@ func (l *Log) StepStopped(id, by string) {
 	l.line("step " + id + " stopped because step " + by + " failed")
 }
 
+// StepRetrying records that a failed attempt of Step id will be run again.
+// attempt is the number of the next attempt out of attempts; delay is the wait
+// before it. The next attempt writes its own start line.
+func (l *Log) StepRetrying(id string, attempt, attempts int, delay time.Duration) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.line(fmt.Sprintf("step %s retry %d of %d in %s", id, attempt, attempts, formatDuration(delay)))
+}
+
+// StepContinued records that Step id failed and the run goes on because the
+// Step sets continue-on-error. The caller has already called StepFinished.
+func (l *Log) StepContinued(id string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.line("step " + id + " failed but the run continues (continue-on-error)")
+}
+
+// StepSkipped records that Step id did not run. reason is a phrase such as
+// "step a did not succeed"; it never contains environment values.
+func (l *Log) StepSkipped(id, reason string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.line("step " + id + " skipped because " + reason)
+}
+
 // SummarySucceeded writes the closing line for a successful run.
 // steps is the number of steps that started.
 func (l *Log) SummarySucceeded(steps int) {
