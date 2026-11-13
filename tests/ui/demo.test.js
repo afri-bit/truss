@@ -58,6 +58,11 @@ test("demo mode shows sample data, says so, and never calls an API", async () =>
     await page.getByRole("button", { name: "Cancel run" }).click();
     await page.locator(".head .badge.s-cancelled").waitFor();
 
+    // Resource figures are sample data too, and say so.
+    await page.evaluate(() => { location.hash = "#/monitor"; });
+    await page.locator("section", { hasText: "Cores" }).locator(".sim", { hasText: "sample" }).waitFor();
+    assert.equal(await page.locator(".core").count(), 8);
+
     // A reload stays in demo mode for this tab.
     await page.reload();
     await page.locator("#conn", { hasText: "Demo data" }).waitFor();
