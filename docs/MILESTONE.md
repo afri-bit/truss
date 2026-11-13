@@ -26,7 +26,7 @@ that matches it. `go.mod` already says `// version: 0.1.0`. The changelog stays 
 | Daemon | Background service, registry, cron scheduling with missed-run policy, run queue and history, HTTP API, CLI commands | `006-daemon-registry-and-scheduling` | Implemented |
 | Run tracking and queue | Queued runs survive a daemon restart; `truss run --track` reports a local run to the daemon (`local` trigger) | `010-run-tracking-and-queue` | Implemented |
 | Secrets | `truss secret`, `secrets` in the pipeline file, redaction of values in step output | `012-secrets` | Implemented |
-| TRUSS Desktop | Dashboard, pipeline control, run view with graph and live log, file picker, browser tests | `007-truss-desktop`, `013-desktop-polish` | Implemented |
+| TRUSS Desktop | Dashboard, pipeline control, run view with graph and live log, file picker, browser tests | `007-truss-desktop`, `013-desktop-polish`, `014-desktop-redesign` | Implemented |
 | Retries and conditions | `retries`, `retry_delay`, `continue-on-error`, `if` on steps, `if` on jobs | `009-retries-and-conditions` | Implemented |
 
 **Operating systems.** Linux, macOS and Windows. A `run` string is a command for that host's
