@@ -159,6 +159,7 @@ class ApiError extends Error {
 async function api(method, path, body) {
   const res = await fetch(API + path, {
     method,
+    signal: AbortSignal.timeout(10000), // a daemon that accepts but never answers must not stall the page
     headers: Object.assign({ Authorization: "Bearer " + token }, body ? { "Content-Type": "application/json" } : {}),
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -322,6 +323,9 @@ const sim = (() => {
 const shell = { status: null, runs: [], up: null, latency: null, beats: [], pipelines: [] };
 
 // ---------- shared pieces ----------
+
+// simOff stands where simulated figures would be when the user turned them off.
+const simOff = () => h("div", { class: "empty" }, "The daemon does not report resource usage. Simulated figures are off (Settings).");
 
 function meter(kind, pct, label) {
   const p = Math.max(0, Math.min(100, pct));
@@ -567,7 +571,7 @@ views.dashboard = {
           panel("Recent runs", { tools: h("a", { class: "btn", href: "#/runs" }, "All runs") }, h("div", { class: "scroll" }, runsTable(runs.slice(0, 10), { note: false })))),
         h("div", { class: "stack" },
           panel("System", { sim: true, tools: h("a", { class: "btn", href: "#/monitor" }, icon("monitor", "sm"), "Monitor") },
-            h("div", { class: "panel-body", style: "display:grid;gap:14px" },
+            !settings.sim ? simOff() : h("div", { class: "panel-body", style: "display:grid;gap:14px" },
               h("div", { class: "metric-head" }, h("span", { class: "big" }, host.cpu.toFixed(1)), h("span", { class: "unit" }, "% CPU"),
                 h("span", { class: "legend" }, h("span", null, h("i"), "cpu"), h("span", null, h("i", { class: "s2" }), "mem"))),
               lineChart([{ values: sim.history.cpu.slice(-60), area: true }, { values: sim.history.mem.slice(-60).map((m) => (m / sim.memTotal) * 100), cls: "s2" }], { height: 120, max: 100, fmt: (v) => v + "%", label: "CPU and memory, last minute" }),
@@ -746,8 +750,9 @@ function paintLog() {
   const marker = logState.step ? ` step ${logState.step} ` : "";
   const q = logState.query.toLowerCase();
   const frag = document.createDocumentFragment();
-  let count = 0;
+  let count = 0, no = 0;
   for (const line of logState.text.split("\n")) {
+    if (line) no++;
     if (!line || (marker && !(line.slice(19) + " ").startsWith(marker))) continue;
     if (q && !line.toLowerCase().includes(q)) continue;
     const rest = line.slice(20);
@@ -760,7 +765,7 @@ function paintLog() {
     const bar = rest.indexOf(" | ");
     if (!cls && bar > 0) body.push(h("span", { class: "stepname" }, rest.slice(0, bar)), " │ ", highlight(rest.slice(bar + 3), q));
     else body.push(cls ? h("span", { class: cls }, highlight(rest, q)) : highlight(rest, q));
-    frag.append(h("span", { class: "ln" }, h("span", { class: "ts" }, line.slice(11, 20)), body));
+    frag.append(h("span", { class: "ln" }, h("span", { class: "no", "aria-hidden": "true" }, no), h("span", { class: "ts" }, line.slice(11, 20)), body));
     count++;
   }
   if (!count) {
@@ -966,8 +971,8 @@ views.monitor = {
     const host = sim.host();
     const active = runs.filter(isActive);
     const procs = [];
-    procs.push({ pid: status.pid, name: "truss daemon", run: "–", state: "S", cpu: 0.4 + host.cpu / 60, mem: 38 + active.length * 4, real: true });
-    for (const r of active) for (const st of r.steps.filter((x) => x.status === "running")) {
+    procs.push({ pid: status.pid, name: "truss daemon", run: "–", state: "S", cpu: null, mem: null, real: true });
+    if (settings.sim) for (const r of active) for (const st of r.steps.filter((x) => x.status === "running")) {
       const u = sim.step(r.id, st);
       procs.push({ pid: u.pid, name: st.id, run: r, state: "R", cpu: u.cpu, mem: u.mem, threads: u.threads });
     }
@@ -976,37 +981,37 @@ views.monitor = {
     const beats = shell.beats.slice(-48);
     return [
       h("div", { class: "head" }, h("div", { class: "title" }, h("h1", null, "Monitor"),
-        h("p", { class: "sub" }, `Daemon pid ${status.pid} · ${status.address} · up ${compact(up)} · ${sim.cores} cores`)),
+        h("p", { class: "sub" }, `Daemon pid ${status.pid} · ${status.address} · up ${compact(up)}`)),
         h("span", { class: "spacer" }), simTag()),
       h("div", { class: "strip", style: "--n:6" },
         h("div", null, h("div", { class: "k" }, "Health"), h("div", { class: "v sans", style: `color:var(--${summary.state === "ok" ? "ok" : summary.state === "warn" ? "warn" : "bad"})` }, summary.text)),
-        h("div", null, h("div", { class: "k" }, "CPU"), h("div", { class: "v" }, host.cpu.toFixed(1) + "%")),
-        h("div", null, h("div", { class: "k" }, "Memory"), h("div", { class: "v" }, `${host.mem.toFixed(1)} / ${host.memTotal} GiB`)),
-        h("div", null, h("div", { class: "k" }, "Load average"), h("div", { class: "v" }, host.load.toFixed(2))),
+        h("div", null, h("div", { class: "k" }, "CPU", settings.sim && h("span", { class: "muted" }, " · sim")), h("div", { class: "v" }, settings.sim ? host.cpu.toFixed(1) + "%" : "–")),
+        h("div", null, h("div", { class: "k" }, "Memory", settings.sim && h("span", { class: "muted" }, " · sim")), h("div", { class: "v" }, settings.sim ? `${host.mem.toFixed(1)} / ${host.memTotal} GiB` : "–")),
+        h("div", null, h("div", { class: "k" }, "Load average", settings.sim && h("span", { class: "muted" }, " · sim")), h("div", { class: "v" }, settings.sim ? host.load.toFixed(2) : "–")),
         h("div", null, h("div", { class: "k" }, "Run slots"), h("div", { class: "v" }, `${status.running_runs} / ${status.max_parallel_runs}`)),
         h("div", null, h("div", { class: "k" }, "Processes"), h("div", { class: "v" }, procs.length))),
       h("div", { class: "grid-2" },
-        panel("CPU", { sim: true, hint: "host, last two minutes" }, h("div", { class: "panel-body" },
+        panel("CPU", { sim: true, hint: "host, last two minutes" }, !settings.sim ? simOff() : h("div", { class: "panel-body" },
           h("div", { class: "metric-head" }, h("span", { class: "big" }, host.cpu.toFixed(1)), h("span", { class: "unit" }, "%"),
             h("span", { class: "legend" }, h("span", null, h("i"), "utilisation"), h("span", null, h("i", { class: "s3" }), "load × 10"))),
           lineChart([{ values: sim.history.cpu, area: true }, { values: sim.history.load.map((x) => x * 10), cls: "s3" }], { height: 150, max: 100, fmt: (v) => v + "%", ticks: ["-2m", "-90s", "-60s", "-30s", "now"], label: "Host CPU" }))),
-        panel("Memory", { sim: true, hint: `${host.memTotal} GiB installed` }, h("div", { class: "panel-body" },
+        panel("Memory", { sim: true, hint: settings.sim ? `${host.memTotal} GiB installed` : "" }, !settings.sim ? simOff() : h("div", { class: "panel-body" },
           h("div", { class: "metric-head" }, h("span", { class: "big" }, host.mem.toFixed(1)), h("span", { class: "unit" }, "GiB used"),
             h("span", { class: "legend" }, h("span", null, h("i", { class: "s2" }), "used"))),
           lineChart([{ values: sim.history.mem, area: true, cls: "s2" }], { height: 150, max: host.memTotal, fmt: (v) => v.toFixed(0) + "G", ticks: ["-2m", "-90s", "-60s", "-30s", "now"], label: "Host memory" })))),
       h("div", { class: "grid-main" },
         h("div", { class: "stack" },
-          panel("Cores", { sim: true, hint: `${sim.cores} logical cores` }, h("div", { class: "panel-body" },
+          panel("Cores", { sim: true, hint: settings.sim ? `${sim.cores} logical cores` : "" }, !settings.sim ? simOff() : h("div", { class: "panel-body" },
             h("div", { class: "cores" }, host.perCore.map((v, i) => h("div", { class: "core" + (v > 80 ? " hot" : "") }, h("span", { class: "k" }, "cpu" + i), h("span", { class: "v" }, v.toFixed(0) + "%"), h("span", { class: "track" }, h("i", { style: `width:${v}%` }))))))),
-          panel("Processes", { sim: active.length > 0, hint: "the daemon and every live step" }, h("div", { class: "scroll" }, h("table", null,
+          panel("Processes", { sim: procs.length > 1, hint: settings.sim ? "the daemon and every live step" : "the daemon; step processes are not reported" }, h("div", { class: "scroll" }, h("table", null,
             h("thead", null, h("tr", null, h("th", null, "PID"), h("th", null, "Process"), h("th", null, "Run"), h("th", null, "State"), h("th", { style: "width:170px" }, "CPU"), h("th", { class: "num" }, "RSS"))),
             h("tbody", null, procs.map((p) => h("tr", { class: p.run && p.run.id ? "link" : "", onclick: p.run && p.run.id ? () => go(href.run(p.run.id)) : null },
-              h("td", { class: "mono" }, p.pid, p.real && [" ", h("span", { class: "tag", title: "reported by the daemon, not simulated" }, "real")]),
+              h("td", { class: "mono" }, p.pid, p.real && [" ", h("span", { class: "tag", title: "the pid is reported by the daemon; its CPU and memory are not" }, "daemon")]),
               h("td", { class: "mono" }, p.name),
               h("td", null, p.run && p.run.id ? h("span", { class: "id" }, `${p.run.pipeline} · ${shortId(p.run.id)}`) : h("span", { class: "muted" }, "–")),
               h("td", null, h("span", { class: "tag" }, p.state)),
-              h("td", null, meter("cpu", p.cpu, p.cpu.toFixed(1) + "%")),
-              h("td", { class: "num" }, p.mem.toFixed(0) + " MiB")))))))),
+              h("td", null, p.cpu == null ? h("span", { class: "muted", title: "not reported by the daemon" }, "not reported") : meter("cpu", p.cpu, p.cpu.toFixed(1) + "%")),
+              h("td", { class: "num" }, p.mem == null ? h("span", { class: "muted" }, "–") : p.mem.toFixed(0) + " MiB")))))))),
         h("div", { class: "stack" },
           panel("Health", { hint: summary.text }, healthList(false)),
           panel("Availability", { hint: "each cell is one poll of the daemon" }, h("div", { class: "panel-body" },
@@ -1072,8 +1077,10 @@ views.settings = {
 };
 function forgetToken() {
   if (!confirm("Forget the access token? You will need to run truss desktop again.")) return;
-  store.set("");
+  try { localStorage.removeItem("truss-token"); } catch { /* private mode */ }
   token = "";
+  shell.up = null; shell.status = null;
+  paintConn();
   route(true);
 }
 
@@ -1190,11 +1197,11 @@ function finderPaint() {
   const list = h("ul", { class: "finder-list", role: "listbox", id: "finder-list" });
   finder.items.forEach((it, i) => {
     if (it.group !== group) { group = it.group; list.append(h("li", { class: "finder-group", role: "presentation" }, group)); }
-    list.append(h("li", { role: "presentation" }, h("a", { href: it.to, role: "option", "aria-selected": String(i === finder.sel), onclick: () => dlg.close(), onmousemove: () => { if (finder.sel !== i) { finder.sel = i; finderPaint(); } } }, it.icon, h("span", { class: "ellipsis" }, it.label), h("span", { class: "k" }, it.k))));
+    list.append(h("li", { role: "presentation" }, h("a", { href: it.to, id: "finder-opt-" + i, role: "option", "aria-selected": String(i === finder.sel), onclick: () => dlg.close(), onmousemove: () => { if (finder.sel !== i) { finder.sel = i; finderPaint(); } } }, it.icon, h("span", { class: "ellipsis" }, it.label), h("span", { class: "k" }, it.k))));
   });
   if (!finder.items.length) list.append(h("li", { class: "empty" }, "Nothing matches."));
   const old = dlg.querySelector("#finder-list");
-  if (old) { old.replaceWith(list); return; }
+  if (old) { old.replaceWith(list); dlg.querySelector("input").setAttribute("aria-activedescendant", finder.items.length ? "finder-opt-" + finder.sel : ""); return; }
   const input = h("input", { type: "text", placeholder: "Jump to a page, pipeline or run…", "aria-label": "Jump to", "aria-controls": "finder-list", autocomplete: "off",
     oninput: (e) => { finder.q = e.target.value; finder.sel = 0; finderPaint(); },
     onkeydown: (e) => {
@@ -1220,6 +1227,7 @@ document.getElementById("finder").addEventListener("click", (e) => { if (e.targe
 
 function paintMenu() {
   const menu = document.getElementById("settings-menu");
+  const at = [...menu.querySelectorAll("button")].indexOf(document.activeElement);
   const st = shell.status;
   const item = (ic, label, onclick, kbd) => h("button", { type: "button", class: "item", role: "menuitem", onclick }, icon(ic, "sm"), label, kbd && h("kbd", null, kbd));
   const menuSeg = (key, options) => h("div", { class: "seg full", role: "group", "aria-label": key }, options.map(([v, l]) => h("button", { type: "button", "aria-pressed": String(settings[key] === v), onclick: () => setSetting(key, v) }, l)));
@@ -1234,6 +1242,7 @@ function paintMenu() {
     item("settings", "All settings", () => { closeMenu(); go("#/settings"); }),
     h("hr"),
     item("key", "Forget access token", () => { closeMenu(); forgetToken(); }));
+  if (at >= 0) menu.querySelectorAll("button")[at]?.focus(); // repainting must not drop keyboard focus
 }
 function closeMenu() {
   document.getElementById("settings-menu").hidden = true;
@@ -1245,13 +1254,14 @@ document.getElementById("settings-btn").addEventListener("click", (e) => {
   const open = menu.hidden;
   if (open) { paintMenu(); menu.hidden = false; e.currentTarget.setAttribute("aria-expanded", "true"); menu.querySelector("button")?.focus(); } else closeMenu();
 });
-document.addEventListener("click", (e) => { if (!e.target.closest(".menu-wrap")) closeMenu(); });
+// composedPath still holds the clicked button when a repaint has detached it.
+document.addEventListener("click", (e) => { if (!e.composedPath().some((el) => el.classList && el.classList.contains("menu-wrap"))) closeMenu(); });
 document.getElementById("theme-toggle").addEventListener("click", () => setSetting("theme", isDark() ? "light" : "dark"));
 function toggleSidebar() { setSetting("sidebar", settings.sidebar === "collapsed" ? "expanded" : "collapsed"); }
 document.getElementById("collapse").addEventListener("click", toggleSidebar);
 document.addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || document.querySelector("dialog[open]");
-  if (e.key === "Escape") closeMenu();
+  if (e.key === "Escape" && !document.getElementById("settings-menu").hidden) { closeMenu(); document.getElementById("settings-btn").focus(); }
   if (typing || e.metaKey || e.ctrlKey || e.altKey) {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openFinder(); }
     return;
@@ -1281,7 +1291,9 @@ function paintNav(current) {
 }
 function paintSideLive() {
   const live = shell.runs.filter(isActive);
-  document.getElementById("side-live").replaceChildren(...[
+  const box = document.getElementById("side-live");
+  const focused = box.contains(document.activeElement) ? document.activeElement.getAttribute("href") : null;
+  box.replaceChildren(...[
     h("div", { class: "side-label" }, live.length ? h("span", { class: "dot run", style: `animation-delay:${phase(1400)}` }) : null, `Active runs`, h("span", { class: "spacer" }), h("span", { class: "mono" }, live.length)),
     live.length
       ? live.slice(0, 8).map((r) => {
@@ -1292,6 +1304,10 @@ function paintSideLive() {
           h("span", { class: "bar" }, h("i", { style: `width:${steps.length ? (done / steps.length) * 100 : 4}%` })));
       })
       : h("div", { class: "side-empty" }, "Idle")].flat());
+  if (focused) {
+    const again = [...box.querySelectorAll("a")].find((a) => a.getAttribute("href") === focused);
+    if (again) again.focus({ preventScroll: true }); else document.getElementById("nav").querySelector("a[data-route=runs]").focus({ preventScroll: true });
+  }
 }
 function paintCrumbs(view, arg, data) {
   const parts = view.crumbs(arg, data);
@@ -1301,6 +1317,9 @@ function paintCrumbs(view, arg, data) {
     out.push(h("span", { class: "sep" }, "/"));
     out.push(p[1] && i < parts.length - 1 ? h("a", { href: p[1] }, p[0]) : h("span", { class: "here" }, p[0]));
   });
+  const key = JSON.stringify(parts);
+  if (el.dataset.key === key) return; // rebuilding would drop keyboard focus on a crumb
+  el.dataset.key = key;
   el.replaceChildren(...out);
 }
 
@@ -1376,7 +1395,10 @@ async function route(force) {
     if (mine !== generation) return;
     // Do not replace a form the user is typing in, or a dialog that is open.
     // Decided now, not before the request: the user may have moved on meanwhile.
-    const typing = main.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
+    // Search fields keep their text in ui/logState, so only form fields hold the page still.
+    const active = document.activeElement;
+    const typing = main.contains(active) && active.tagName === "INPUT" && !!active.closest("form");
+    const caret = main.contains(active) && active.tagName === "INPUT" && active.type !== "checkbox" ? [active.selectionStart, active.selectionEnd] : null;
     if (picker.open || (typing && !force && lastHash === location.hash)) return;
     const kept = lastHash === location.hash ? focusIndex(main) : -1;
     const scroll = document.getElementById("log") ? document.getElementById("log").scrollTop : null;
@@ -1389,7 +1411,10 @@ async function route(force) {
     }
     if (kept >= 0) {
       const target = main.querySelectorAll(FOCUSABLE)[kept];
-      if (target) target.focus({ preventScroll: true });
+      if (target) {
+        target.focus({ preventScroll: true });
+        if (caret && target.tagName === "INPUT") try { target.setSelectionRange(caret[0], caret[1]); } catch { /* not a text field */ }
+      }
     } else if (lastHash !== location.hash) {
       main.focus({ preventScroll: true });
     }
