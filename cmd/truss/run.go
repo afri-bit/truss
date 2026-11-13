@@ -80,6 +80,24 @@ func startTracking(ctx context.Context, def pipeline.Pipeline, env []string, std
 // (an api run status and reason) for the tracker. ctx is the caller's;
 // runCtx also ends when the daemon cancels a tracked run.
 func execute(ctx, runCtx context.Context, def pipeline.Pipeline, cwd string, env []string, stdout, stderr io.Writer, tr *tracker) (int, string, string) {
+	// Steps get a project-local data folder, the counterpart of the daemon's
+	// per-pipeline one (specs/008-workspace-and-cache).
+	abs := cwd
+	if a, absErr := filepath.Abs(cwd); absErr == nil {
+		abs = a
+	}
+	if err := os.MkdirAll(filepath.Join(abs, ".truss"), 0o755); err != nil { // #nosec G301 -- same mode as the run log folder
+		fmt.Fprintf(stderr, "error: prepare data folder: %s\n", err.Error())
+		return 1, api.RunFailed, err.Error()
+	}
+	dataDir := filepath.Join(abs, ".truss", "data")
+	cacheDir := filepath.Join(dataDir, "cache")
+	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+		fmt.Fprintf(stderr, "error: prepare data folder: %s\n", err.Error())
+		return 1, api.RunFailed, err.Error()
+	}
+	env = append(append([]string(nil), env...), "TRUSS_DATA_DIR="+dataDir, "TRUSS_CACHE_DIR="+cacheDir)
+
 	var extra io.Writer
 	if tr != nil {
 		extra = tr
@@ -89,11 +107,7 @@ func execute(ctx, runCtx context.Context, def pipeline.Pipeline, cwd string, env
 		fmt.Fprintf(stderr, "error: %s\n", err.Error())
 		return 1, api.RunFailed, err.Error()
 	}
-	dir := cwd
-	if abs, absErr := filepath.Abs(cwd); absErr == nil {
-		dir = abs
-	}
-	log.Setup(runlog.OSName(runtime.GOOS), runtime.GOARCH, executor.Shell(), dir)
+	log.Setup(runlog.OSName(runtime.GOOS), runtime.GOARCH, executor.Shell(), abs)
 	var events engine.StepEvents = log
 	if tr != nil {
 		events = newTrackedEvents(log, tr, runCtx)

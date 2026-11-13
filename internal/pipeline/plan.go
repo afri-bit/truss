@@ -6,8 +6,8 @@ import "fmt"
 //
 // Jobs are flattened: each step of a job becomes a step named "job/step" that
 // needs the step before it, and the first step of a job needs the last step
-// of every job that job needs. Environment and working directory are resolved
-// here, so the engine only sees steps.
+// of every job that job needs. Environment and working directory (step, job,
+// then pipeline workdir) are resolved here, so the engine only sees steps.
 //
 // In Steps a step is placed only after every step it needs. When several
 // steps could be placed next, the one written earliest in the definition goes
@@ -43,6 +43,9 @@ func flatten(p Pipeline) []Step {
 		for i, s := range p.Steps {
 			s.Env = mergeEnv(p.Env, s.Env)
 			s.Secrets = mergeNames(p.Secrets, s.Secrets)
+			if s.Dir == "" {
+				s.Dir = p.Workdir
+			}
 			steps[i] = s
 		}
 		return steps
@@ -65,8 +68,12 @@ func flatten(p Pipeline) []Step {
 			s.Needs = needs
 			s.Env = mergeEnv(p.Env, job.Env, s.Env)
 			s.Secrets = mergeNames(p.Secrets, job.Secrets, s.Secrets)
+			// The nearest setting wins: step, job, then pipeline workdir.
 			if s.Dir == "" {
 				s.Dir = job.Dir
+			}
+			if s.Dir == "" {
+				s.Dir = p.Workdir
 			}
 			steps = append(steps, s)
 			needs = []string{s.ID}

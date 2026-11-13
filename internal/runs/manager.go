@@ -63,6 +63,10 @@ type Options struct {
 	Secrets func() (map[string]string, error)
 	// Now is the clock. Nil means time.Now.
 	Now func() time.Time
+	// Folders returns the data and cache folder of a registered pipeline. It
+	// gives restored runs the folders a fresh submit would have passed.
+	// Nil means restored runs get none.
+	Folders func(pipeline string) (data, cache string)
 	// Resolve brings queued runs back after a restart. Without it, they are
 	// closed as failed.
 	Resolve Resolver
@@ -75,8 +79,12 @@ type Request struct {
 	// Definition is the validated definition to run, read when the run was requested.
 	Definition pipeline.Pipeline
 	// Dir is the directory the run starts in.
-	Dir     string
-	Trigger string
+	Dir string
+	// DataDir and CacheDir, when set, are handed to steps as TRUSS_DATA_DIR
+	// and TRUSS_CACHE_DIR. The caller creates them.
+	DataDir  string
+	CacheDir string
+	Trigger  string
 	// ScheduledFor is the time a schedule named; zero for manual runs.
 	ScheduledFor time.Time
 }
@@ -192,6 +200,9 @@ func (m *Manager) restore(rec *record) error {
 	rec.req = Request{Pipeline: rec.run.Pipeline, Definition: def, Dir: dir, Trigger: rec.run.Trigger}
 	if rec.run.ScheduledFor != nil {
 		rec.req.ScheduledFor = *rec.run.ScheduledFor
+	}
+	if m.opts.Folders != nil {
+		rec.req.DataDir, rec.req.CacheDir = m.opts.Folders(rec.run.Pipeline)
 	}
 	return nil
 }
@@ -534,6 +545,16 @@ func (m *Manager) execute(ctx context.Context, rec *record) {
 
 	env := append(append([]string(nil), m.opts.Env...),
 		"TRUSS_RUN_ID="+id, "TRUSS_PIPELINE="+req.Pipeline, "TRUSS_TRIGGER="+req.Trigger)
+	if req.CacheDir != "" {
+		// A cache clear may have run while this run was queued.
+		_ = os.MkdirAll(req.CacheDir, 0o700)
+	}
+	if req.DataDir != "" {
+		env = append(env, "TRUSS_DATA_DIR="+req.DataDir)
+	}
+	if req.CacheDir != "" {
+		env = append(env, "TRUSS_CACHE_DIR="+req.CacheDir)
+	}
 	result, err := engine.Run(ctx, req.Definition, req.Dir, env, &follower{m: m, rec: rec, log: log},
 		engine.WithSecrets(m.opts.Secrets))
 

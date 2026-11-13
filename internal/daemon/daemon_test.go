@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -545,5 +546,99 @@ func waitStopped(t *testing.T, h home.Dir) {
 			t.Fatal("the daemon did not stop")
 		}
 		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestDaemon_RunsStartInWorkdirAndSeeTheDataFolders(t *testing.T) {
+	ctx := context.Background()
+	h := home.Dir(t.TempDir())
+	_, c := boot(t, h, nil)
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "work"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	show := "echo $TRUSS_DATA_DIR && echo $TRUSS_CACHE_DIR && pwd"
+	if runtime.GOOS == "windows" {
+		show = "echo %TRUSS_DATA_DIR% && echo %TRUSS_CACHE_DIR% && cd"
+	}
+	path := writeDefinition(t, dir, "truss.yaml", "version: \"1\"\npipeline:\n  name: spaces\n  workdir: work\nsteps:\n  - id: show\n    run: "+show+"\n")
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	run, err := c.Trigger(ctx, "spaces")
+	if err != nil {
+		t.Fatal(err)
+	}
+	awaitRuns(t, c, "spaces", 1)
+	data, _, status, err := c.Log(ctx, run.ID, 0)
+	if err != nil || status != api.RunSucceeded {
+		t.Fatalf("log (%s, %v):\n%s", status, err, data)
+	}
+	var lines []string
+	for _, l := range strings.Split(string(data), "\n") {
+		if _, v, ok := strings.Cut(l, " step show | "); ok {
+			lines = append(lines, strings.TrimSpace(v))
+		}
+	}
+	// The shell may print a symlink-resolved or short-named path, so the
+	// working directory is checked by its last element only.
+	if len(lines) != 3 || lines[0] != h.PipelineData("spaces") || lines[1] != h.PipelineCache("spaces") || filepath.Base(lines[2]) != "work" {
+		t.Errorf("step output = %q\nlog:\n%s", lines, data)
+	}
+	if info, err := os.Stat(h.PipelineCache("spaces")); err != nil || !info.IsDir() {
+		t.Fatalf("cache folder: %v", err)
+	}
+
+	// Unregistering keeps the data folder.
+	marker := filepath.Join(h.PipelineCache("spaces"), "keep")
+	if err := os.WriteFile(marker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Unregister(ctx, "spaces"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("data folder lost after unregister: %v", err)
+	}
+}
+
+func TestDaemon_MissingWorkdirFailsTheRunWithoutAnExitCode(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	path := writeDefinition(t, t.TempDir(), "truss.yaml", "version: \"1\"\npipeline:\n  name: gone\n  workdir: nope\nsteps:\n  - id: s\n    run: echo hi\n")
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Trigger(ctx, "gone"); err != nil {
+		t.Fatal(err)
+	}
+	list := awaitRuns(t, c, "gone", 1)
+	if list[0].Status != api.RunFailed || len(list[0].Steps) == 0 || list[0].Steps[0].ExitCode != nil {
+		t.Fatalf("run = %+v", list[0])
+	}
+}
+
+func TestDaemon_RestoredQueuedRunSeesTheDataFolders(t *testing.T) {
+	h := home.Dir(t.TempDir())
+	show := "echo $TRUSS_CACHE_DIR"
+	if runtime.GOOS == "windows" {
+		show = "echo %TRUSS_CACHE_DIR%"
+	}
+	path := writeDefinition(t, t.TempDir(), "truss.yaml", "version: \"1\"\npipeline:\n  name: restored\nsteps:\n  - id: show\n    run: "+show+"\n")
+	_, c := boot(t, h, nil)
+	if _, err := c.Register(context.Background(), api.RegisterRequest{Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	waitStopped(t, h)
+	queuedRecord(t, h, "20261111-090000-aaaaaa", "restored")
+
+	_, c = boot(t, h, nil)
+	awaitRuns(t, c, "restored", 1)
+	log, _, _, err := c.Log(context.Background(), "20261111-090000-aaaaaa", 0)
+	if err != nil || !strings.Contains(string(log), "step show | "+h.PipelineCache("restored")) {
+		t.Fatalf("log = %q, %v", log, err)
 	}
 }

@@ -127,3 +127,114 @@ func TestRun_JobsRunInDependencyOrder(t *testing.T) {
 		t.Fatalf("start order = %v", started)
 	}
 }
+
+func TestRun_WorkdirPrecedenceStepThenJobThenWorkdirThenRunDirectory(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"base", "jobdir", "stepdir"} {
+		if err := os.Mkdir(filepath.Join(dir, name), 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p, err := pipeline.Parse([]byte(`
+version: "1"
+pipeline:
+  name: dirs
+  workdir: base
+jobs:
+  a:
+    dir: jobdir
+    steps:
+      - id: own
+        run: ` + printDir() + `
+        dir: stepdir
+      - id: inherit
+        run: ` + printDir() + `
+  b:
+    steps:
+      - id: plain
+        run: ` + printDir() + `
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := Run(context.Background(), p, dir, os.Environ(), nil)
+	if err != nil || run.Status != pipeline.StatusSucceeded {
+		t.Fatalf("run = %+v, err = %v", run, err)
+	}
+	want := map[string]string{"a/own": "stepdir", "a/inherit": "jobdir", "b/plain": "base"}
+	for _, s := range run.Steps {
+		if got := filepath.Base(strings.TrimSpace(s.Output)); got != want[s.ID] {
+			t.Errorf("%s ran in %q, want %q", s.ID, got, want[s.ID])
+		}
+	}
+
+	// Without a workdir, steps start in the run directory.
+	flat := pipeline.Pipeline{Version: "1", Name: "flat", Steps: []pipeline.Step{{ID: "s", Run: printDir()}}}
+	run, err = Run(context.Background(), flat, dir, os.Environ(), nil)
+	if err != nil || run.Status != pipeline.StatusSucceeded {
+		t.Fatalf("flat run = %+v, err = %v", run, err)
+	}
+	if got := filepath.Base(strings.TrimSpace(run.Steps[0].Output)); got != filepath.Base(dir) {
+		t.Fatalf("flat step ran in %q", got)
+	}
+}
+
+func TestRun_AbsoluteWorkdirIsUsedAsIs(t *testing.T) {
+	target := t.TempDir()
+	p := pipeline.Pipeline{Version: "1", Name: "abs", Workdir: target, Steps: []pipeline.Step{{ID: "s", Run: printDir()}}}
+	run, err := Run(context.Background(), p, t.TempDir(), os.Environ(), nil)
+	if err != nil || run.Status != pipeline.StatusSucceeded {
+		t.Fatalf("run = %+v, err = %v", run, err)
+	}
+	if got := filepath.Base(strings.TrimSpace(run.Steps[0].Output)); got != filepath.Base(target) {
+		t.Fatalf("step ran in %q, want %q", got, target)
+	}
+}
+
+func TestRun_MissingWorkdirFailsTheStepWithoutAnExitCode(t *testing.T) {
+	p := pipeline.Pipeline{Version: "1", Name: "gone", Workdir: "nope", Steps: []pipeline.Step{
+		{ID: "first", Run: printDir()},
+		{ID: "second", Run: printDir(), Needs: []string{"first"}},
+	}}
+	run, err := Run(context.Background(), p, t.TempDir(), os.Environ(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != pipeline.StatusFailed || len(run.Steps) != 1 || run.Steps[0].ExitCode != nil || run.Steps[0].Error == "" {
+		t.Fatalf("run = %+v", run)
+	}
+}
+
+func TestStepDir(t *testing.T) {
+	sep := string(filepath.Separator)
+	abs := filepath.Join(t.TempDir(), "abs")
+	cases := []struct {
+		name, run, dir, want string
+		windows, wantErr     bool
+	}{
+		{name: "empty", run: "run", dir: "", want: "run"},
+		{name: "relative", run: "run", dir: "sub", want: "run" + sep + "sub"},
+		{name: "dot dot", run: "run" + sep + "x", dir: "..", want: "run"},
+		{name: "absolute", run: "run", dir: abs, want: abs},
+		{name: "drive absolute", run: `C:\run`, dir: `D:\work`, want: `D:\work`, windows: true},
+		{name: "drive absolute slash", run: `C:\run`, dir: `D:/work`, want: `D:\work`, windows: true},
+		{name: "rooted takes the run drive", run: `C:\run`, dir: `\work`, want: `C:\work`, windows: true},
+		{name: "rooted slash", run: `C:\run`, dir: `/work`, want: `C:\work`, windows: true},
+		{name: "drive relative is refused", run: `C:\run`, dir: `D:work`, windows: true, wantErr: true},
+		{name: "relative on a drive", run: `C:\run`, dir: `sub\x`, want: `C:\run\sub\x`, windows: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if c.windows && runtime.GOOS != "windows" {
+				t.Skip("Windows path rules")
+			}
+			got, err := stepDir(c.run, c.dir)
+			if (err != nil) != c.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, c.wantErr)
+			}
+			if err == nil && filepath.Clean(got) != filepath.Clean(c.want) {
+				t.Fatalf("stepDir(%q, %q) = %q, want %q", c.run, c.dir, got, c.want)
+			}
+		})
+	}
+}

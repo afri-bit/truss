@@ -112,7 +112,10 @@ type Pipeline struct {
 	// definition did not declare it, which is the same as 1.
 	Concurrency int
 	// Overlap is empty when the definition did not declare it (queue).
-	Overlap   Overlap
+	Overlap Overlap
+	// Workdir is the directory steps start in, as written: relative to the
+	// directory the run starts in, or absolute. Empty means that directory.
+	Workdir   string
 	Env       map[string]string
 	Secrets   []string
 	Schedules []Schedule
