@@ -44,6 +44,7 @@ func (d *Daemon) handler() http.Handler {
 		})
 	}
 	route("GET /status", d.getStatus)
+	route("GET /metrics", d.getMetrics)
 	route("POST /shutdown", d.postShutdown)
 	route("GET /pipelines", d.listPipelines)
 	route("POST /pipelines", d.registerPipeline)
@@ -141,6 +142,11 @@ func writeJSON(w http.ResponseWriter, status int, v any) error {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	_ = writeJSON(w, status, api.Error{Message: msg})
+}
+
+// getMetrics returns the latest resource sample (spec 015).
+func (d *Daemon) getMetrics(w http.ResponseWriter, _ *http.Request) error {
+	return writeJSON(w, http.StatusOK, d.metrics.Snapshot())
 }
 
 func (d *Daemon) getStatus(w http.ResponseWriter, _ *http.Request) error {
