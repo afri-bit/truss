@@ -84,6 +84,15 @@ Written alongside the implementation (constitution 2.0.0, principle I).
   sleep and power-off. A schedule of a newly registered, edited or resumed pipeline counts
   from that moment, never from the past.
 - **FR-021** A schedule whose file is invalid at fire time records a `failed` run with the reason.
+  The daemon keeps the schedules of the last valid definition while the file is invalid, so the
+  fire time is not lost; it forgets them only when the pipeline is paused or unregistered.
+- **FR-023** Triggering a pipeline by hand, or reloading an unchanged file, never changes when its
+  schedules fire or what counts as missed.
+- **FR-024** A registered path must be a regular file of at most 1 MiB; anything else is refused
+  (`422`) at registration and fails the run or schedule that reaches it later.
+- **FR-025** A run whose log cannot be created ends `failed` with the reason `open the run log`.
+- **FR-026** A client trusts an endpoint file only if the process answering at its address reports
+  the recorded pid; otherwise the daemon counts as not running and the stale file is replaced.
 
 ### API
 

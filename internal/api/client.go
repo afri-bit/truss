@@ -35,12 +35,18 @@ func Dial(ctx context.Context, h home.Dir) (*Client, error) {
 		return nil, err
 	}
 	c := NewClient(ep)
-	if _, err := c.Status(ctx); err != nil {
+	st, err := c.Status(ctx)
+	if err != nil {
 		var apiErr *StatusError
-		if errors.As(err, &apiErr) {
+		if errors.As(err, &apiErr) && apiErr.Code != http.StatusUnauthorized {
 			return nil, err
 		}
-		return nil, ErrNotRunning // a stale endpoint file: nothing listens there
+		// A refused connection or a 401: the endpoint file is stale and the
+		// address is free or belongs to something else.
+		return nil, ErrNotRunning
+	}
+	if st.PID != ep.PID {
+		return nil, ErrNotRunning // another program answers at the recorded address
 	}
 	return c, nil
 }

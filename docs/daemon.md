@@ -160,8 +160,16 @@ The newest 200 runs are kept. A run that was *running* when the daemon died is c
 The daemon runs your commands, so it is careful about who may ask.
 
 - It listens on the loopback interface only and refuses any other address.
-- Every API call needs the token from `daemon.json`, a file only your user can read. A new
-  token is created at every start.
+- Every API call needs the token from `daemon.json`. A new token is created at every start. On
+  Linux and macOS the file and the home directory are private to your user (`0600`, `0700`;
+  `truss daemon start` refuses a home it cannot make private). **On Windows the file only has
+  the access rights it inherits from its folder**: keep the home inside your user profile (the
+  default) and do not point `TRUSS_HOME` at a shared folder such as `C:\` or `C:\ProgramData`.
+- A registered file must be a regular file of at most 1 MiB. The daemon runs what the file says
+  as your user, so register only files that only you can change.
+- `truss desktop` opens your browser with the token in the address, which other users of the
+  same machine can see in the process list while the browser starts. Treat a shared machine
+  accordingly (a follow-up replaces this with a one-time ticket).
 - Requests whose `Host` header does not name this machine are refused, which stops web pages
   from reaching the API through DNS tricks.
 
@@ -248,7 +256,8 @@ the file's `env` ([reference](pipeline-reference.md)). To give the daemon more:
 
 The CLI and TRUSS Desktop use this API; you can too. Base path `/api/v1`, JSON bodies,
 `snake_case` fields, RFC 3339 times, `Authorization: Bearer <token>` on every call. Errors are
-`{"error": "..."}` with a fitting status (`400`, `401`, `404`, `409`, `422`).
+`{"error": "..."}` with a fitting status (`400`, `401`, `403` for a foreign `Host`, `404`, `409`, `422`, `500`, `503`
+while the daemon stops).
 
 | Method and path | Does |
 |---|---|

@@ -354,6 +354,27 @@ func TestHistory_KeepsCreationOrderWhenTheClockDoesNotMove(t *testing.T) {
 	}
 }
 
+// A run whose log cannot be opened must fail with a reason, not run unlogged.
+func TestSubmit_FailsWhenTheRunLogCannotBeOpened(t *testing.T) {
+	dir := t.TempDir()
+	m := open(t, Options{Dir: dir})
+	gate := filepath.Join(t.TempDir(), "gate")
+	d := def("p", pipeline.OverlapQueue, pipeline.Step{ID: "wait", Run: waitFor(gate)})
+	first := submit(t, m, "p", d)
+	second := submit(t, m, "p", d)
+	await(t, m, first.ID, api.RunRunning)
+	// The queued run's log path is taken by a directory, so it cannot be created.
+	if err := os.Mkdir(filepath.Join(dir, second.ID, "run.log"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	release(t, gate)
+	await(t, m, first.ID, api.RunSucceeded)
+	got := await(t, m, second.ID, api.RunFailed, api.RunSucceeded)
+	if got.Status != api.RunFailed || !strings.Contains(got.Reason, "run log") {
+		t.Fatalf("run = %+v, want failed with a run log reason", got)
+	}
+}
+
 func TestSubmit_RetriesConditionsAndContinueOnErrorShowInStepsAndLog(t *testing.T) {
 	m := open(t, Options{})
 	run := submit(t, m, "rich", def("rich", "",
