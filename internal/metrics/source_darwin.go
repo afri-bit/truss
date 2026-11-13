@@ -11,18 +11,18 @@ func newSource() (source, string) {
 	if denom == 0 {
 		return nil, "the Mach timebase is not available"
 	}
-	page, err := syscall.SysctlUint32("hw.pagesize")
-	if err != nil || page == 0 {
-		return nil, "the page size is not available"
+	page := hostPageSize(host)
+	if page == 0 {
+		return nil, "the kernel page size is not available"
 	}
-	return machSource{hostPort: host, task: taskSelf(), page: uint64(page), numer: numer, denom: denom}, ""
+	return machSource{hostPort: host, task: taskSelf(), page: page, numer: numer, denom: denom}, ""
 }
 
 // machSource reads macOS through Mach host calls, libproc and sysctl. Like
 // Linux it measures a step's whole process group (Tree is true).
 type machSource struct {
 	hostPort, task uint32 // ports, taken once: every lookup adds a reference
-	page           uint64
+	page           uint64 // the kernel's, not this task's: see hostPageSize
 	numer, denom   uint32 // Mach timebase: absolute units to nanoseconds
 }
 

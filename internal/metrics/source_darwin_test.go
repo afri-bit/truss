@@ -51,17 +51,34 @@ func TestMachSource_ProcessCountsItsOwnCPU(t *testing.T) {
 	if !ok || before.rss == 0 || before.threads == 0 || before.processes != 1 || before.tree {
 		t.Fatalf("own process = %+v, %v", before, ok)
 	}
-	for end := time.Now().Add(200 * time.Millisecond); time.Now().Before(end); {
+	// Spin until getrusage, which reports real time units, counts 0.2 s more
+	// CPU, so a loaded runner only makes the test slower. Then the Mach figure
+	// must agree; a wrong timebase is off by a factor of 40.
+	ruBefore := ownCPU(t)
+	var spent float64
+	for end := time.Now().Add(20 * time.Second); spent < 0.2 && time.Now().Before(end); {
+		for i := 0; i < 1_000_000; i++ {
+		}
+		spent = ownCPU(t) - ruBefore
 	}
 	after, _ := m.process(os.Getpid())
-	// 200 ms of spinning is at least 0.1 s of CPU, even on a loaded runner;
-	// a wrong timebase is off by a factor of 40.
-	if got := after.cpuSeconds - before.cpuSeconds; got < 0.1 || got > 2 {
-		t.Fatalf("cpu went from %v to %v s over 200 ms of spinning", before.cpuSeconds, after.cpuSeconds)
+	got := after.cpuSeconds - before.cpuSeconds
+	if spent < 0.2 || got < spent/2 || got > spent*2 {
+		t.Fatalf("Mach counted %v s of CPU where getrusage counted %v s", got, spent)
 	}
 	if _, ok := m.process(0); ok {
 		t.Error("pid 0 is reported")
 	}
+}
+
+// ownCPU is this process's user and system CPU time in seconds.
+func ownCPU(t *testing.T) float64 {
+	t.Helper()
+	var ru syscall.Rusage
+	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &ru); err != nil {
+		t.Fatal(err)
+	}
+	return time.Duration(ru.Utime.Nano() + ru.Stime.Nano()).Seconds()
 }
 
 // TestMachSource_GroupSumsAStepsWholeProcessGroup starts a shell in its own

@@ -18,6 +18,11 @@ TEXT libc_mach_timebase_info_trampoline<>(SB),NOSPLIT,$0-0
 GLOBL	·libcMachTimebaseInfoTrampolineAddr(SB), RODATA, $8
 DATA	·libcMachTimebaseInfoTrampolineAddr(SB)/8, $libc_mach_timebase_info_trampoline<>(SB)
 
+TEXT libc_host_page_size_trampoline<>(SB),NOSPLIT,$0-0
+	JMP	libc_host_page_size(SB)
+GLOBL	·libcHostPageSizeTrampolineAddr(SB), RODATA, $8
+DATA	·libcHostPageSizeTrampolineAddr(SB)/8, $libc_host_page_size_trampoline<>(SB)
+
 TEXT libc_host_processor_info_trampoline<>(SB),NOSPLIT,$0-0
 	JMP	libc_host_processor_info(SB)
 GLOBL	·libcHostProcessorInfoTrampolineAddr(SB), RODATA, $8
