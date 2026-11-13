@@ -121,6 +121,12 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 	return s, c.call(ctx, http.MethodGet, "/status", nil, &s)
 }
 
+// Metrics returns the daemon's latest resource sample.
+func (c *Client) Metrics(ctx context.Context) (Metrics, error) {
+	var m Metrics
+	return m, c.call(ctx, http.MethodGet, "/metrics", nil, &m)
+}
+
 // Shutdown asks the daemon to stop.
 func (c *Client) Shutdown(ctx context.Context) error {
 	return c.call(ctx, http.MethodPost, "/shutdown", nil, nil)
