@@ -580,7 +580,7 @@ views.dashboard = {
               ? h("table", null, h("tbody", null, upcoming.slice(0, 8).map((p) => h("tr", { class: "link", onclick: () => go(href.pipeline(p.name)) },
                 h("td", null, h("a", { class: "pipe", href: href.pipeline(p.name), onclick: (e) => e.stopPropagation() }, p.name)),
                 h("td", null, h("code", null, p.schedules[0].cron)),
-                h("td", { class: "mono" }, clock(nextOf(p))), h("td", { class: "num" }, until(nextOf(p)))))))
+                h("td", { class: "mono" }, clock(nextOf(p)).slice(-8)), h("td", { class: "num" }, "in " + compact(new Date(nextOf(p)) - new Date()))))))
               : h("div", { class: "empty" }, h("div", { class: "empty-title" }, "No schedules."), "Add ", h("code", null, "on.schedule"), " to a pipeline file.")))),
     ];
   },
@@ -1123,7 +1123,7 @@ function pickerPaint() {
     input.value = draft.path = joinPath(l.path, name);
     closePicker();
   };
-  dlg.replaceChildren(
+  dlg.replaceChildren(...[
     h("h2", { id: "picker-title" }, "Choose a pipeline file"),
     picker.error && h("p", { class: "error", role: "alert", id: "picker-error" }, picker.error),
     l && h("div", { class: "picker-bar" },
@@ -1138,7 +1138,7 @@ function pickerPaint() {
           h("span", { class: "kind", "aria-hidden": "true" }, icon(en.kind === "dir" ? "folder" : "file", "sm")), safeName(en.name) + (en.link ? " →" : ""), en.kind === "dir" && h("span", { class: "sr" }, " (folder)")))))
       : h("div", { class: "empty" }, "No folders or .yaml files here.")),
     l && l.truncated && h("p", { class: "sub" }, "Only the first entries are shown. Type the path instead."),
-    h("div", { class: "picker-foot" }, h("button", { type: "button", id: "picker-cancel", onclick: closePicker }, "Cancel")));
+    h("div", { class: "picker-foot" }, h("button", { type: "button", id: "picker-cancel", onclick: closePicker }, "Cancel"))].filter((x) => x && x.nodeType));
 }
 
 async function openPicker(input) {
