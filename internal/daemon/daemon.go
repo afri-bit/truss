@@ -24,6 +24,7 @@ import (
 
 	"github.com/afri-bit/truss/internal/api"
 	"github.com/afri-bit/truss/internal/home"
+	"github.com/afri-bit/truss/internal/metrics"
 	"github.com/afri-bit/truss/internal/pipeline"
 	"github.com/afri-bit/truss/internal/registry"
 	"github.com/afri-bit/truss/internal/runs"
@@ -79,6 +80,7 @@ type Daemon struct {
 	opts     Options
 	registry *registry.Registry
 	runs     *runs.Manager
+	metrics  *metrics.Sampler
 	listener net.Listener
 	endpoint api.Endpoint
 
@@ -152,6 +154,7 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 		defs:     map[string]*definition{},
 		stop:     make(chan struct{}),
 	}
+	d.metrics = metrics.New(metrics.Options{Self: os.Getpid(), Targets: d.metricTargets})
 
 	// Count schedules from the last moment a daemon watched the clock, so the
 	// first tick can tell which times were missed in between.
@@ -170,6 +173,15 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 	return d, nil
 }
 
+// metricTargets lists the step attempts running now, for the sampler.
+func (d *Daemon) metricTargets() []metrics.Target {
+	var out []metrics.Target
+	for _, p := range d.runs.LiveProcesses() {
+		out = append(out, metrics.Target{RunID: p.RunID, StepID: p.StepID, PID: p.PID})
+	}
+	return out
+}
+
 // Endpoint returns where the daemon listens and the token clients need.
 func (d *Daemon) Endpoint() api.Endpoint { return d.endpoint }
 
@@ -184,6 +196,10 @@ func (d *Daemon) Serve(ctx context.Context) error {
 	served := make(chan error, 1)
 	go func() { served <- server.Serve(d.listener) }()
 	d.runs.Resume()
+	sampling, stopSampling := context.WithCancel(ctx)
+	sampled := make(chan struct{})
+	go func() { d.metrics.Run(sampling); close(sampled) }()
+	defer func() { stopSampling(); <-sampled }() // no sample after Serve returns
 	d.logf("daemon started on %s (pid %d, home %s)", d.endpoint.Address, d.endpoint.PID, d.opts.Home)
 
 	ticker := time.NewTicker(d.opts.Tick)

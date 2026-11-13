@@ -85,6 +85,9 @@ type Step struct {
 	ContinuedOnError bool `json:"continued_on_error,omitempty"`
 	// Reason says why a step was skipped by a condition or by a step it needs.
 	Reason string `json:"reason,omitempty"`
+	// PID is the operating-system process id of the step's current or last
+	// attempt, for steps the daemon started. Tracked local runs have none.
+	PID int `json:"pid,omitempty"`
 }
 
 // Schedule is one cron trigger of a pipeline and when it fires next.
@@ -243,4 +246,60 @@ type DirListing struct {
 	Entries []DirEntry `json:"entries"`
 	// Truncated is true when the directory held more names than were returned.
 	Truncated bool `json:"truncated,omitempty"`
+}
+
+// Metrics is the daemon's view of the machine's resources (GET /metrics).
+// CPU percentages are shares of the whole machine: 100 means every core busy.
+// When Supported is false, Host is absent, Steps and History are empty, and
+// only OS, Reason, IntervalSeconds and Daemon.PID carry values.
+type Metrics struct {
+	Supported bool   `json:"supported"`
+	OS        string `json:"os"`
+	Reason    string `json:"reason,omitempty"`
+	// IntervalSeconds is how often the daemon samples.
+	IntervalSeconds float64        `json:"interval_seconds"`
+	SampledAt       *time.Time     `json:"sampled_at,omitempty"`
+	Host            *HostMetrics   `json:"host,omitempty"`
+	Daemon          ProcessMetrics `json:"daemon"`
+	// Steps lists every running step the daemon started, with its processes.
+	Steps []StepMetrics `json:"steps"`
+	// History holds host samples, oldest first, for at most the last ten minutes.
+	History []HostPoint `json:"history"`
+}
+
+// HostMetrics describes the whole machine at the last sample.
+type HostMetrics struct {
+	CPUPercent float64 `json:"cpu_percent"`
+	// Cores holds the busy percentage of each logical core, in order.
+	Cores            []float64 `json:"cores"`
+	MemoryTotalBytes uint64    `json:"memory_total_bytes"`
+	MemoryUsedBytes  uint64    `json:"memory_used_bytes"`
+	// Load holds the 1, 5 and 15 minute load averages where the OS has them.
+	Load []float64 `json:"load,omitempty"`
+}
+
+// ProcessMetrics describes a process, or a step's group of processes.
+type ProcessMetrics struct {
+	PID        int     `json:"pid"`
+	CPUPercent float64 `json:"cpu_percent"`
+	RSSBytes   uint64  `json:"rss_bytes"`
+	Threads    int     `json:"threads,omitempty"`
+	// Processes counts the processes measured. Tree says whether that covers
+	// everything the step started (its process group) or only its shell.
+	Processes int  `json:"processes"`
+	Tree      bool `json:"tree"`
+}
+
+// StepMetrics ties a step's process figures to its run.
+type StepMetrics struct {
+	RunID  string `json:"run_id"`
+	StepID string `json:"step_id"`
+	ProcessMetrics
+}
+
+// HostPoint is one host sample in Metrics.History.
+type HostPoint struct {
+	At              time.Time `json:"at"`
+	CPUPercent      float64   `json:"cpu_percent"`
+	MemoryUsedBytes uint64    `json:"memory_used_bytes"`
 }

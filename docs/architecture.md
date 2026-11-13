@@ -17,6 +17,7 @@ flowchart TB
         registry["internal/registry"]
         scheduler["internal/scheduler"]
         runs["internal/runs"]
+        metrics["internal/metrics"]
     end
     subgraph core["Core"]
         pipeline["internal/pipeline<br/>parse, validate, plan"]
@@ -30,7 +31,7 @@ flowchart TB
     cli --> api --> daemon
     ui --> daemon
     cli --> engine
-    daemon --> registry & scheduler & runs
+    daemon --> registry & scheduler & runs & metrics
     scheduler --> cron
     runs --> engine
     engine --> pipeline & executor
@@ -61,6 +62,7 @@ two callers of the same engine, so a pipeline behaves the same in both.
 | `internal/registry` | Remember registered pipeline files by name. | Read pipeline content. |
 | `internal/scheduler` | Decide, for a given time, which schedules fire, catch up, or were missed. | Own a timer or start runs. |
 | `internal/runs` | Queue, execute and remember runs; enforce the parallel limit and overlap policy. | Know about HTTP or schedules. |
+| `internal/metrics` | Sample the machine's CPU and memory and each running step's processes; keep ten minutes of host history. See [ADR 0012](decisions/0012-daemon-samples-resources-with-the-standard-library.md). | Start processes, write files, or know about HTTP or runs. |
 | `internal/api` | The daemon's JSON types and a Go client for them. | Contain server logic. |
 | `internal/daemon` | Wire registry, scheduler and runs together; serve the HTTP API; watch files. | Reimplement what those packages do. |
 | `internal/loginstart` | Generate and install the per-user login item (systemd unit, launchd agent, Task Scheduler task) behind runner and file interfaces. See [ADR 0008](decisions/0008-login-start-is-per-user-and-marker-owned.md). | Know about the daemon or its API, or print. |

@@ -2,9 +2,8 @@
 // It talks to the daemon's HTTP API (/api/v1) with the access token that
 // `truss desktop` passes in the URL fragment.
 //
-// Resource figures (CPU, memory, per-step processes) are not reported by the
-// daemon yet. Where the page shows them, they come from the `sim` module below
-// and every such place carries a visible "simulated" tag.
+// Resource figures (CPU, memory, step processes) come from the daemon's
+// GET /metrics. In demo mode demo.js answers it with sample figures.
 "use strict";
 
 const API = "/api/v1";
@@ -12,7 +11,7 @@ const LOG_MS = 700;
 
 // ---------- settings ----------
 
-const DEFAULTS = { theme: "system", density: "comfortable", sidebar: "expanded", refresh: 1500, sim: true, motion: "full", logWrap: false, logTs: true, logSize: 12 };
+const DEFAULTS = { theme: "system", density: "comfortable", sidebar: "expanded", refresh: 1500, motion: "full", logWrap: false, logTs: true, logSize: 12 };
 const settings = Object.assign({}, DEFAULTS, (() => {
   try { return JSON.parse(localStorage.getItem("truss-settings") || "{}"); } catch { return {}; }
 })());
@@ -279,76 +278,58 @@ function nextOf(p) {
 const href = { pipeline: (name) => "#/pipelines/" + encodeURIComponent(name), run: (id) => "#/runs/" + encodeURIComponent(id) };
 const go = (hash) => { location.hash = hash; };
 const shortId = (id) => (id.length > 14 ? id.slice(0, 14) : id);
-const simTag = () => settings.sim && h("span", { class: "sim", title: "The daemon does not report resource usage yet. These figures are simulated so the layout can be judged." }, "simulated");
+// In demo mode every figure is sample data; panels with resource figures say so.
+const simTag = () => demo && h("span", { class: "sim", title: "demo mode: sample figures, no daemon" }, "sample");
 
-// ---------- simulated telemetry ----------
-// Deterministic smooth noise: the same run shows the same curve on every repaint.
+// ---------- resource figures from the daemon ----------
+// res keeps the latest GET /metrics answer, plus each active run's figures as
+// seen by this page, so a run's chart can show more than the latest sample.
 
-const sim = (() => {
-  const hash = (str) => { let x = 2166136261; for (let i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = Math.imul(x, 16777619); } return x >>> 0; };
-  const noise = (seed, t) => {
-    const a = (seed % 997) / 997 * 6.283, b = (seed % 431) / 431 * 6.283, c = (seed % 211) / 211 * 6.283;
-    return (Math.sin(t * 0.21 + a) * 0.5 + Math.sin(t * 0.57 + b) * 0.3 + Math.sin(t * 1.33 + c) * 0.2 + 1) / 2; // 0..1
-  };
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  const cores = Math.max(2, Math.min(32, navigator.hardwareConcurrency || 8));
-  const memTotal = 32; // GiB
-  const history = { cpu: [], mem: [], load: [], t: [] };
-  let running = 0;
-  function host(t = Date.now() / 1000) {
-    const base = 7 + running * 16;
-    const cpu = clamp(base + noise(11, t) * 14 + (running ? noise(97, t * 2) * 10 : 0), 1, 99);
-    const mem = clamp(9.4 + running * 0.9 + noise(23, t * 0.3) * 0.8, 1, memTotal - 1);
-    const perCore = Array.from({ length: cores }, (_, i) => clamp(cpu + (noise(300 + i, t) - 0.5) * 50 * (i % 3 === 0 ? 1.3 : 0.8), 0, 100));
-    return { cpu, mem, memTotal, cores, perCore, load: (cpu / 100) * cores * 0.9, swap: 0.2 + noise(31, t * 0.1) * 0.1 };
-  }
-  let seeded = false;
-  function sample(activeRuns) {
-    running = activeRuns;
-    if (!seeded) { seeded = true; for (const k of Object.keys(history)) history[k].length = 0; backfill(); }
-    const now = host();
-    history.cpu.push(now.cpu); history.mem.push(now.mem); history.load.push(now.load); history.t.push(Date.now());
-    for (const k of Object.keys(history)) if (history[k].length > 120) history[k].shift();
-  }
-  // Before the first minute, fill the charts with the curve's own past so they do not start empty.
-  function backfill() {
-    const now = Date.now() / 1000;
-    for (let i = 90; i > 0; i--) {
-      const x = host(now - i);
-      history.cpu.push(x.cpu); history.mem.push(x.mem); history.load.push(x.load); history.t.push((now - i) * 1000);
+const GiB = 1024 ** 3, MiB = 1024 ** 2;
+const res = {
+  m: null, // the latest api.Metrics
+  runs: new Map(), // run id -> { at: [], cpu: [], mem: [] }
+  ok() { return !!(this.m && this.m.supported && this.m.host); },
+  why() {
+    if (!this.m) return "Waiting for the first sample from the daemon…";
+    if (!this.m.supported) return `The daemon does not collect resource figures on ${this.m.os}. ${this.m.reason || ""}`.trim();
+    return "Waiting for the first sample from the daemon…";
+  },
+  host() {
+    const h = this.m.host;
+    return { cpu: h.cpu_percent, cores: h.cores, memUsed: h.memory_used_bytes / GiB, memTotal: h.memory_total_bytes / GiB, load: h.load || null };
+  },
+  history() {
+    const pts = (this.m && this.m.history) || [];
+    return { cpu: pts.map((p) => p.cpu_percent), mem: pts.map((p) => p.memory_used_bytes / GiB), seconds: pts.length ? (Date.parse(pts[pts.length - 1].at) - Date.parse(pts[0].at)) / 1000 : 0 };
+  },
+  step(runId, stepId) { return (this.m && (this.m.steps || []).find((x) => x.run_id === runId && x.step_id === stepId)) || null; },
+  run(runId) {
+    const parts = ((this.m && this.m.steps) || []).filter((x) => x.run_id === runId);
+    return { cpu: parts.reduce((a, b) => a + b.cpu_percent, 0), mem: parts.reduce((a, b) => a + b.rss_bytes, 0) / MiB, procs: parts.reduce((a, b) => a + b.processes, 0), steps: parts.length };
+  },
+  ingest(m) {
+    const fresh = !this.m || m.sampled_at !== this.m.sampled_at;
+    this.m = m;
+    if (!fresh || !m.supported) return;
+    const ids = new Set((m.steps || []).map((x) => x.run_id));
+    for (const id of ids) {
+      const r = this.runs.get(id) || { cpu: [], mem: [] };
+      const u = this.run(id);
+      r.cpu.push(u.cpu); r.mem.push(u.mem);
+      if (r.cpu.length > 150) { r.cpu.shift(); r.mem.shift(); }
+      this.runs.set(id, r);
     }
-  }
-  backfill();
-  function step(runId, st) {
-    const seed = hash(runId + "/" + st.id);
-    const t = Date.now() / 1000;
-    const active = st.status === "running";
-    return {
-      pid: 2000 + (seed % 61000),
-      threads: 1 + (seed % 7),
-      cpu: active ? clamp(6 + noise(seed, t) * 78, 0.3, 99) : 0,
-      mem: active ? 18 + (seed % 140) + noise(seed + 7, t * 0.4) * 40 : 0,
-      peakCpu: 20 + (seed % 70),
-      peakMem: 40 + (seed % 260),
-    };
-  }
-  function run(r) {
-    const live = (r.steps || []).filter((st) => st.status === "running");
-    if (!isActive(r) || !live.length) return { cpu: 0, mem: 0, procs: 0 };
-    const parts = live.map((st) => step(r.id, st));
-    return { cpu: clamp(parts.reduce((a, b) => a + b.cpu, 0) / cores, 0, 100), mem: parts.reduce((a, b) => a + b.mem, 0), procs: parts.length };
-  }
-  function runSeries(r, n = 60) {
-    const seed = hash(r.id);
-    const t = Date.now() / 1000;
-    const k = Math.max(1, (r.steps || []).filter((st) => st.status === "running").length);
-    return {
-      cpu: Array.from({ length: n }, (_, i) => clamp(10 + noise(seed, t - (n - i)) * 60 * Math.min(k, 2), 0, 100)),
-      mem: Array.from({ length: n }, (_, i) => 60 + noise(seed + 5, (t - (n - i)) * 0.4) * 90 * k),
-    };
-  }
-  return { host, sample, history, step, run, runSeries, cores, memTotal, hash };
-})();
+    for (const id of [...this.runs.keys()]) if (!ids.has(id) && !shell.runs.some((r) => r.id === id && isActive(r))) this.runs.delete(id);
+  },
+};
+// ticksFor labels a chart that spans the given number of seconds.
+function ticksFor(seconds) {
+  if (seconds < 20) return ["", "", "", "", "now"];
+  const fmt = (s) => (s >= 120 ? `-${Math.round(s / 60)}m` : `-${Math.round(s)}s`);
+  return [fmt(seconds), fmt(seconds * 0.75), fmt(seconds / 2), fmt(seconds / 4), "now"];
+}
+const bytes = (n) => (n >= GiB ? (n / GiB).toFixed(1) + " GiB" : (n / MiB).toFixed(0) + " MiB");
 
 // ---------- shared state from the shell poll ----------
 
@@ -356,8 +337,8 @@ const shell = { status: null, runs: [], up: null, latency: null, beats: [], pipe
 
 // ---------- shared pieces ----------
 
-// simOff stands where simulated figures would be when the user turned them off.
-const simOff = () => h("div", { class: "empty" }, "The daemon does not report resource usage. Simulated figures are off (Settings).");
+// noFigures stands where resource figures would be when the daemon has none.
+const noFigures = () => h("div", { class: "empty" }, res.why());
 
 function meter(kind, pct, label) {
   const p = Math.max(0, Math.min(100, pct));
@@ -367,10 +348,14 @@ function meter(kind, pct, label) {
     h("span", { class: "v" }, label));
 }
 function runMeters(r) {
-  if (!settings.sim) return h("span", { class: "muted" }, "–");
-  if (!isActive(r) || r.status === "queued") return h("span", { class: "muted mono" }, r.status === "queued" ? "waiting" : "exited");
-  const u = sim.run(r);
-  return h("div", { class: "meters", title: "simulated" }, meter("cpu", u.cpu, u.cpu.toFixed(0) + "%"), meter("mem", (u.mem / 1024) * 100 / 2, u.mem.toFixed(0) + "M"));
+  if (r.status === "queued") return h("span", { class: "muted mono" }, "waiting");
+  if (!isActive(r)) return h("span", { class: "muted mono" }, "exited");
+  if (r.trigger === "local") return h("span", { class: "muted", title: "the run executes in a shell outside the daemon" }, "not measured");
+  if (!res.ok()) return h("span", { class: "muted", title: res.why() }, "not reported");
+  const u = res.run(r.id);
+  if (!u.steps) return h("span", { class: "muted mono" }, "starting");
+  const memPct = res.m.host.memory_total_bytes ? (u.mem * MiB / res.m.host.memory_total_bytes) * 100 : 0;
+  return h("div", { class: "meters" }, meter("cpu", u.cpu, u.cpu.toFixed(1) + "%"), meter("mem", memPct, u.mem.toFixed(0) + "M"));
 }
 function progress(r) {
   const steps = r.steps || [];
@@ -581,7 +566,6 @@ views.dashboard = {
     const avg = durations.length ? "avg " + compact(durations.reduce((a, b) => a + b, 0) / durations.length) : "–";
     const scheduled = pipelines.filter((p) => (p.schedules || []).length).length;
     const tile = (cls, num, label, foot) => h("div", { class: "tile " + cls }, h("div", { class: "label" }, h("i"), label), h("div", { class: "num" }, num), h("div", { class: "foot" }, foot));
-    const host = sim.host();
     const up = shell.status ? Date.now() - new Date(shell.status.started_at) : 0;
     return [
       h("div", { class: "head" }, h("div", { class: "title" }, h("h1", null, "Dashboard"),
@@ -602,14 +586,8 @@ views.dashboard = {
           panel("Activity", { hint: "runs started per hour, last 24 hours" }, h("div", { class: "panel-body" }, activity(runs))),
           panel("Recent runs", { tools: h("a", { class: "btn", href: "#/runs" }, "All runs") }, h("div", { class: "scroll" }, runsTable(runs.slice(0, 10), { note: false })))),
         h("div", { class: "stack" },
-          panel("System", { sim: true, tools: h("a", { class: "btn", href: "#/monitor" }, icon("monitor", "sm"), "Monitor") },
-            !settings.sim ? simOff() : h("div", { class: "panel-body", style: "display:grid;gap:14px" },
-              h("div", { class: "metric-head" }, h("span", { class: "big" }, host.cpu.toFixed(1)), h("span", { class: "unit" }, "% CPU"),
-                h("span", { class: "legend" }, h("span", null, h("i"), "cpu"), h("span", null, h("i", { class: "s2" }), "mem"))),
-              lineChart([{ values: sim.history.cpu.slice(-60), area: true }, { values: sim.history.mem.slice(-60).map((m) => (m / sim.memTotal) * 100), cls: "s2" }], { height: 120, max: 100, fmt: (v) => v + "%", label: "CPU and memory, last minute" }),
-              h("div", { style: "display:grid;gap:6px" },
-                meter("cpu", host.cpu, host.cpu.toFixed(0) + "%"),
-                meter("mem", (host.mem / host.memTotal) * 100, host.mem.toFixed(1) + "G")))),
+          panel("System", { sim: true, hint: res.ok() ? "this machine" : "", tools: h("a", { class: "btn", href: "#/monitor" }, icon("monitor", "sm"), "Monitor") },
+            !res.ok() ? noFigures() : systemBody()),
           panel("Health", { hint: healthSummary().text }, healthList(true)),
           panel("Coming up", { hint: upcoming.length ? `${upcoming.length} scheduled` : "" },
             upcoming.length
@@ -621,6 +599,19 @@ views.dashboard = {
     ];
   },
 };
+
+function systemBody() {
+  const host = res.host(), hist = res.history();
+  const last = Math.min(hist.cpu.length, 60); // two minutes at the default interval
+  const span = hist.seconds * (last / Math.max(1, hist.cpu.length));
+  return h("div", { class: "panel-body", style: "display:grid;gap:14px" },
+    h("div", { class: "metric-head" }, h("span", { class: "big" }, host.cpu.toFixed(1)), h("span", { class: "unit" }, "% CPU"),
+      h("span", { class: "legend" }, h("span", null, h("i"), "cpu"), h("span", null, h("i", { class: "s2" }), "mem"))),
+    lineChart([{ values: hist.cpu.slice(-last), area: true }, { values: hist.mem.slice(-last).map((m) => (m / host.memTotal) * 100), cls: "s2" }], { height: 120, max: 100, fmt: (v) => v + "%", ticks: ticksFor(span), label: "CPU and memory" }),
+    h("div", { style: "display:grid;gap:6px" },
+      meter("cpu", host.cpu, host.cpu.toFixed(0) + "%"),
+      meter("mem", (host.memUsed / host.memTotal) * 100, host.memUsed.toFixed(1) + "G")));
+}
 
 function activity(runs) {
   const now = new Date();
@@ -867,7 +858,7 @@ views.run = {
     const steps = run.steps || [];
     const doneN = steps.filter((st) => !["pending", "running", "queued"].includes(st.status)).length;
     const current = steps.filter((st) => st.status === "running").map((st) => st.id);
-    const usage = sim.run(run);
+    const usage = res.run(run.id);
     const active = isActive(run);
     const stepDetail = (st) => {
       if (st.reason) return st.reason;
@@ -890,17 +881,17 @@ views.run = {
         h("div", null, h("div", { class: "k" }, active ? "Running now" : "Ended"), h("div", { class: "v", title: current.join(", ") }, active ? (current.join(", ") || "waiting") : clock(run.finished_at))),
         h("div", null, h("div", { class: "k" }, "Started"), h("div", { class: "v" }, clock(run.started_at))),
         h("div", null, h("div", { class: "k" }, active ? "Elapsed" : "Duration"), h("div", { class: "v" }, took(run))),
-        h("div", null, h("div", { class: "k" }, "Processes ", settings.sim && h("span", { class: "muted" }, "· sim")), h("div", { class: "v" }, settings.sim ? (active ? `${usage.procs} live` : "0 live") : "–")),
+        h("div", null, h("div", { class: "k" }, "Processes"), h("div", { class: "v", title: run.trigger === "local" ? "the run executes in a shell outside the daemon" : res.ok() ? "processes of this run's running steps" : res.why() }, !active ? "0 live" : run.trigger === "local" ? "local shell" : res.ok() ? `${usage.procs} live` : "not reported")),
         h("div", null, h("div", { class: "k" }, "Supervisor PID"), h("div", { class: "v", title: run.trigger === "local" ? "the run executes in a shell outside the daemon" : "the daemon process that runs this pipeline" }, run.trigger === "local" ? "local shell" : shell.status ? shell.status.pid : "–"))),
       run.reason && h("div", { class: "callout" + (run.status === "failed" ? " bad" : ""), role: run.status === "failed" ? "alert" : null }, icon(run.status === "failed" ? "alert" : "info"), h("div", null, run.reason)),
       steps.length > 0 && panel("Workflow", { hint: "click a step to filter the log", tools: legend() },
         graph(steps, stepState, logState.step, select, (st) => (st.started_at ? tookCompact(st) : ""))),
       steps.length > 0 && h("div", { class: "runlayout" },
         h("section", { class: "panel", style: "display:flex;flex-direction:column;min-height:0" },
-          h("div", { class: "panel-head" }, h("h2", null, "Steps"), h("span", { class: "hint" }, `${doneN} of ${steps.length} done`), settings.sim && h("span", { class: "tools" }, simTag())),
+          h("div", { class: "panel-head" }, h("h2", null, "Steps"), h("span", { class: "hint" }, `${doneN} of ${steps.length} done`), demo && h("span", { class: "tools" }, simTag())),
           h("ul", { class: "steps" },
             steps.map((st) => {
-              const u = sim.step(run.id, st);
+              const u = res.step(run.id, st.id);
               return h("li", { class: logState.step === st.id ? "selected" : "", title: st.error || st.reason || "", tabindex: "0", role: "button", "aria-pressed": logState.step === st.id ? "true" : "false",
                 onclick: () => select(st.id), onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(st.id); } } },
                 h("span", { class: "st" }, statusGlyph(stepState(st))),
@@ -908,8 +899,9 @@ views.run = {
                 h("span", { class: "dur" }, stepDetail(st)),
                 h("span", { class: "sub" },
                   h("span", { class: "badge s-" + stepState(st) }, stepState(st) === "tolerated" ? "failed · continued" : st.status),
-                  settings.sim && st.status === "running" && [h("span", { class: "mini" }, h("span", { class: "track" }, h("i", { style: `width:${u.cpu}%` })), h("span", null, u.cpu.toFixed(0) + "%")), h("span", { class: "mono" }, "pid " + u.pid)],
-                  settings.sim && st.status !== "running" && st.started_at && h("span", { class: "mono" }, `peak ${u.peakCpu}% · ${u.peakMem}M`)));
+                  st.status === "running" && u && h("span", { class: "mini", title: "CPU share of the machine" }, h("span", { class: "track" }, h("i", { style: `width:${Math.min(100, u.cpu_percent)}%` })), h("span", null, u.cpu_percent.toFixed(1) + "%")),
+                  st.status === "running" && u && h("span", { class: "mono" }, bytes(u.rss_bytes)),
+                  st.pid > 0 && h("span", { class: "mono", title: st.status === "running" ? "process id" : "process id of the last attempt" }, "pid " + st.pid)));
             }))),
         h("section", { class: "log", "aria-label": "Run log" },
           h("div", { class: "bar" },
@@ -924,7 +916,7 @@ views.run = {
             active ? h("span", { class: "live" }, "live") : h("span", { class: "done" }, "complete")),
           pre)),
       h("div", { class: "grid-2" },
-        panel("Resources", { sim: true, hint: active ? "this run's processes, last minute" : "this run has ended" },
+        panel("Resources", { sim: true, hint: active ? "this run's processes, since this page opened" : "this run has ended" },
           h("div", { class: "panel-body" }, runResources(run))),
         panel("Configuration", { hint: pipeline ? pipeline.path : "pipeline not registered" },
           h("div", { class: "panel-body", style: "padding-top:4px;padding-bottom:4px" }, h("dl", { class: "facts" },
@@ -942,25 +934,27 @@ views.run = {
 };
 
 function runResources(run) {
-  if (!settings.sim) return h("div", { class: "empty" }, "Resource figures are off. Turn on simulated metrics in Settings to preview this panel.");
+  if (run.trigger === "local") return h("div", { class: "empty" }, "Not measured: this run executes in a shell outside the daemon (truss run --track).");
+  if (!res.ok()) return noFigures();
   const active = isActive(run);
+  if (!active) return h("div", { class: "empty" }, "Figures are kept only while a run is running.");
+  const u = res.run(run.id), ser = res.runs.get(run.id) || { cpu: [], mem: [] };
   const live = (run.steps || []).filter((st) => st.status === "running");
-  const ser = sim.runSeries(run);
-  const u = sim.run(run);
+  const memMax = Math.max(64, ...ser.mem) * 1.2;
   return h("div", { style: "display:grid;gap:14px" },
-    h("div", { class: "metric-head" }, h("span", { class: "big" }, active ? u.cpu.toFixed(1) : "0.0"), h("span", { class: "unit" }, "% CPU"),
-      h("span", { class: "big", style: "margin-left:18px" }, active ? u.mem.toFixed(0) : "0"), h("span", { class: "unit" }, "MiB RSS"),
-      h("span", { class: "legend" }, h("span", null, h("i"), "cpu %"), h("span", null, h("i", { class: "s2" }), "mem MiB ÷ 4"))),
-    active
-      ? lineChart([{ values: ser.cpu, area: true }, { values: ser.mem.map((m) => m / 4), cls: "s2" }], { height: 130, max: 100, label: "Run CPU and memory, last minute" })
-      : h("div", { class: "empty", style: "padding:18px" }, "No live processes. Peak values are listed per step."),
+    h("div", { class: "metric-head" }, h("span", { class: "big" }, u.cpu.toFixed(1)), h("span", { class: "unit" }, "% CPU"),
+      h("span", { class: "big", style: "margin-left:18px" }, u.mem.toFixed(0)), h("span", { class: "unit" }, "MiB RSS"),
+      h("span", { class: "legend" }, h("span", null, h("i"), "cpu %"), h("span", null, h("i", { class: "s2" }), "mem, % of chart"))),
+    ser.cpu.length > 1
+      ? lineChart([{ values: ser.cpu, area: true }, { values: ser.mem.map((m) => (m / memMax) * 100), cls: "s2" }], { height: 130, max: Math.max(10, ...ser.cpu) * 1.2, fmt: (v) => v.toFixed(0) + "%", ticks: ticksFor((ser.cpu.length - 1) * (res.m.interval_seconds || 2)), label: "Run CPU and memory" })
+      : h("div", { class: "empty", style: "padding:18px" }, "Collecting samples…"),
     h("table", null,
-      h("thead", null, h("tr", null, h("th", null, "PID"), h("th", null, "Step"), h("th", null, "State"), h("th", { class: "num" }, "CPU"), h("th", { class: "num" }, "Mem"), h("th", { class: "num" }, "Thr"))),
-      h("tbody", null, (live.length ? live : (run.steps || []).filter((st) => st.started_at).slice(-4)).map((st) => {
-        const x = sim.step(run.id, st);
-        const on = st.status === "running";
-        return h("tr", null, h("td", { class: "mono" }, x.pid), h("td", { class: "mono" }, st.id), h("td", null, on ? h("span", { class: "badge s-running" }, "R") : h("span", { class: "muted" }, "exited")),
-          h("td", { class: "num" }, on ? x.cpu.toFixed(1) + "%" : `${x.peakCpu}% pk`), h("td", { class: "num" }, on ? x.mem.toFixed(0) + "M" : `${x.peakMem}M pk`), h("td", { class: "num" }, x.threads));
+      h("thead", null, h("tr", null, h("th", null, "PID"), h("th", null, "Step"), h("th", { class: "num" }, "Procs"), h("th", { class: "num" }, "CPU"), h("th", { class: "num" }, "RSS"), h("th", { class: "num" }, "Thr"))),
+      h("tbody", null, live.map((st) => {
+        const x = res.step(run.id, st.id);
+        return h("tr", null, h("td", { class: "mono" }, st.pid || "–"), h("td", { class: "mono" }, st.id),
+          h("td", { class: "num", title: x && !x.tree ? "only the step's shell is measured on this OS" : "the step's process group" }, x ? x.processes + (x.tree ? "" : "*") : "–"),
+          h("td", { class: "num" }, x ? x.cpu_percent.toFixed(1) + "%" : "–"), h("td", { class: "num" }, x ? bytes(x.rss_bytes) : "–"), h("td", { class: "num" }, x && x.threads ? x.threads : "–"));
       }))));
 }
 
@@ -980,6 +974,8 @@ function healthChecks() {
   checks.push({ name: "Pipeline files", detail: invalid ? `${invalid} file${invalid === 1 ? "" : "s"} failed validation` : "all files parse", val: `${shell.pipelines.length - invalid}/${shell.pipelines.length}`, state: invalid ? "bad" : "ok" });
   const failedRecent = shell.runs.slice(0, 20).filter((r) => r.status === "failed").length;
   checks.push({ name: "Recent runs", detail: `${failedRecent} of the last ${Math.min(20, shell.runs.length)} failed`, val: shell.runs.length ? `${Math.round(100 - (failedRecent / Math.min(20, shell.runs.length)) * 100)}%` : "–", state: failedRecent > 3 ? "bad" : failedRecent ? "warn" : "ok" });
+  const m = res.m;
+  checks.push({ name: "Resource sampling", detail: !m ? "no sample yet" : m.supported ? `every ${m.interval_seconds} s on ${m.os}` : `not collected on ${m.os}`, val: m && m.supported && m.host ? `${(m.history || []).length} pts` : "–", state: !m ? "off" : m.supported ? "ok" : "off" });
   checks.push({ name: "Connection", detail: `${okBeats} of the last ${beats.length} polls answered`, val: beats.length ? `${Math.round((okBeats / beats.length) * 100)}%` : "–", state: okBeats === beats.length ? "ok" : "warn" });
   return checks;
 }
@@ -1004,50 +1000,55 @@ views.monitor = {
     return { status, runs };
   },
   render({ status, runs }) {
-    const host = sim.host();
+    const ok = res.ok(), host = ok ? res.host() : null, hist = res.history();
     const active = runs.filter(isActive);
+    const m = res.m;
     const procs = [];
-    procs.push({ pid: status.pid, name: "truss daemon", run: "–", state: "S", cpu: null, mem: null, real: true });
-    if (settings.sim) for (const r of active) for (const st of r.steps.filter((x) => x.status === "running")) {
-      const u = sim.step(r.id, st);
-      procs.push({ pid: u.pid, name: st.id, run: r, state: "R", cpu: u.cpu, mem: u.mem, threads: u.threads });
+    const d = m && m.supported ? m.daemon : null;
+    procs.push({ pid: status.pid, name: "truss daemon", run: null, state: "S", cpu: d ? d.cpu_percent : null, rss: d ? d.rss_bytes : null, threads: d ? d.threads : 0, processes: 1, tree: false, daemon: true });
+    for (const r of active) for (const st of (r.steps || []).filter((x) => x.status === "running")) {
+      const x = res.step(r.id, st.id);
+      procs.push({ pid: st.pid || null, name: st.id, run: r, state: "R", cpu: x ? x.cpu_percent : null, rss: x ? x.rss_bytes : null, threads: x ? x.threads : 0, processes: x ? x.processes : null, tree: x ? x.tree : false });
     }
     const summary = healthSummary();
     const up = Date.now() - new Date(status.started_at);
     const beats = shell.beats.slice(-48);
+    const span = ticksFor(hist.seconds);
+    const v = (x) => (ok ? x : "–");
     return [
       h("div", { class: "head" }, h("div", { class: "title" }, h("h1", null, "Monitor"),
-        h("p", { class: "sub" }, `Daemon pid ${status.pid} · ${status.address} · up ${compact(up)}`)),
+        h("p", { class: "sub" }, `Daemon pid ${status.pid} · ${status.address} · up ${compact(up)}` + (ok ? ` · ${host.cores.length} cores · sampled every ${m.interval_seconds} s` : ""))),
         h("span", { class: "spacer" }), simTag()),
       h("div", { class: "strip", style: "--n:6" },
         h("div", null, h("div", { class: "k" }, "Health"), h("div", { class: "v sans", style: `color:var(--${summary.state === "ok" ? "ok" : summary.state === "warn" ? "warn" : "bad"})` }, summary.text)),
-        h("div", null, h("div", { class: "k" }, "CPU", settings.sim && h("span", { class: "muted" }, " · sim")), h("div", { class: "v" }, settings.sim ? host.cpu.toFixed(1) + "%" : "–")),
-        h("div", null, h("div", { class: "k" }, "Memory", settings.sim && h("span", { class: "muted" }, " · sim")), h("div", { class: "v" }, settings.sim ? `${host.mem.toFixed(1)} / ${host.memTotal} GiB` : "–")),
-        h("div", null, h("div", { class: "k" }, "Load average", settings.sim && h("span", { class: "muted" }, " · sim")), h("div", { class: "v" }, settings.sim ? host.load.toFixed(2) : "–")),
+        h("div", null, h("div", { class: "k" }, "CPU"), h("div", { class: "v" }, v(ok && host.cpu.toFixed(1) + "%"))),
+        h("div", null, h("div", { class: "k" }, "Memory"), h("div", { class: "v" }, v(ok && `${host.memUsed.toFixed(1)} / ${host.memTotal.toFixed(1)} GiB`))),
+        h("div", null, h("div", { class: "k" }, "Load average"), h("div", { class: "v", title: ok && !host.load ? `${m.os} has no load average` : "" }, ok && host.load ? host.load.map((x) => x.toFixed(2)).join(" ") : "–")),
         h("div", null, h("div", { class: "k" }, "Run slots"), h("div", { class: "v" }, `${status.running_runs} / ${status.max_parallel_runs}`)),
-        h("div", null, h("div", { class: "k" }, "Processes"), h("div", { class: "v" }, procs.length))),
+        h("div", null, h("div", { class: "k" }, "Step processes"), h("div", { class: "v" }, ok ? (m.steps || []).reduce((a, x) => a + x.processes, 0) : "–"))),
       h("div", { class: "grid-2" },
-        panel("CPU", { sim: true, hint: "host, last two minutes" }, !settings.sim ? simOff() : h("div", { class: "panel-body" },
+        panel("CPU", { sim: true, hint: ok ? "this machine, last " + (span[0] || "moments").replace("-", "") : "" }, !ok ? noFigures() : h("div", { class: "panel-body" },
           h("div", { class: "metric-head" }, h("span", { class: "big" }, host.cpu.toFixed(1)), h("span", { class: "unit" }, "%"),
-            h("span", { class: "legend" }, h("span", null, h("i"), "utilisation"), h("span", null, h("i", { class: "s3" }), "load × 10"))),
-          lineChart([{ values: sim.history.cpu, area: true }, { values: sim.history.load.map((x) => x * 10), cls: "s3" }], { height: 150, max: 100, fmt: (v) => v + "%", ticks: ["-2m", "-90s", "-60s", "-30s", "now"], label: "Host CPU" }))),
-        panel("Memory", { sim: true, hint: settings.sim ? `${host.memTotal} GiB installed` : "" }, !settings.sim ? simOff() : h("div", { class: "panel-body" },
-          h("div", { class: "metric-head" }, h("span", { class: "big" }, host.mem.toFixed(1)), h("span", { class: "unit" }, "GiB used"),
+            h("span", { class: "legend" }, h("span", null, h("i"), "utilisation"))),
+          lineChart([{ values: hist.cpu, area: true }], { height: 150, max: 100, fmt: (x) => x + "%", ticks: span, label: "Host CPU" }))),
+        panel("Memory", { sim: true, hint: ok ? `${host.memTotal.toFixed(1)} GiB installed` : "" }, !ok ? noFigures() : h("div", { class: "panel-body" },
+          h("div", { class: "metric-head" }, h("span", { class: "big" }, host.memUsed.toFixed(1)), h("span", { class: "unit" }, "GiB used"),
             h("span", { class: "legend" }, h("span", null, h("i", { class: "s2" }), "used"))),
-          lineChart([{ values: sim.history.mem, area: true, cls: "s2" }], { height: 150, max: host.memTotal, fmt: (v) => v.toFixed(0) + "G", ticks: ["-2m", "-90s", "-60s", "-30s", "now"], label: "Host memory" })))),
+          lineChart([{ values: hist.mem, area: true, cls: "s2" }], { height: 150, max: host.memTotal, fmt: (x) => x.toFixed(0) + "G", ticks: span, label: "Host memory" })))),
       h("div", { class: "grid-main" },
         h("div", { class: "stack" },
-          panel("Cores", { sim: true, hint: settings.sim ? `${sim.cores} logical cores` : "" }, !settings.sim ? simOff() : h("div", { class: "panel-body" },
-            h("div", { class: "cores" }, host.perCore.map((v, i) => h("div", { class: "core" + (v > 80 ? " hot" : "") }, h("span", { class: "k" }, "cpu" + i), h("span", { class: "v" }, v.toFixed(0) + "%"), h("span", { class: "track" }, h("i", { style: `width:${v}%` }))))))),
-          panel("Processes", { sim: procs.length > 1, hint: settings.sim ? "the daemon and every live step" : "the daemon; step processes are not reported" }, h("div", { class: "scroll" }, h("table", null,
-            h("thead", null, h("tr", null, h("th", null, "PID"), h("th", null, "Process"), h("th", null, "Run"), h("th", null, "State"), h("th", { style: "width:170px" }, "CPU"), h("th", { class: "num" }, "RSS"))),
-            h("tbody", null, procs.map((p) => h("tr", { class: p.run && p.run.id ? "link" : "", onclick: p.run && p.run.id ? () => go(href.run(p.run.id)) : null },
-              h("td", { class: "mono" }, p.pid, p.real && [" ", h("span", { class: "tag", title: "the pid is reported by the daemon; its CPU and memory are not" }, "daemon")]),
+          panel("Cores", { sim: true, hint: ok ? `${host.cores.length} logical cores` : "" }, !ok ? noFigures() : h("div", { class: "panel-body" },
+            h("div", { class: "cores" }, host.cores.map((x, i) => h("div", { class: "core" + (x > 80 ? " hot" : "") }, h("span", { class: "k" }, "cpu" + i), h("span", { class: "v" }, x.toFixed(0) + "%"), h("span", { class: "track" }, h("i", { style: `width:${x}%` }))))))),
+          panel("Processes", { sim: true, hint: ok ? "the daemon and every running step; CPU is a share of the whole machine" : "process ids only" }, h("div", { class: "scroll" }, h("table", null,
+            h("thead", null, h("tr", null, h("th", null, "PID"), h("th", null, "Process"), h("th", null, "Run"), h("th", { class: "num" }, "Procs"), h("th", { style: "width:170px" }, "CPU"), h("th", { class: "num" }, "RSS"), h("th", { class: "num" }, "Thr"))),
+            h("tbody", null, procs.map((p) => h("tr", { class: p.run ? "link" : "", onclick: p.run ? () => go(href.run(p.run.id)) : null },
+              h("td", { class: "mono" }, p.pid || "–", p.daemon && [" ", h("span", { class: "tag" }, "daemon")]),
               h("td", { class: "mono" }, p.name),
-              h("td", null, p.run && p.run.id ? h("span", { class: "id" }, `${p.run.pipeline} · ${shortId(p.run.id)}`) : h("span", { class: "muted" }, "–")),
-              h("td", null, h("span", { class: "tag" }, p.state)),
-              h("td", null, p.cpu == null ? h("span", { class: "muted", title: "not reported by the daemon" }, "not reported") : meter("cpu", p.cpu, p.cpu.toFixed(1) + "%")),
-              h("td", { class: "num" }, p.mem == null ? h("span", { class: "muted" }, "–") : p.mem.toFixed(0) + " MiB")))))))),
+              h("td", null, p.run ? h("span", { class: "id" }, `${p.run.pipeline} · ${shortId(p.run.id)}`) : h("span", { class: "muted" }, "–")),
+              h("td", { class: "num", title: p.processes != null && !p.tree && !p.daemon ? "only the step's shell is measured on this OS" : "" }, p.processes == null ? "–" : p.processes + (p.tree || p.daemon ? "" : "*")),
+              h("td", null, p.cpu == null ? (p.run && p.run.trigger === "local" ? h("span", { class: "muted", title: "the run executes in a shell outside the daemon" }, "local shell") : h("span", { class: "muted", title: res.why() }, "not reported")) : meter("cpu", p.cpu, p.cpu.toFixed(1) + "%")),
+              h("td", { class: "num" }, p.rss == null ? h("span", { class: "muted" }, "–") : bytes(p.rss)),
+              h("td", { class: "num" }, p.threads || "–")))))))),
         h("div", { class: "stack" },
           panel("Health", { hint: summary.text }, healthList(false)),
           panel("Availability", { hint: "each cell is one poll of the daemon" }, h("div", { class: "panel-body" },
@@ -1094,8 +1095,7 @@ views.settings = {
             row("Sidebar", "Collapse to icons. Shortcut: [", seg("sidebar", [["expanded", "Expanded"], ["collapsed", "Collapsed"]])),
             row("Motion", "Turn off spinners, pulses and transitions.", seg("motion", [["full", "Full"], ["reduced", "Reduced"]]))),
           panel("Data", { id: "set-data" },
-            row("Refresh interval", "How often pages ask the daemon for news.", seg("refresh", [[1000, "1 s"], [1500, "1.5 s"], [3000, "3 s"], [5000, "5 s"]])),
-            row("Simulated metrics", "The daemon does not report CPU, memory or step processes yet. Show sample figures, marked as simulated.", toggle("sim", "Show"))),
+            row("Refresh interval", "How often pages ask the daemon for news. The daemon samples CPU and memory every 2 s.", seg("refresh", [[1000, "1 s"], [1500, "1.5 s"], [3000, "3 s"], [5000, "5 s"]]))),
           panel("Log viewer", { id: "set-log" },
             row("Wrap long lines", "Otherwise lines scroll sideways.", toggle("logWrap", "Wrap")),
             row("Timestamps", "Show the time at the start of each line.", toggle("logTs", "Show")),
@@ -1370,8 +1370,9 @@ async function pollShell() {
     shell.latency = Math.max(1, Math.round(performance.now() - t0));
     shell.status = status;
     shell.up = true;
-    const [runs, pipelines] = await Promise.all([getJSON("/runs?limit=100"), getJSON("/pipelines")]);
+    const [runs, pipelines, metrics] = await Promise.all([getJSON("/runs?limit=100"), getJSON("/pipelines"), getJSON("/metrics").catch(() => null)]);
     shell.runs = runs; shell.pipelines = pipelines;
+    if (metrics) res.ingest(metrics);
     shell.beats.push(true);
   } catch (e) {
     if (!(e instanceof ApiError)) { shell.up = false; shell.status = null; shell.beats.push(false); }
@@ -1379,7 +1380,6 @@ async function pollShell() {
     shellBusy = false;
   }
   if (shell.beats.length > 96) shell.beats.shift();
-  sim.sample(shell.runs.filter((r) => r.status === "running").length);
   paintConn();
   paintSideLive();
   paintNav(parseRoute().view.nav);

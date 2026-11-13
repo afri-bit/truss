@@ -28,3 +28,10 @@ type StepEvents interface {
 	StepContinued(id string)
 	StepSkipped(id, reason string)
 }
+
+// ProcessEvents is an optional extension of StepEvents. When the StepEvents
+// value implements it, StepProcess is called after each attempt's process has
+// started, with that process's operating-system id.
+type ProcessEvents interface {
+	StepProcess(id string, pid int)
+}

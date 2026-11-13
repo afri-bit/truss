@@ -290,6 +290,9 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 		if err != nil {
 			return finish(outcome{slot: slot, attempt: attempt, id: step.ID, res: executor.Result{Err: err}})
 		}
+		if pe, ok := events.(ProcessEvents); ok {
+			pe.StepProcess(step.ID, proc.PID())
+		}
 		go func() {
 			waitCtx := base
 			if step.Timeout > 0 {

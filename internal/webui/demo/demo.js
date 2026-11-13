@@ -147,8 +147,9 @@ window.TrussDemo = (function () {
     }
     if (e.state === "skipped") return now < begin ? Object.assign(view, { status: "pending" }) : Object.assign(view, { status: "skipped", reason: e.reason });
     if (now < begin) return Object.assign(view, { status: "pending" });
-    if (now < end) return Object.assign(view, { status: "running", started_at: iso(begin) });
+    if (now < end) return Object.assign(view, { status: "running", started_at: iso(begin), pid: 2000 + (hash(run.id + s.id) % 61000) });
     return Object.assign(view, {
+      pid: 2000 + (hash(run.id + s.id) % 61000),
       status: e.state === "tolerated" ? "failed" : e.state, continued_on_error: e.state === "tolerated" || undefined,
       exit_code: e.exit || undefined, started_at: iso(begin), finished_at: iso(end),
     });
@@ -241,6 +242,40 @@ window.TrussDemo = (function () {
     return { path: dir, parent: dir === "/" ? "" : dir.slice(0, dir.lastIndexOf("/")) || "/", roots: ["/"], entries };
   }
 
+  // Sample resource figures in the shape of GET /metrics: smooth, deterministic noise.
+  const noise = (seed, t) => {
+    const a = (seed % 997) / 997 * 6.283, b = (seed % 431) / 431 * 6.283, c = (seed % 211) / 211 * 6.283;
+    return (Math.sin(t * 0.21 + a) * 0.5 + Math.sin(t * 0.57 + b) * 0.3 + Math.sin(t * 1.33 + c) * 0.2 + 1) / 2;
+  };
+  const clamp = (v) => Math.max(0, Math.min(100, v));
+  const CORES = 8, MEM = 32 * 1024 ** 3, INTERVAL = 2;
+  function hostAt(ms, running) {
+    const t = ms / 1000;
+    const cpu = clamp(6 + running * 9 + noise(11, t) * 14 + (running ? noise(97, t * 2) * 8 : 0));
+    const used = (9.4 + running * 0.7 + noise(23, t * 0.3) * 0.8) * 1024 ** 3;
+    return { cpu, used, cores: Array.from({ length: CORES }, (_, i) => clamp(cpu + (noise(300 + i, t) - 0.5) * 50 * (i % 3 === 0 ? 1.3 : 0.8))) };
+  }
+  function metrics(now) {
+    const sampled = now - (now % (INTERVAL * 1000));
+    const live = world.runs.map((r) => [r, runView(r, sampled)]).filter(([, v]) => v.status === "running");
+    const steps = [];
+    for (const [r, v] of live) for (const s of v.steps.filter((x) => x.status === "running")) {
+      const seed = hash(r.id + "/" + s.id), t = sampled / 1000;
+      const procs = 1 + (seed % 4);
+      steps.push({ run_id: r.id, step_id: s.id, pid: s.pid, cpu_percent: clamp(1 + noise(seed, t) * 11), rss_bytes: Math.round((18 + (seed % 140) + noise(seed + 7, t * 0.4) * 40) * 1024 ** 2), threads: procs + (seed % 6), processes: procs, tree: true });
+    }
+    const h = hostAt(sampled, live.length);
+    const history = [];
+    for (let at = sampled - 10 * 60 * 1000 + INTERVAL * 1000; at <= sampled; at += INTERVAL * 1000) {
+      const x = hostAt(at, live.length);
+      history.push({ at: iso(at), cpu_percent: x.cpu, memory_used_bytes: Math.round(x.used) });
+    }
+    return { supported: true, os: "demo", interval_seconds: INTERVAL, sampled_at: iso(sampled),
+      host: { cpu_percent: h.cpu, cores: h.cores, memory_total_bytes: MEM, memory_used_bytes: Math.round(h.used), load: [h.cpu / 100 * CORES * 0.9, 1.4, 1.1] },
+      daemon: { pid: 4242, cpu_percent: 0.3 + h.cpu / 80, rss_bytes: 41 * 1024 ** 2, threads: 14, processes: 1, tree: false },
+      steps, history };
+  }
+
   const json = (status, body, headers) => new Response(body === undefined ? null : JSON.stringify(body), { status, headers: Object.assign({ "Content-Type": "application/json" }, headers || {}) });
   const fail = (status, message) => json(status, { error: message });
 
@@ -258,6 +293,7 @@ window.TrussDemo = (function () {
         return json(200, { version: "0.1.0-demo", pid: 4242, started_at: iso(T0 - 3 * H - 12 * M), home: HOME + "/.truss", address: location.host, pipelines: world.pipelines.size,
           running_runs: views.filter((r) => r.status === "running").length, queued_runs: views.filter((r) => r.status === "queued").length, max_parallel_runs: 4 });
       }
+      case "GET metrics": return json(200, metrics(now));
       case "GET pipelines": return json(200, [...world.pipelines.keys()].sort().map((n) => pipelineView(n, now)));
       case "GET pipelines/:x": return world.pipelines.has(parts[1]) ? json(200, pipelineView(parts[1], now)) : fail(404, `pipeline is not registered: "${parts[1]}"`);
       case "POST pipelines": {

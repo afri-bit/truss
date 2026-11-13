@@ -1,5 +1,6 @@
 "use strict";
-// The page shell from spec 014: sidebar, header, settings, finder, and the simulated-figures switch.
+// The page shell from spec 014 and the resource figures from spec 015: sidebar, header,
+// settings, finder, and real figures from GET /metrics.
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const { startDaemon, openBrowser, poll, sleep } = require("./support");
@@ -18,45 +19,38 @@ const active = (page) => page.evaluate(() => {
   return el ? (el.id || el.getAttribute("href") || el.textContent.trim()) : "";
 });
 
-test("with simulated figures off, no simulated number or label is shown", async () => {
+test("resource figures are the daemon's own: no sample labels, real step and daemon processes", async () => {
   const run = await d.call("POST", "/pipelines/slow/runs");
-  await d.waitRun(run.id, (r) => r.status === "running");
+  // "wait" is slow.yaml's long step; "first" ends at once.
+  const running = await d.waitRun(run.id, (r) => r.steps.some((s) => s.id === "wait" && s.status === "running" && s.pid > 0));
+  const step = running.steps.find((s) => s.id === "wait");
+  const metrics = await d.call("GET", "/metrics");
   const page = await b.newPage();
-  await page.addInitScript(() => localStorage.setItem("truss-settings", JSON.stringify({ sim: false })));
   try {
     await page.goto(d.authedUrl());
     await page.locator("h1", { hasText: "Dashboard" }).waitFor();
-    await page.locator("section", { hasText: "System" }).getByText("Simulated figures are off").waitFor();
     for (const hash of ["#/", "#/monitor", "#/runs/" + run.id]) {
       await page.evaluate((h) => { location.hash = h; }, hash);
       await page.waitForTimeout(800);
-      assert.equal(await page.locator(".sim").count(), 0, `simulated label on ${hash}`);
-      assert.equal(await page.locator(".chart, .core, .meter").count(), 0, `simulated figure on ${hash}`);
+      assert.equal(await page.locator(".sim").count(), 0, `sample label on ${hash}: figures must be real`);
     }
-    // The daemon's process row shows its real pid and says the rest is not reported.
-    await page.evaluate(() => { location.hash = "#/monitor"; });
     const status = await d.call("GET", "/status");
-    await page.locator("section", { hasText: "Processes" }).locator("td", { hasText: String(status.pid) }).waitFor();
-    await page.locator("section", { hasText: "Processes" }).getByText("not reported", { exact: true }).waitFor();
-    assert.deepEqual(page.problems, []);
-  } finally {
-    await d.call("POST", `/runs/${run.id}/cancel`);
-    await d.waitRun(run.id); // slow.yaml skips overlapping runs: let this one end first
-    await page.context().close();
-  }
-});
-
-test("with simulated figures on, every simulated panel is labeled", async () => {
-  const run = await d.call("POST", "/pipelines/slow/runs");
-  await d.waitRun(run.id, (r) => r.status === "running");
-  const page = await b.newPage();
-  try {
-    await page.goto(d.authedUrl());
     await page.evaluate(() => { location.hash = "#/monitor"; });
-    await page.locator("h1", { hasText: "Monitor" }).waitFor();
-    for (const title of ["CPU", "Memory", "Cores", "Processes"]) {
-      await page.locator(".panel-head", { has: page.locator("h2", { hasText: new RegExp(`^${title}$`) }) }).locator(".sim").waitFor();
+    const table = page.locator("section", { hasText: "Processes" });
+    if (metrics.supported) {
+      // The daemon row and the step row both carry measured CPU, and the step's pid is the run's.
+      await table.locator("tr", { hasText: "truss daemon" }).locator(".meter").waitFor();
+      await table.locator("tr", { hasText: step.id }).locator("td", { hasText: String(step.pid) }).waitFor({ timeout: 10000 });
+      await table.locator("tr", { hasText: step.id }).locator(".meter").waitFor({ timeout: 10000 });
+      await page.locator("section", { hasText: "Cores" }).locator(".core").first().waitFor();
+      await page.locator(".strip", { hasText: "Memory" }).getByText(/GiB/).waitFor();
+    } else {
+      await table.locator("td", { hasText: String(status.pid) }).waitFor();
+      await page.getByText(`does not collect resource figures on ${metrics.os}`).first().waitFor();
     }
+    // The run page lists the step's real pid.
+    await page.evaluate((id) => { location.hash = "#/runs/" + id; }, run.id);
+    await page.locator(".steps li", { hasText: "pid " + step.pid }).waitFor();
     assert.deepEqual(page.problems, []);
   } finally {
     await d.call("POST", `/runs/${run.id}/cancel`);

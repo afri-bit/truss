@@ -69,5 +69,6 @@ server has no API and answers `/api/` with `404`.
 
 ## Not in scope
 
-Real resource metrics from the daemon (a later API addition would replace the simulation), a
-packaged desktop window.
+A packaged desktop window. Real resource figures came later in
+[spec 015](../015-resource-metrics/spec.md), which replaces FR-005's simulation outside demo mode
+and removes the *Simulated metrics* setting from FR-007.

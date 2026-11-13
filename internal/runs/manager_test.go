@@ -664,3 +664,66 @@ func TestSubmit_StepsSeeTheDataFoldersAndEnvCanOverrideThem(t *testing.T) {
 		t.Fatalf("cache folder not recreated: %v", err)
 	}
 }
+
+func TestManager_RecordsTheStepProcessAndListsActiveRuns(t *testing.T) {
+	m := open(t, Options{})
+	gate := filepath.Join(t.TempDir(), "gate")
+	run := submit(t, m, "p", def("p", "", pipeline.Step{ID: "wait", Run: waitFor(gate)}))
+	var pid int
+	for deadline := time.Now().Add(20 * time.Second); pid == 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the step never reported a process")
+		}
+		got, _ := m.Get(run.ID)
+		if got.Steps[0].Status == api.StepRunning {
+			pid = got.Steps[0].PID
+		}
+	}
+	if pid <= 0 {
+		t.Fatalf("pid = %d", pid)
+	}
+	if active := m.Active(); len(active) != 1 || active[0].ID != run.ID || active[0].Steps[0].PID != pid {
+		t.Fatalf("Active = %+v", active)
+	}
+	if err := os.WriteFile(gate, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(20 * time.Second); len(m.Active()) > 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the run did not end")
+		}
+	}
+	done, _ := m.Get(run.ID)
+	if done.Steps[0].PID != pid {
+		t.Errorf("finished step pid = %d, want the last attempt's %d", done.Steps[0].PID, pid)
+	}
+}
+
+func TestManager_AStepWaitingToRetryHasNoLiveProcess(t *testing.T) {
+	m := open(t, Options{})
+	run := submit(t, m, "p", def("p", "", pipeline.Step{ID: "flaky", Run: "exit 1", Retries: 1, RetryDelay: 3 * time.Second}))
+	// The first attempt starts and fails at once; the step then waits 3 s before the second.
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		got, _ := m.Get(run.ID)
+		if st := got.Steps[0]; st.Status == api.StepRunning && st.PID > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the first attempt never started")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	time.Sleep(time.Second) // well inside the 3 s wait
+	got, _ := m.Get(run.ID)
+	if st := got.Steps[0]; st.Status != api.StepRunning || st.Attempts > 1 || st.PID == 0 {
+		t.Fatalf("expected the step to wait to retry with its last pid: %+v", st)
+	}
+	if live := m.LiveProcesses(); len(live) != 0 {
+		t.Fatalf("a step waiting to retry is still measured: %+v", live)
+	}
+	await(t, m, run.ID, api.RunFailed)
+	if live := m.LiveProcesses(); len(live) != 0 {
+		t.Fatalf("an ended run is still measured: %+v", live)
+	}
+}

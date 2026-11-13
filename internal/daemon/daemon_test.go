@@ -642,3 +642,75 @@ func TestDaemon_RestoredQueuedRunSeesTheDataFolders(t *testing.T) {
 		t.Fatalf("log = %q, %v", log, err)
 	}
 }
+
+func TestDaemon_MetricsReportTheHostAndARunningStep(t *testing.T) {
+	h := home.Dir(t.TempDir())
+	_, c := boot(t, h, nil)
+	ctx := context.Background()
+
+	m, err := c.Metrics(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.OS != runtime.GOOS || m.Daemon.PID != os.Getpid() || m.Steps == nil || m.History == nil {
+		t.Fatalf("metrics = %+v", m)
+	}
+	if runtime.GOOS != "linux" && runtime.GOOS != "windows" {
+		if m.Supported || m.Reason == "" {
+			t.Fatalf("an unsupported OS must say why: %+v", m)
+		}
+		return
+	}
+
+	long := "sleep 30"
+	if runtime.GOOS == "windows" {
+		long = "ping -n 31 127.0.0.1 >NUL"
+	}
+	dir := t.TempDir()
+	path := writeDefinition(t, dir, "truss.yaml", "version: \"1\"\npipeline:\n  name: busy\nsteps:\n  - id: wait\n    run: "+long+"\n")
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	run, err := c.Trigger(ctx, "busy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		// Wait for the step to be gone: on Windows its shell would still hold dir open.
+		_, _ = c.Cancel(ctx, run.ID)
+		for end := time.Now().Add(20 * time.Second); time.Now().Before(end); time.Sleep(50 * time.Millisecond) {
+			if r, err := c.Run(ctx, run.ID); err != nil || !r.Active() {
+				return
+			}
+		}
+	}()
+
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		got, err := c.Run(ctx, run.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m, err = c.Metrics(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if pid := got.Steps[0].PID; pid > 0 && len(m.Steps) == 1 && m.Steps[0].PID == pid && m.Host != nil && len(m.History) > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("run %+v\nmetrics %+v", got, m)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	st := m.Steps[0]
+	if st.RunID != run.ID || st.StepID != "wait" || st.RSSBytes == 0 || st.Processes < 1 {
+		t.Errorf("step metrics = %+v", st)
+	}
+	if runtime.GOOS == "linux" && !st.Tree {
+		t.Error("on Linux a step's whole process group is measured")
+	}
+	if m.Host.MemoryTotalBytes == 0 || len(m.Host.Cores) == 0 || m.Daemon.RSSBytes == 0 {
+		t.Errorf("host %+v daemon %+v", m.Host, m.Daemon)
+	}
+}

@@ -262,6 +262,7 @@ while the daemon stops).
 | Method and path | Does |
 |---|---|
 | `GET /status` | Version, address, counts, limits. |
+| `GET /metrics` | CPU and memory of the machine, the daemon and each running step, plus ten minutes of host history. See [Resource figures](#resource-figures). |
 | `POST /shutdown` | Stops the daemon. |
 | `GET /pipelines` | Registered pipelines with schedules, step graph and last run. |
 | `POST /pipelines` | Registers `{"path": "/abs/file.yaml", "name": "optional"}`. |
@@ -278,6 +279,37 @@ while the daemon stops).
 | `POST /runs/{id}/log?offset=` | Appends text to a local run's log at its current end; answers `204` with the headers below. Max 256 KiB. |
 | `POST /runs/{id}/finish` | Closes a local run: `{"status": "succeeded" \| "failed" \| "cancelled", "reason"}`. |
 | `GET /runs/{id}/log?offset=` | Log text from a byte offset. `X-Truss-Log-Offset` is the next offset, `X-Truss-Run-Status` the run status; an empty body for a finished run means the log is complete. |
+
+Each step of a run the daemon started has `pid`, the process id of its current or last attempt.
+
+### Resource figures
+
+The daemon samples every 2 seconds and keeps ten minutes of host history in memory; it starts no
+process and writes nothing to do so. `GET /metrics` answers:
+
+```json
+{
+  "supported": true, "os": "linux", "interval_seconds": 2, "sampled_at": "2026-11-13T09:00:02Z",
+  "host": {"cpu_percent": 23.4, "cores": [31.0, 15.8], "memory_total_bytes": 17179869184,
+           "memory_used_bytes": 9126805504, "load": [0.52, 0.58, 0.59]},
+  "daemon": {"pid": 4242, "cpu_percent": 0.4, "rss_bytes": 41943040, "threads": 14, "processes": 1, "tree": false},
+  "steps": [{"run_id": "20261113-090001-a1b2c3", "step_id": "test/unit", "pid": 5123,
+             "cpu_percent": 12.5, "rss_bytes": 104857600, "threads": 9, "processes": 3, "tree": true}],
+  "history": [{"at": "2026-11-13T09:00:00Z", "cpu_percent": 21.0, "memory_used_bytes": 9120000000}]
+}
+```
+
+- CPU percentages are shares of the whole machine: 100 means every core is busy.
+- **Linux** reads `/proc`. A step counts its whole process group (`tree: true`); a process that
+  moves to a group of its own (`setsid`, a daemonising tool) is no longer counted.
+- **Windows** uses system calls and counts the step's shell only (`tree: false`); it has no `load`
+  and no `threads`.
+- **macOS** and others: `supported` is `false` and `reason` says why. There is no `host`,
+  `steps` and `history` are empty, and `daemon` has only its `pid`.
+- Only steps whose attempt is running now are listed. Tracked local runs are not measured.
+
+See [spec 015](../specs/015-resource-metrics/spec.md) and
+[decision 0012](decisions/0012-daemon-samples-resources-with-the-standard-library.md).
 
 ### Tracked local runs
 
