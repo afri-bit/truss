@@ -300,9 +300,13 @@ process and writes nothing to do so. `GET /metrics` answers:
 ```
 
 - CPU percentages are shares of the whole machine: 100 means every core is busy.
-- **Linux** reads `/proc`. A step counts its whole process group (`tree: true`).
-- **Windows** uses system calls and counts the step's shell only (`tree: false`); it has no `load`.
-- **macOS** and others: `supported` is `false` and `reason` says why. Only `daemon.pid` is set.
+- **Linux** reads `/proc`. A step counts its whole process group (`tree: true`); a process that
+  moves to a group of its own (`setsid`, a daemonising tool) is no longer counted.
+- **Windows** uses system calls and counts the step's shell only (`tree: false`); it has no `load`
+  and no `threads`.
+- **macOS** and others: `supported` is `false` and `reason` says why. There is no `host`,
+  `steps` and `history` are empty, and `daemon` has only its `pid`.
+- Only steps whose attempt is running now are listed. Tracked local runs are not measured.
 
 See [spec 015](../specs/015-resource-metrics/spec.md) and
 [decision 0012](decisions/0012-daemon-samples-resources-with-the-standard-library.md).

@@ -21,8 +21,10 @@ kept by the daemon.
 
 ## Requirements
 
-- **FR-001** A run's step carries `pid`: the operating-system process id of its current or last
-  attempt, for steps the daemon started. Tracked local runs have none.
+- **FR-001** A run's step carries `pid`: the operating-system process id of its current attempt,
+  or of its last attempt once the step waits to retry or has ended. A new attempt clears it until
+  its process has started; an attempt whose command did not start leaves none. Steps of tracked
+  local runs have none.
 - **FR-002** `GET /api/v1/metrics` (token required, like every call) answers
   `{supported, os, reason, interval_seconds, sampled_at, host, daemon, steps, history}`:
   - `host`: `cpu_percent`, `cores[]` (busy percent per logical core), `memory_total_bytes`,
@@ -32,11 +34,14 @@ kept by the daemon.
   - `history[]`: `{at, cpu_percent, memory_used_bytes}`, oldest first, at most ten minutes.
   - CPU percentages are shares of the whole machine: 100 means every core is busy.
 - **FR-003** The daemon samples every 2 seconds while it serves, from the start, and keeps ten
-  minutes of host history in memory only. It starts no process to do so and writes nothing.
+  minutes of host history in memory only. It starts no process to do so and writes nothing. Only
+  attempts running now are measured: a step waiting to retry is not, so a reused process id is
+  never credited to it.
 - **FR-004** Linux: figures come from `/proc`. A step is measured with its whole process group
-  (`tree: true`), which holds everything it started unless a process left the group.
+  (`tree: true`), which holds everything it started unless a process left the group. CPU time of
+  children that already exited is kept, through their parent's reaped time.
 - **FR-005** Windows: figures come from system calls. A step is measured by its shell process only
-  (`tree: false`).
+  (`tree: false`), without `threads`, and the host has no `load`.
 - **FR-006** Other systems (macOS today): `supported: false`, `reason` says why, `daemon.pid` is
   set, `steps` and `history` are empty, no `host`. The page shows the reason where figures would be.
 - **FR-007** Desktop shows only the daemon's figures; nothing is simulated outside demo mode.
