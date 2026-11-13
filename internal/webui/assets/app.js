@@ -51,6 +51,23 @@ const store = {
   set(v) { try { localStorage.setItem("truss-token", v); } catch { /* private mode */ } },
 };
 let token = store.get();
+// Demo mode (`truss desktop --demo`, or #demo in the address): sample data from demo.js, no daemon.
+// It lasts for this browser tab only.
+const demo = (() => {
+  let on = false;
+  try { on = sessionStorage.getItem("truss-demo") === "1"; } catch { /* private mode */ }
+  if (location.hash === "#demo") {
+    on = true;
+    try { sessionStorage.setItem("truss-demo", "1"); } catch { /* still on for this page */ }
+    history.replaceState(null, "", location.pathname + "#/");
+  }
+  return on && window.TrussDemo ? window.TrussDemo : null;
+})();
+function leaveDemo() {
+  try { sessionStorage.removeItem("truss-demo"); } catch { /* private mode */ }
+  location.hash = "#/";
+  location.reload();
+}
 (function takeTokenFromAddress() {
   const m = /^#token=([0-9a-f]+)$/.exec(location.hash);
   if (!m) return;
@@ -157,7 +174,7 @@ class ApiError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 async function api(method, path, body) {
-  const res = await fetch(API + path, {
+  const res = demo ? await demo.request(method, path, body) : await fetch(API + path, {
     method,
     signal: AbortSignal.timeout(10000), // a daemon that accepts but never answers must not stall the page
     headers: Object.assign({ Authorization: "Bearer " + token }, body ? { "Content-Type": "application/json" } : {}),
@@ -655,6 +672,8 @@ function filterInPlace(selector, query, countId, total) {
   if (countId) document.getElementById(countId).textContent = `${n} of ${total}`;
 }
 
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
 function pipelineCard(p) {
   const last = p.last_run;
   const statusOf = (id) => { const x = last && last.steps.find((y) => y.id === id); return x ? stepState(x) : "pending"; };
@@ -670,8 +689,8 @@ function pipelineCard(p) {
         h("dt", null, "Duration"), h("dd", { class: "mono" }, last && last.started_at ? took(last) : h("span", { class: "muted" }, "–")))
       : h("div", { class: "card-error" }, p.error),
     h("div", { class: "shape" },
-      h("span", { class: "dag", "aria-hidden": "true" }, cols.map((col) => h("span", null, col.map((st) => h("b", { class: "s-" + statusOf(st.id) }))))),
-      p.valid ? h("span", null, `${(p.steps || []).length} steps · ${cols.length} stages · ${p.concurrency || 1}× concurrency`) : h("span", null, "not runnable")),
+      h("span", { class: "dag", "aria-hidden": "true" }, cols.map((col) => h("span", null, col.slice(0, 4).map((st) => h("b", { class: "s-" + statusOf(st.id) }))))),
+      p.valid ? h("span", null, `${plural((p.steps || []).length, "step")} · ${plural(cols.length, "stage")} · ${p.concurrency || 1}× concurrency`) : h("span", null, "not runnable")),
     pipelineActions(p, true));
 }
 
@@ -1235,7 +1254,7 @@ function paintMenu() {
   const item = (ic, label, onclick, kbd) => h("button", { type: "button", class: "item", role: "menuitem", onclick }, icon(ic, "sm"), label, kbd && h("kbd", null, kbd));
   const menuSeg = (key, options) => h("div", { class: "seg full", role: "group", "aria-label": key }, options.map(([v, l]) => h("button", { type: "button", "aria-pressed": String(settings[key] === v), onclick: () => setSetting(key, v) }, l)));
   menu.replaceChildren(
-    h("div", { class: "menu-head" }, h("strong", null, "TRUSS Desktop"), h("span", null, st ? `daemon ${st.version} · pid ${st.pid}` : "daemon not connected")),
+    h("div", { class: "menu-head" }, h("strong", null, "TRUSS Desktop"), h("span", null, demo ? "demo mode · sample data, no daemon" : st ? `daemon ${st.version} · pid ${st.pid}` : "daemon not connected")),
     h("div", { class: "menu-label" }, "Theme"), h("div", { class: "menu-row" }, menuSeg("theme", [["system", "System"], ["light", "Light"], ["dark", "Dark"]])),
     h("div", { class: "menu-label" }, "Density"), h("div", { class: "menu-row" }, menuSeg("density", [["comfortable", "Comfortable"], ["compact", "Compact"]])),
     h("hr"),
@@ -1244,7 +1263,7 @@ function paintMenu() {
     item("monitor", "System monitor", () => { closeMenu(); go("#/monitor"); }),
     item("settings", "All settings", () => { closeMenu(); go("#/settings"); }),
     h("hr"),
-    item("key", "Forget access token", () => { closeMenu(); forgetToken(); }));
+    demo ? item("x", "Leave demo", () => { closeMenu(); leaveDemo(); }) : item("key", "Forget access token", () => { closeMenu(); forgetToken(); }));
   if (at >= 0) menu.querySelectorAll("button")[at]?.focus(); // repainting must not drop keyboard focus
 }
 function closeMenu() {
@@ -1352,7 +1371,9 @@ async function pollShell() {
 }
 function paintConn() {
   const el = document.getElementById("conn");
-  if (shell.up === false) el.replaceChildren(h("span", { class: "dot down" }), "offline");
+  el.classList.toggle("demo", !!demo);
+  if (demo) el.replaceChildren(h("span", { class: "dot" }), "Demo data", h("span", { class: "lat", title: "sample data generated in this page; no daemon is contacted" }, "no daemon"));
+  else if (shell.up === false) el.replaceChildren(h("span", { class: "dot down" }), "offline");
   else if (shell.up) el.replaceChildren(h("span", { class: "dot" }), "connected", h("span", { class: "lat" }, `${shell.latency} ms`));
   else el.replaceChildren(h("span", { class: "dot", style: "background:var(--off);box-shadow:none" }), "connecting");
 }
@@ -1455,6 +1476,10 @@ function paintDaemon(up) {
   }
   const st = shell.status;
   if (!st) return;
+  if (demo) {
+    el.replaceChildren(h("strong", null, h("span", { class: "dot demo" }), "Demo mode"), h("span", null, "sample data, no daemon"), h("br"), h("span", { class: "mono" }, "truss desktop --demo"));
+    return;
+  }
   el.replaceChildren(h("strong", null, h("span", { class: "dot" }), "Daemon running"),
     h("span", { class: "mono" }, `${st.address} · pid ${st.pid}`), h("br"), `up ${compact(Date.now() - new Date(st.started_at))} · ${st.version}`);
 }

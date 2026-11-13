@@ -256,6 +256,8 @@ h3 { font-size: 12px; line-height: 18px; color: var(--text-2); font-weight: 500;
 kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); color: var(--text-3); font-size: 11px; line-height: 1; }
 .conn { display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-sm); font: 12px var(--mono); color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .conn .lat { color: var(--text-3); }
+.conn.demo { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: var(--accent-soft); color: var(--accent-text); font-family: var(--sans); font-weight: 500; }
+.conn.demo .dot, .dot.demo { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 .icon-btn { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--text-2); cursor: pointer; padding: 0; }
 .icon-btn:hover { background: var(--hover); color: var(--text); border-color: var(--line-2); }
 .icon-btn[aria-expanded="true"] { background: var(--press); color: var(--text); }

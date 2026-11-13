@@ -175,10 +175,14 @@ func (in invocation) daemonStatus(ctx context.Context, h home.Dir) int {
 }
 
 // desktop prints the address of TRUSS Desktop and opens it in the browser.
+// With --demo it needs no daemon and serves the page with sample data instead.
 func (in invocation) desktop(ctx context.Context) int {
-	pos, flags, err := options(in.args, nil, []string{"no-open"})
+	pos, flags, err := options(in.args, nil, []string{"no-open", "demo"})
 	if err != nil || len(pos) != 0 {
 		return in.usage()
+	}
+	if flags["demo"] != "" {
+		return in.desktopDemo(ctx, flags["no-open"] == "")
 	}
 	c, err := in.dial(ctx)
 	if err != nil {
