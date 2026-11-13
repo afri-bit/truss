@@ -189,7 +189,7 @@ succeeded
 failed
 ```
 
-A step that is stopped because another step failed is `failed`. A step that never started is omitted from the run log, not reported as `skipped`. An interrupted run reports no status. `cancelled` is not a status in v0.1.0.
+A step that is stopped because another step failed is `failed`. A step that never started only because an earlier failure ended the run is omitted from the run log, not reported as `skipped`. A step skipped by an `if` condition, or because a step it needs did not succeed, is logged and shown as `skipped` with the reason (spec 009). A step with `retries` has one attempt per run of its command; its result is the last attempt. A step that failed under `continue-on-error` is `failed` and does not fail the run (a tolerated failure). An interrupted run reports no status. `cancelled` is not a status in v0.1.0.
 
 ### Exit Code
 

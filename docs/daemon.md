@@ -97,7 +97,7 @@ as `failed` with the reason.
 |---|---|
 | `queued` | Waiting for a free slot or for an earlier run of the same pipeline. |
 | `running` | Steps are executing. |
-| `succeeded` | Every step succeeded. |
+| `succeeded` | No step failed the run. A step with `continue-on-error` can fail and the run still succeeds. |
 | `failed` | A step failed; the note names it. |
 | `cancelled` | You cancelled it, or the daemon stopped while it was running. |
 | `skipped` | Requested but never started: a missed schedule, or `overlap: skip`. |
@@ -106,7 +106,13 @@ The trigger says why a run exists: `manual`, `schedule`, `catch-up`, or `local` 
 shell with `truss run --track`, only recorded by the daemon).
 
 Steps are `pending`, `running`, `succeeded`, `failed`, `stopped` (ended because another step
-failed), `cancelled`, or `skipped` (the run ended before they started).
+failed), `cancelled`, or `skipped` (never started: the run ended first, an `if` condition was false, or a step it
+needs did not succeed).
+
+A step also carries, only where they apply: `attempts` (the number of the current or last
+attempt, once a step was run again after a failure), `continued_on_error` (a failed step whose
+`continue-on-error` let the run go on) and `reason` (why a step was skipped). While a step waits
+to retry it is `running` and keeps the exit code of its last attempt.
 
 ## What runs see
 

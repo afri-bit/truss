@@ -3,12 +3,14 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/afri-bit/truss/internal/pipeline"
 )
@@ -99,6 +101,25 @@ func (r *eventLog) StepFinished(id string, exitCode *int, startErr error) {
 		ev.chunk = startErr.Error()
 	}
 	r.events = append(r.events, ev)
+}
+
+func (r *eventLog) StepRetrying(id string, attempt, attempts int, delay time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, stepEvent{kind: "retrying", id: id, chunk: fmt.Sprintf("%d/%d %s", attempt, attempts, delay)})
+}
+
+func (r *eventLog) StepContinued(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, stepEvent{kind: "continued", id: id})
+}
+
+// StepSkipped keeps the reason in chunk.
+func (r *eventLog) StepSkipped(id, reason string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, stepEvent{kind: "skipped", id: id, chunk: reason})
 }
 
 func (r *eventLog) phases() []string {

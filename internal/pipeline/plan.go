@@ -62,8 +62,9 @@ func flatten(p Pipeline) []Step {
 		for _, need := range job.Needs {
 			needs = append(needs, last[need])
 		}
-		for _, s := range job.Steps {
+		for i, s := range job.Steps {
 			s.ID = joinID(job.ID, s.ID)
+			s.Job, s.JobFirst, s.JobIf = job.ID, i == 0, job.If
 			s.Needs = needs
 			s.Env = mergeEnv(p.Env, job.Env, s.Env)
 			s.Secrets = mergeNames(p.Secrets, job.Secrets, s.Secrets)

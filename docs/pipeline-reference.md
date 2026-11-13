@@ -181,6 +181,10 @@ Windows). Every step starts a new shell, so `cd` or `export` in one step does no
 | `secrets` | no | Stored secrets for this step. |
 | `dir` | no | Working directory, relative to where the run starts: your current directory for `truss run`, the file's directory for the daemon. |
 | `timeout` | no | Ends the step when it runs longer: `90s`, `5m`, `1h30m`. |
+| `retries` | no | Extra attempts after a failure, 0 to 100. Default 0. See [Retries](#retries). |
+| `retry_delay` | no | Wait before each retry, same format as `timeout`. Needs `retries`. |
+| `continue-on-error` | no | `true` lets the run go on when this step fails. Default `false`. |
+| `if` | no | A condition; the step runs only when it holds. See [Conditions](#conditions). |
 
 A step's working directory is the first one set of: its own `dir`, its job's `dir`,
 `pipeline.workdir`, the run's starting directory. They replace each other; they are not joined,
@@ -203,6 +207,7 @@ A job is a named list of steps for one purpose: build, test, deploy.
 | `env` | no | Variables for every step of the job. |
 | `secrets` | no | Stored secrets for every step of the job. |
 | `dir` | no | Working directory for the job's steps; a step's own `dir` replaces it. |
+| `if` | no | A condition for the whole job, checked once when its first step is ready. |
 
 Job ids use letters, digits, `.`, `_` and `-`. In logs and in TRUSS Desktop a step of a job is
 named `job/step`, for example `build/compile`.
@@ -242,8 +247,93 @@ name. Pipeline `env` can override both variables like any other. To clear a cach
 ## When something fails
 
 The first failed step fails the run. Steps that are still running are stopped, and nothing new
-starts. A step fails when its command exits with a non-zero code, cannot start, is ended by a
-signal, or runs past its `timeout`.
+starts, except the steps that ask for it with `if: always()` or `if: failure()`. A step fails
+when its command exits with a non-zero code, cannot start, is ended by a signal, or runs past
+its `timeout`. `truss run` then exits 1.
+
+### Retries
+
+```yaml
+- id: fetch
+  run: curl -fsS https://example.com/data.json -o data.json
+  retries: 2          # at most 3 attempts
+  retry_delay: 10s    # wait between attempts
+```
+
+Any failed attempt is run again, and `timeout` applies to each attempt. The step's result is its
+last attempt. In the run log every attempt has its own lines:
+
+```text
+step fetch started
+step fetch finished duration 0.210s exit 22
+step fetch retry 2 of 3 in 10.000s
+step fetch started
+step fetch finished duration 0.180s exit 0
+```
+
+A step is not retried when the run is interrupted, or when TRUSS stopped it because another step
+failed the run. A step that is waiting to retry at that moment is stopped. A step whose `if`
+calls `always()` or `failure()` and that starts after the run failed is retried normally.
+
+### continue-on-error
+
+```yaml
+- id: lint
+  run: make lint
+  continue-on-error: true
+```
+
+The failure is logged and shown, but the run does not fail, `truss run` can still exit 0, and
+other steps keep going. A step that `needs` a failed `continue-on-error` step is skipped, unless
+its `if` says otherwise (for example `if: failure()`).
+
+### Conditions
+
+`if` takes an expression. A step without `if` runs when every step it `needs` succeeded.
+
+| Part | Meaning |
+|---|---|
+| `success()` | every step this step `needs` succeeded (always true without `needs`) |
+| `failure()` | at least one step this step `needs` failed, was stopped, or timed out |
+| `always()` | true |
+| `env.NAME` | the value of NAME as the step would see it, or empty when unset |
+| `'text'` or `"text"` | a literal, no escapes |
+| `==` `!=` | compare two values |
+| `!` `&&` `\|\|` `( )` | not, and, or, grouping |
+
+An expression with no status function means `success() && (...)`. Quote the whole expression
+when it starts with `!` or contains `: `.
+
+```yaml
+steps:
+  - id: build
+    run: make build
+  - id: deploy
+    needs: [build]
+    if: env.STAGE == 'prod'
+    run: make deploy
+  - id: notify
+    needs: [build, deploy]
+    if: failure()
+    run: ./tell-the-team.sh
+  - id: cleanup
+    needs: [build, deploy, notify]
+    if: always()
+    run: make clean
+```
+
+On a job, `if` is checked once, when the job's first step is ready. If it is false, every step
+of the job is skipped; if it is true it replaces the default check for the first step (the jobs
+it needs may have failed, for example a job with `if: always()`).
+
+A skipped step is logged as `step deploy skipped because its if condition is false` (or `because
+step build did not succeed`) and shown as skipped in TRUSS Desktop. The log never prints the
+values an expression compared. A step with `always()` and no `needs` starts at once, so use
+`needs` to run it last. After a failure only steps whose condition calls `always()` or
+`failure()` start; `success()` and plain comparisons do not. The check is on the text of the expression: any
+expression that calls `always()` or `failure()` counts, even inside `!`. A job's `if` with such a
+call lets every step of that job start after a failure. A job whose first step is skipped
+because of the jobs it needs (or an earlier failure) is skipped as a whole.
 
 ## Recipes
 

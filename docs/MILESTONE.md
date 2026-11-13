@@ -27,6 +27,7 @@ that matches it. `go.mod` already says `// version: 0.1.0`. The changelog stays 
 | Run tracking and queue | Queued runs survive a daemon restart; `truss run --track` reports a local run to the daemon (`local` trigger) | `010-run-tracking-and-queue` | Implemented |
 | Secrets | `truss secret`, `secrets` in the pipeline file, redaction of values in step output | `012-secrets` | Implemented |
 | TRUSS Desktop | Dashboard, pipeline control, run view with graph and live log | `007-truss-desktop` | First version |
+| Retries and conditions | `retries`, `retry_delay`, `continue-on-error`, `if` on steps, `if` on jobs | `009-retries-and-conditions` | Implemented |
 
 **Operating systems.** Linux, macOS and Windows. A `run` string is a command for that host's
 shell; v0.1.0 does not promise that one file runs unchanged on every shell.
@@ -43,7 +44,7 @@ These are known gaps inside the release scope:
 ### Not in v0.1.0
 
 - Container execution and remote workers
-- Matrix builds, conditions, retries, caches, artifacts
+- Matrix builds, caches, artifacts, step outputs in conditions
 - Encrypted or OS-keychain secret storage, per-pipeline secret scope
 - Triggers other than cron and manual (file changes, webhooks)
 - A packaged desktop window, tray icon and notifications
