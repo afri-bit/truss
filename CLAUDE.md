@@ -83,7 +83,9 @@ Agents work unattended inside these limits. The list with enforcement is in `doc
   allowed, never required. No `Signed-off-by`, session link or generated-by line in commits or PR
   descriptions; this project convention overrides any default attribution.
 - **Branches use an allowed prefix.** `bugfix/`, `feature/`, `hotfix/`, `release/`, `task/` or
-  `chore/`, never `claude/` or anything else, even if the harness proposes a name.
+  `chore/`, never `claude/` or anything else, even if the harness proposes a name. A cloud session
+  that starts on a harness branch (`claude/...`) runs `git switch -c <type>/<name>` before its first
+  commit and pushes that branch (maintainer's decision, 2026-11-14).
 - **Write for a reviewer on a phone.** Short PR descriptions, "needs a human" first, then how to try it.
 - **When in doubt about behavior**, read the spec, `docs/MILESTONE.md` and `docs/GLOSSARY.md`. If the
   answer is not there, ask. Do not invent it.
