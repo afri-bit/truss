@@ -1,37 +1,43 @@
 #!/usr/bin/env bash
-# Usage: scripts/verify.sh [--e2e] [--only name,name,...]
+# Usage: scripts/verify.sh [--only name,name,...]
 #
-# TRUSS's local quality gate, the same checks CI runs. Prints one line per
-# check and exits 1 if any check fails or its tool is missing, 0 otherwise.
-# A missing tool is reported as "missing" and never counts as a pass.
+# TRUSS's local quality gate, the same checks CI runs, for Linux and macOS
+# (bash 3.2 or later). Prints one line per check and exits 1 if any check
+# fails or its tool is missing, 0 otherwise. A missing tool is reported as
+# "missing" and never counts as a pass. Exit 2 is a usage error.
 #
-# Checks: gofmt, vet, lint (Linux, Windows and macOS files), test (-race),
-# tooling (memory validation, Python and shell tests), e2e (built binary).
-# e2e runs with --e2e, or when the branch changes cmd/, internal/executor/,
-# internal/runlog/ or .github/scripts/ compared with develop.
+# Checks: gofmt, vet, lint (golangci-lint v2.15.0 on Linux, Windows and macOS
+# files), test (-race), tooling (memory validation, Python and shell tests),
+# e2e (the built binary). --only runs a subset, for example --only gofmt,vet.
 #
-# The last line names the commit the result belongs to; paste the output into
-# the pull request as verification evidence. Must stay compatible with bash 3.2.
+# The last lines name the commit the result belongs to; paste the output into
+# the pull request as verification evidence.
 set -u
+
+lint_version=2.15.0
+checks="gofmt vet lint test tooling e2e"
+usage="usage: verify.sh [--only name,...]   names: ${checks// /, }"
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root" || exit 2
 
-e2e=auto
 only=""
 while [ $# -gt 0 ]; do
 	case "$1" in
-	--e2e) e2e=yes ;;
 	--only)
-		[ $# -ge 2 ] || { echo "usage: verify.sh [--e2e] [--only name,...]" >&2; exit 2; }
+		[ $# -ge 2 ] && [ -n "$2" ] || { echo "$usage" >&2; exit 2; }
+		for name in $(echo "$2" | tr ',' ' '); do
+			case " $checks " in *" $name "*) ;; *) echo "verify.sh: unknown check '$name'; $usage" >&2; exit 2 ;; esac
+		done
 		only=",$2,"; shift ;;
-	-h | --help) sed -n '2,15p' "$0"; exit 0 ;;
-	*) echo "usage: verify.sh [--e2e] [--only name,...]" >&2; exit 2 ;;
+	-h | --help) sed -n '2,/^set -u/p' "$0" | sed '$d'; exit 0 ;;
+	*) echo "$usage" >&2; exit 2 ;;
 	esac
 	shift
 done
 
-logs="$(mktemp -d)"
+logs="$(mktemp -d)" || exit 2
+[ -n "$logs" ] && [ -d "$logs" ] || exit 2
 trap 'rm -rf "$logs"' EXIT
 failed=0
 summary=""
@@ -42,12 +48,13 @@ wanted() { [ -z "$only" ] || case "$only" in *",$1,"*) return 0 ;; *) return 1 ;
 record() {
 	summary="$summary$(printf '%-9s %s' "$1" "$2")${3:+  ($3)}
 "
-	case "$2" in pass | skipped) ;; *) failed=1 ;; esac
+	case "$2" in pass) ;; *) failed=1 ;; esac
 }
 
 # check NAME COMMAND...: runs the command, keeps its output for the report.
 check() {
-	local name="$1"; shift
+	local name="$1"
+	shift
 	if "$@" >"$logs/$name.log" 2>&1; then
 		record "$name" pass
 	else
@@ -57,11 +64,18 @@ check() {
 	fi
 }
 
-# Prefer the copy `go install` put in GOPATH/bin: it is built with this
-# module's Go. An older copy elsewhere on PATH fails to load the config.
+# Prefer the copy `go install` writes (GOBIN, else the first GOPATH entry):
+# it is built with this module's Go. An older copy on PATH fails to load the
+# config.
 find_lint() {
-	if [ -x "$(go env GOPATH)/bin/golangci-lint" ]; then
-		echo "$(go env GOPATH)/bin/golangci-lint"
+	local gobin gopath
+	gobin="$(go env GOBIN)"
+	gopath="$(go env GOPATH)"
+	gopath="${gopath%%:*}"
+	if [ -n "$gobin" ] && [ -x "$gobin/golangci-lint" ]; then
+		echo "$gobin/golangci-lint"
+	elif [ -n "$gopath" ] && [ -x "$gopath/bin/golangci-lint" ]; then
+		echo "$gopath/bin/golangci-lint"
 	elif command -v golangci-lint >/dev/null 2>&1; then
 		command -v golangci-lint
 	fi
@@ -87,6 +101,8 @@ e2e_run() {
 	go build -o "$logs/truss" ./cmd/truss && bash .github/scripts/e2e-test.sh "$logs/truss"
 }
 
+install_hint="go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$lint_version"
+
 if ! command -v go >/dev/null 2>&1; then
 	for c in gofmt vet lint test e2e; do wanted "$c" && record "$c" missing "go not found"; done
 else
@@ -95,7 +111,9 @@ else
 	if wanted lint; then
 		lint="$(find_lint)"
 		if [ -z "$lint" ]; then
-			record lint missing "install: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0"
+			record lint missing "install: $install_hint"
+		elif ! "$lint" version 2>/dev/null | grep -q "version $lint_version "; then
+			record lint fail "$lint is not v$lint_version; install: $install_hint"
 		else
 			check lint lint_all
 		fi
@@ -111,22 +129,13 @@ if wanted tooling; then
 	fi
 fi
 
-if wanted e2e && command -v go >/dev/null 2>&1; then
-	if [ "$e2e" = auto ]; then
-		base="$(git merge-base HEAD origin/develop 2>/dev/null || git merge-base HEAD develop 2>/dev/null || true)"
-		if [ -n "$base" ] && git diff --name-only "$base" HEAD |
-			grep -qE '^(cmd/|internal/executor/|internal/runlog/|\.github/scripts/)'; then
-			e2e=yes
-		fi
-	fi
-	if [ "$e2e" = yes ]; then check e2e e2e_run; else record e2e skipped "CLI paths unchanged; --e2e to force"; fi
-fi
+wanted e2e && command -v go >/dev/null 2>&1 && check e2e e2e_run
 
 printf '%s' "$summary"
 dirty=""
 [ -n "$(git status --porcelain 2>/dev/null)" ] && dirty=" + uncommitted changes"
-echo "commit    $(git rev-parse --short HEAD 2>/dev/null || echo unknown)$dirty"
-if [ "$failed" -ne 0 ]; then
+echo "commit    $(git rev-parse --short HEAD 2>/dev/null || echo none)$dirty"
+if [ "$failed" -ne 0 ] || [ -z "$summary" ]; then
 	echo "result    FAIL"
 	exit 1
 fi
