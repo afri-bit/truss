@@ -71,13 +71,18 @@ while IFS= read -r segment; do
   [ "${#tok[@]}" -gt 0 ] || continue
   for i in "${!tok[@]}"; do tok[$i]=${tok[$i]//[\"\']/}; done
 
+  # Leading VAR=value assignments (also after `env`) and `git -c key=value` are kept: a
+  # commit must not override the author identity through them.
   idx=0
-  while [[ "${tok[idx]:-}" == *=* ]]; do idx=$((idx + 1)); done
+  overrides=()
+  [ "${tok[idx]:-}" = env ] && idx=$((idx + 1))
+  while [[ "${tok[idx]:-}" == *=* ]]; do overrides+=("${tok[idx]}"); idx=$((idx + 1)); done
   [ "${tok[idx]:-}" = git ] || continue
   idx=$((idx + 1))
   while [[ "${tok[idx]:-}" == -* ]]; do
     case "${tok[idx]}" in
-      -C | -c) idx=$((idx + 2)) ;;
+      -c) overrides+=("${tok[idx + 1]:-}"); idx=$((idx + 2)) ;;
+      -C) idx=$((idx + 2)) ;;
       *) idx=$((idx + 1)) ;;
     esac
   done
@@ -122,11 +127,17 @@ while IFS= read -r segment; do
     case "$a" in
       --no-verify | --no-gpg-sign) deny "do not skip hooks or signing." ;;
       -n) [ "$sub" = commit ] && deny "do not skip hooks (commit -n)." ;;
-      --author | --author=*) [ "$sub" = commit ] && deny "do not set the author with --author; commits are authored by afri-bit (git config). Name a helper with a Co-authored-by trailer." ;;
+      --au*) [ "$sub" = commit ] && deny "do not set the author with --author; commits are authored by afri-bit (git config). Name a helper with a Co-authored-by trailer." ;;
     esac
   done
 
   if [ "$sub" = commit ]; then
+    for o in "${overrides[@]}"; do
+      case "$o" in
+        GIT_AUTHOR_* | GIT_COMMITTER_* | user.name=* | user.email=* | author.* | committer.*)
+          deny "do not override the commit identity ($o); commits are authored by afri-bit (git config). Name a helper with a Co-authored-by trailer." ;;
+      esac
+    done
     ident=$(git -C "${CLAUDE_PROJECT_DIR:-.}" var GIT_AUTHOR_IDENT 2>/dev/null || true)
     ident_name=${ident%% <*}
     ident_email=${ident#*<}; ident_email=${ident_email%%>*}
