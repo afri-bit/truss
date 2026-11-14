@@ -7,7 +7,9 @@ paths:
 
 # Specifications
 
-Principle I: required behavior lives in `specs/<feature>/spec.md` before implementation.
+Principle I: behavior users can depend on is written down in `specs/<feature>/spec.md`, in the same
+pull request as the code (before, during or right after it). `spec.md` is the only required artifact;
+the others are optional aids (constitution 2.0, ADR 0005).
 
 - `spec.md` holds what and why, with independently testable user stories. `plan.md` holds
   technical decisions. `tasks.md` holds the work. Do not put implementation detail in a spec
