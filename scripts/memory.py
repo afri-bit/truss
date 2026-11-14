@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import unicodedata
 import os
 import re
 import sys
@@ -829,8 +830,10 @@ def apply_state_change(state: dict, key: str, value: str) -> None:
 
 
 def printable(text: str, limit: int = 120) -> str:
-    """One line of plain text: control characters become spaces, long text is cut."""
-    flat = "".join(" " if ord(ch) < 32 or ord(ch) == 127 else ch for ch in text).strip()
+    """One line of plain text: control characters and line or paragraph separators (ASCII and
+    Unicode) become spaces, long text is cut."""
+    flat = "".join(" " if unicodedata.category(ch)[0] == "C" or unicodedata.category(ch) in ("Zl", "Zp")
+                   else ch for ch in text).strip()
     return flat if len(flat) <= limit else flat[: limit - 1] + "…"
 
 
