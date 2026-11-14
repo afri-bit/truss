@@ -14,7 +14,8 @@ $ARGUMENTS
 
 # Recall
 
-1. Read `.agent/memory/INDEX.md`. Run `python3 scripts/memory.py state list --open` to see work in progress.
+1. Read `.agent/memory/INDEX.md`. Run `python3 scripts/memory.py state list --open` to see work in
+   progress without a PR (open PRs are the main record of work in progress).
 2. Pick topics from the input (and the task). For each:
    `python3 scripts/memory.py search --topic <topic>`; also `search --text "<word>"` for loose terms.
 3. Open only the matching entries and read them. Check `status` (ignore superseded unless asked) and

@@ -29,23 +29,29 @@ The binding text is the constitution's "Agentic Operation" section; this page is
 
 ## Roster
 
-The main session is the **orchestrator** (model alias `opusplan`). Agents do not call agents.
+The main session is the **orchestrator and the builder** (model alias `opusplan`): it implements and
+integrates the change itself and delegates where an agent adds value. Repository agents do not start
+agents (their `tools` lists leave out `Agent`).
 
-| Agent | Model | Access | Use for |
-|---|---|---|---|
-| `lead` | opus | edit + delegate | Placeholder for unattended mode: the orchestrator of an issue-driven run (main session only) |
-| `planner` | opus | read-only | Approach, boundaries, compatibility, task list tagged `low`/`high` |
-| `architect` | opus | docs | ADRs, constitution amendments, dependency and boundary decisions |
-| `go-engineer` | sonnet | edit | Go code in `cmd/` and `internal/`, test-first |
-| `test-writer` | sonnet | edit | Failing tests first; contract, integration and e2e tests |
-| `devops-engineer` | sonnet | edit | Workflows, release scripts, lint configuration |
-| `docs-writer` | haiku | docs | README, CHANGELOG, formatting ADRs, PR text |
-| `reviewer` | opus | read-only | Independent code review |
-| `spec-reviewer` | opus | read-only | Implementation versus spec, plan, tasks and constitution gates |
-| `security-reviewer` | opus | read-only | Execution safety, secrets, input handling, supply chain |
-| `portability-reviewer` | sonnet | read-only | Linux, macOS and Windows behavior |
-| `check-runner` | haiku | read-only | Runs the gate and reports compactly |
-| `memory-keeper` | haiku | `.agent/` | Reviews, deduplicates and supersedes memory |
+**Status** says how the PR history shows each agent used (2026-11): *core* agents run on most
+changes; *optional* ones are kept for when their own context, tools or model help, and are reviewed
+again with usage data before any is removed.
+
+| Agent | Status | Model | Access | Use for |
+|---|---|---|---|---|
+| `reviewer` | core | opus | read-only | Independent code review |
+| `security-reviewer` | core (tier 2, guardrail paths) | opus | read-only | Execution safety, secrets, input handling, supply chain |
+| `portability-reviewer` | core (tier 2, OS-facing paths) | sonnet | read-only | Linux, macOS and Windows behavior |
+| `spec-reviewer` | core (behavior changes) | opus | read-only | Implementation versus spec and constitution gates |
+| `planner` | optional | opus | read-only | Approach, boundaries, compatibility for a large or unclear change |
+| `architect` | optional | opus | docs | ADRs, constitution amendments, dependency and boundary decisions |
+| `test-writer` | optional | sonnet | edit | Tests from the spec, written apart from the implementation |
+| `go-engineer` | optional | sonnet | edit | A Go unit in `/fan-out` |
+| `devops-engineer` | optional | sonnet | edit | Workflows, release scripts, lint configuration |
+| `docs-writer` | optional | haiku | docs | README, CHANGELOG, formatting ADRs, PR text |
+| `check-runner` | optional | haiku | read-only | Runs `scripts/verify.sh` in a separate context |
+| `memory-keeper` | optional | haiku | `.agent/` | Reviews, deduplicates and supersedes memory |
+| `lead` | placeholder | opus | edit + delegate | Unattended mode only: the orchestrator of an issue-driven run (main session) |
 
 ## Model policy
 
@@ -63,19 +69,20 @@ The main session is the **orchestrator** (model alias `opusplan`). Agents do not
 
 ## Delivery flow
 
+Constitution 2.0 ([ADR 0005](decisions/0005-specs-record-they-do-not-gate.md)): specs record behavior,
+they do not gate code. `/feature` runs this flow.
+
 | Tier | Class | Flow |
 |---|---|---|
 | 0 | Chore | branch, change, `/verify`, PR. No spec |
-| 1 | Feature | `/speckit-specify`, `-clarify`, planner, `-plan`, `-tasks`, `-analyze` gate, commit specs, `-implement` (test first), `/verify`, `/review`, docs, PR |
-| 2 | Contract or execution safety | Tier 1 plus clarify always, planner always, compatibility note, ADR where decided, security and portability review, "Needs a human" list |
+| 1 | Feature | `spec.md`, tests and code in one PR (any order; test first recommended), `/verify`, `/review`, fix, `/review delta`, PR |
+| 2 | Contract or execution safety | Tier 1 plus a compatibility note, an ADR where a contract or boundary is decided, security and portability review, "Needs a human" list. Spec Kit (`/speckit-plan`, `-tasks`, `-analyze`) and `planner` are recommended for a large or unclear change, never required |
 
 ```
-REQUEST ─ /recall ─ classify (tier) ─ read MILESTONE
-SPEC      /speckit-specify → /speckit-clarify → planner → /speckit-plan → /speckit-tasks
-GATE      /speckit-analyze: no CRITICAL or HIGH · commit + push specs/NNN-name/
-BUILD     /speckit-implement: test-writer (red) → go-engineer (green) → tick task
-QUALITY   /verify → /review (reviewer, spec-, security-, portability-reviewer) → fix → /verify
-SHIP      docs-writer → /handoff → /git-commit → /pr-description → PR against develop (never merge)
+REQUEST ─ /recall ─ read MILESTONE ─ branch <type>/<name> ─ classify (tier, in the PR)
+BUILD     spec.md + tests + code (main session; /fan-out only for independent units)
+QUALITY   /verify (scripts/verify.sh) → /review → fix → /verify → /review delta <sha>
+SHIP      /git-commit → /pr-description → PR against develop (never merge)
 ```
 
 Tools enforce at every tier: hooks, permissions, CI and the agent gate.
@@ -97,7 +104,8 @@ Agents talk through artifacts, not shared context.
 |---|---|---|
 | Delegation brief | Goal, spec path, scope, rules, expected output, what not to touch | Orchestrator |
 | Handoff report | Done, Checks, Decisions, Needs human, Follow-ups | Every agent |
-| Work state `.agent/state/` | Step, blockers, questions, next actions | Orchestrator, `/handoff` |
+| PR description | Where the work stands: needs-a-human, checks, reviewed commit, follow-ups | Main session |
+| Work state `.agent/state/` (optional) | Step, blockers, next actions for work that spans sessions | `/handoff` |
 | Event log `.agent/log/` | Decisions, handoffs, PRs, memory changes | Anyone, via the tool |
 | Memory `.agent/memory/` | Durable facts and lessons | `/remember`, `memory-keeper` |
 | ADR `docs/decisions/` | A decision with context and consequences | `architect`, `/adr` |
@@ -109,11 +117,21 @@ Agents talk through artifacts, not shared context.
 
 ## Shared workspace
 
-`.agent/` is the shared board for every session, local or hosted, and every agent. It is committed and
-reviewed like code. One branch has one owner session and one work-state file, so parallel sessions
-(separate branches or worktrees) do not conflict. `/team-status` shows the board; `/recall` starts a
-session; `/handoff` ends it. Chat is not a record: anything a later session needs goes into the state,
-the log, memory or an ADR.
+Open pull requests are the board you see on a phone, so the PR description is the record of where a
+piece of work stands. `.agent/` holds what outlives a PR: memory (facts and lessons), and optionally a
+work-state file for work that spans sessions before a PR exists. One branch has one owner session, so
+parallel sessions (separate branches, cloud sessions or worktrees) do not conflict. Open work not
+updated for 7 days is flagged as stale at session start. `/recall` starts a session; `/team-status`
+shows open PRs and state; `/handoff` when work continues elsewhere. Chat is not a record: anything a
+later session needs goes into the PR, memory or an ADR.
+
+### Agent teams and direct messaging
+
+Not used by default. Claude Code's agent teams are experimental; enabling them
+(`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) turns named subagents into teammates that share the lead's
+permission mode and do not survive a resumed session. Try them only for a demonstrated need, such as
+debugging with competing hypotheses or an adversarial review, in a separate cloud environment, and
+record what was learned. Separate features run best as separate cloud sessions and PRs.
 
 ## Quality gates
 
@@ -124,10 +142,10 @@ the log, memory or an ADR.
 | Tests | CI on 3 OSes, `/verify` | any failure; skipped or weakened tests are rejected in review |
 | End to end | `.github/scripts/e2e-test.sh` | built-binary behavior differs |
 | Memory | CI `agent-tooling` | invalid memory, state or log; stale index; secret-like content |
-| Spec analysis | `/speckit-analyze` | CRITICAL or HIGH finding |
+| Spec analysis (only when Spec Kit is used) | `/speckit-analyze` | CRITICAL or HIGH finding |
 | Repository rules | CI `repo-rules` (every push and PR), `guard-git.sh` | a branch outside the allowed prefixes; a commit not authored by `afri-bit` (`Co-authored-by` is fine) |
 | Release check | `release.yml` on a `v*` tag | tag, `go.mod`, `cmd/truss` `Version`, `internal/webui/VERSION` (Desktop) and the latest `CHANGELOG.md` section disagree |
-| Agent gate | `agent-gate` (placeholder, not running; `python3 scripts/agent_gate.py` still runs locally) | branch name, missing spec artifacts, code before specs, missing work state, guardrail paths touched, missing `Open tasks:` line |
+| Agent gate | `agent-gate` (placeholder, not running; `python3 scripts/agent_gate.py` still runs locally) | branch name, missing spec artifacts, code before specs, missing work state, guardrail paths touched, missing `Open tasks:` line. These checks predate constitution 2.0; revisit them before unattended mode is enabled |
 | Independent review | `/review` | open blocker from any reviewer |
 | Human | pull request | the maintainer alone merges |
 
@@ -160,7 +178,7 @@ Hooks are a safety net for agent sessions, not a security boundary. GitHub branc
 | `guard-destructive.sh` | PreToolUse Bash | Blocks `rm -rf` outside build dirs, `git reset --hard`, `git clean`, `gh pr merge`, `gh release`, `sudo`, `curl \| sh`, reading `.env` and key files |
 | `guard-secrets.sh` | PreToolUse Write/Edit | Blocks private keys, well-known credential formats and `.env` files |
 | `format-on-edit.sh` | PostToolUse Write/Edit | Runs `gofmt` on edited `.go` files |
-| `session-context.sh` | SessionStart | Prints branch, active spec, open work and memory status |
+| `session-context.sh` | SessionStart | Prints branch (and the command to leave a harness branch), active spec, open work with stale items flagged, and memory status |
 
 ## Memory and state
 
@@ -169,7 +187,7 @@ Details: [`.agent/README.md`](../.agent/README.md) and `.claude/rules/agent-memo
 | Part | Format | Use |
 |---|---|---|
 | Memory `.agent/memory/MEM-nnnn-*.md` | Markdown + YAML front matter | Durable facts, preferences, lessons, outcomes |
-| Work state `.agent/state/<work-id>.json` | JSON, one file per branch | Tier, step, steps done, blockers, next actions, PR |
+| Work state `.agent/state/<work-id>.json` | JSON, one file per branch, optional | Tier, step, blockers, next actions, PR, for work that spans sessions |
 | Event log `.agent/log/YYYY-MM.jsonl` | JSON Lines, append only | Decisions, handoffs, PRs |
 
 `/recall` at the start of a task, `/remember` for a lasting fact, `/handoff` at the end,
@@ -180,10 +198,10 @@ repeats the constitution or a spec.
 
 | Skill | Purpose |
 |---|---|
-| `/feature` | The delivery pipeline for one change |
-| `/fan-out` | Run independent `[P]` tasks in parallel, then merge, cross-check and verify |
+| `/feature` | Delivery of one change at its tier |
+| `/fan-out` | Run genuinely independent units in parallel worktrees, then merge, cross-check and verify |
 | `/consult` | Two separate written opinions before a contract, safety or dependency decision |
-| `/team-status` | The shared board: open work, blockers, recent events, stale memory |
+| `/team-status` | The board: open PRs, open work state, recent events, stale memory |
 | `/milestone-status` | Release scope versus specs, tasks and code |
 | `/release-readiness` | Can this version be tagged? Read-only; never tags |
 | `/speckit-*` | Spec Kit: specify, clarify, plan, tasks, analyze, implement, converge, checklist, constitution, taskstoissues, git helpers |
