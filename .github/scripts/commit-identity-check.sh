@@ -45,7 +45,7 @@ $list
 EOF2
 
 if [ "$errors" -gt 0 ]; then
-	echo "fix: git config user.name $want_name; git config user.email <your $want_name email>; then git rebase -r $1 --exec 'git commit --amend --no-edit --reset-author' (only on a branch nobody else has pulled)" >&2
+	echo "fix: git config user.name $want_name; git config user.email afribit.tech@gmail.com; then git rebase -r $1 --exec 'git commit --amend --no-edit --reset-author' (only on a branch nobody else has pulled)" >&2
 	exit 1
 fi
 echo "$count commit(s) authored by $want_name"

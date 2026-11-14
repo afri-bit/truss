@@ -122,6 +122,7 @@ while IFS= read -r segment; do
     case "$a" in
       --no-verify | --no-gpg-sign) deny "do not skip hooks or signing." ;;
       -n) [ "$sub" = commit ] && deny "do not skip hooks (commit -n)." ;;
+      --author | --author=*) [ "$sub" = commit ] && deny "do not set the author with --author; commits are authored by afri-bit (git config). Name a helper with a Co-authored-by trailer." ;;
     esac
   done
 

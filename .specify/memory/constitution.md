@@ -1,11 +1,14 @@
 <!--
 Sync Impact Report (2.1.1)
 - Version change: 2.1.0 → 2.1.1 (PATCH: clarification)
-- Modified sections: Commit identity (author email afribit.tech@gmail.com; Claude may be named
-  as co-author). Requested by the maintainer on 2026-11-14.
-- Enforcement unchanged: the author must be afri-bit with a non-tool email; trailers are not checked.
+- Modified sections: Commit identity (the afri-bit email to configure is afribit.tech@gmail.com;
+  Claude may be named as co-author, a case of the existing "tool that helped"). Requested by the
+  maintainer on 2026-11-14. The rule itself is unchanged, so PATCH; ADR 0014 still matches.
+- Enforcement: the author must be afri-bit with a non-tool email; trailers are not checked.
+  guard-git.sh now also refuses `git commit --author`, which bypassed its identity check.
 - Templates requiring updates: CLAUDE.md, .claude/rules/git-workflow.md, the git-commit skill,
-  docs/agents.md, README.md, hook and check test fixtures ✅ updated
+  docs/agents.md, README.md, guard-git.sh and session-context.sh messages, the commit-identity-check
+  hint, hook and check tests, .agent/README.md example, MEM-0011 (supersedes MEM-0009) ✅ updated
 
 Previous report (2.1.0)
 - Version change: 2.0.0 → 2.1.0
@@ -216,8 +219,8 @@ throughput side.
 ### Commit identity
 
 - Every commit MUST be authored by `afri-bit` (author name `afri-bit`,
-  author email `afribit.tech@gmail.com`). Commits authored under a tool or
-  assistant identity are not accepted.
+  with an afri-bit email; configure `afribit.tech@gmail.com`). Commits
+  authored under a tool or assistant identity are not accepted.
 - A `Co-authored-by` trailer MAY be added for a person or tool that
   helped; it is never required. Claude MAY be named as co-author with
   `Co-authored-by: Claude <noreply@anthropic.com>`. `Signed-off-by`, session links and
