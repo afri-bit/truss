@@ -89,6 +89,7 @@ A developer opens a terminal and asks what the CLI can do, or which version is i
 - A latest run log already exists when a definition is rejected.
 - A latest run log already exists when a later run finishes.
 - `.truss` in the working directory exists and is not a directory, or the latest run log cannot be written.
+- `.truss` holds a symbolic link where TRUSS writes (a checkout can carry one): the run log is never written into the link's target.
 - The working directory cannot be determined, so the environment is not ready.
 - Help or version is invoked with extra arguments.
 - `truss run --help` is an explicit path, consistent with `truss run [<path>]`, and is not the help command.
@@ -115,6 +116,7 @@ A developer opens a terminal and asks what the CLI can do, or which version is i
 - **FR-015**: `truss run` MUST keep the current load and execution behavior: no path loads `truss.yaml` from the invoker's working directory; a path loads that file; Steps run in definition order on the host shell; the first failed Step fails the Pipeline Run and later Steps do not run. The process exits 0 when the Pipeline Run succeeded and the latest run log was saved. The process exits non-zero when the definition was rejected, the environment or log location was not usable, or the Pipeline Run failed.
 - **FR-016**: This feature MUST NOT add Pipeline Definition fields. Schema version `"1"` remains version, pipeline name, and Steps with `id` and `run`. Unknown fields remain ignored.
 - **FR-017**: Every occurrence TRUSS writes in the run log MUST show the local date and time it happened. Occurrences are the setup section, each Step start, each presented line of Step output, each Step finish, and the closing summary. A timestamp MUST NOT be earlier than the timestamp of the previous occurrence. The command's own text MUST remain that command's output. A timestamp does not replace duration: each started Step and the closing summary MUST still show duration.
+- **FR-018**: Writing the latest run log MUST NOT follow a symbolic link that already exists inside `.truss`: TRUSS writes the log to a newly created file and then replaces `.truss/run.log` itself, so the target of a link at the temporary or final location is left unchanged. The saved file keeps the usual permissions for a new file (0666 less the umask). (Added 2026-11 as a security fix; `.truss` itself being a link is out of scope.)
 
 ### Quality, Safety & Compatibility *(mandatory when applicable)*
 
