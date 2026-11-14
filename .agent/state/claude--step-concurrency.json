@@ -3,8 +3,8 @@
   "title": "Specify and plan step concurrency (spec 004)",
   "tier": 2,
   "branch": "claude/truss-cursor-to-claude-18fzh9",
-  "status": "in_progress",
-  "step": "pr-b-tests",
+  "status": "done",
+  "step": "merged",
   "steps_done": [
     "speckit-specify",
     "speckit-clarify",
@@ -19,11 +19,8 @@
   "owner_agent": "orchestrator",
   "blockers": [],
   "open_questions": [],
-  "next_actions": [
-    "specify, clarify, planner, plan, tasks, analyze",
-    "PR-B: tests first, then pipeline, engine, cli, docs"
-  ],
-  "pr": null,
+  "next_actions": [],
+  "pr": "https://github.com/afri-bit/truss/pull/3",
   "created": "2026-11-01T09:30:00Z",
-  "updated": "2026-11-01T12:00:00Z"
+  "updated": "2026-11-14T12:21:18Z"
 }

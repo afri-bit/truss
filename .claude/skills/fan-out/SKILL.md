@@ -1,7 +1,7 @@
 ---
 name: "fan-out"
-description: "Run independent tasks of one plan in parallel with separate agents and branches or worktrees, then merge, cross-check and verify. Use when tasks.md has several tasks marked [P] that touch different files or packages."
-argument-hint: "Task IDs to run in parallel, e.g. 'T004 T005 T006'"
+description: "Run genuinely independent units of work in parallel with separate agents in worktrees, then merge, cross-check and verify. Use when two or more units share no files and have a fixed interface; most changes do not qualify."
+argument-hint: "The units to run in parallel: task IDs from tasks.md, or a short list"
 user-invocable: true
 disable-model-invocation: false
 ---
@@ -14,19 +14,26 @@ $ARGUMENTS
 
 # Fan out
 
-1. Read `specs/NNN-name/tasks.md`. Take the tasks named in the input (or all unticked `[P]` tasks of
-   the current phase). Refuse tasks that depend on each other, share a file, or touch execution safety
-   or a public contract without a finished design: those run one at a time.
-2. Check the independence rule: no two tasks edit the same file or package. If they do, serialize them.
-3. For each task, write a delegation brief (goal, spec path, files in scope, rules, expected output,
-   what not to touch, the failing test to write first). Pick the agent and model from the task tag
-   (`low` haiku, `high` sonnet).
-4. Spawn all agents **in one turn**. For tasks that could collide, give each its own worktree
-   (`isolation: worktree`) and merge afterwards.
-5. When all report: read each handoff report, merge worktrees, and check cross-references yourself
-   (symbols, imports, docs and tests that refer to another worker's change). Workers cannot see each
-   other's edits.
-6. Run `/verify`. On failure apply the escalation ladder per task (retry with the error, stronger
-   model, `/consult`, then the maintainer).
-7. Tick the finished tasks in `tasks.md`, update the work state (`state set ... add-step-done=...`) and
-   `/remember` a lesson if a collision or surprise happened. Do not commit unless the pipeline says so.
+Parallel work pays only when units are truly independent; otherwise one session is faster and safer.
+
+1. List the units: the input, `[P]` tasks in `specs/NNN-name/tasks.md` if one exists, or units you
+   split from the change yourself. Write the interface between them down first (types, file names,
+   API shapes); it does not change while workers run.
+2. Independence check: no two units edit the same file, and none touches execution safety or a public
+   contract without a finished design. Anything else runs one at a time in this session.
+3. For each unit, a delegation brief: goal, spec path, files in scope, the interface, rules, the
+   failing test to write first, expected output, what not to touch, and "do not start agents". Prefer
+   a repository agent (`go-engineer`, `test-writer`, `devops-engineer`). Pass a `model` only if the
+   unit is clearly mechanical (haiku) or hard (opus); never haiku for process execution, secrets,
+   concurrency or a public contract (constitution, Agent team).
+4. Spawn all workers **in one turn**, each with `isolation: worktree`.
+5. When all report: read each handoff report, merge the worktrees one at a time, and check
+   cross-references yourself (symbols, imports, docs and tests that refer to another worker's change).
+   Workers cannot see each other's edits.
+6. `/verify` after the merge. On failure: retry the unit with the full error, then a stronger model,
+   then `/consult`, then the maintainer.
+7. Tick tasks in `tasks.md` if there is one, update the work state, and note in the PR that the work
+   was fanned out and how.
+   `/remember` a lesson if a collision or surprise happened.
+
+Separate features that need not land in one PR are better as separate cloud sessions and PRs.

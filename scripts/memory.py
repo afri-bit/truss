@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import unicodedata
 import os
 import re
 import sys
@@ -27,6 +28,7 @@ MEMORY_STATUSES = ("active", "superseded", "archived")
 CONFIDENCES = ("high", "medium", "low")
 WORK_STATUSES = ("planned", "in_progress", "blocked", "in_review", "done", "abandoned")
 CLOSED_STATUSES = ("done", "abandoned")
+STALE_DAYS = 7  # open work not updated for this long is flagged at session start
 EVENTS = (
     "work_started",
     "step_done",
@@ -827,6 +829,14 @@ def apply_state_change(state: dict, key: str, value: str) -> None:
         raise Fail(f"unknown key {key!r}; use one of: {', '.join(allowed)}")
 
 
+def printable(text: str, limit: int = 120) -> str:
+    """One line of plain text: control characters and line or paragraph separators (ASCII and
+    Unicode) become spaces, long text is cut."""
+    flat = "".join(" " if unicodedata.category(ch)[0] == "C" or unicodedata.category(ch) in ("Zl", "Zp")
+                   else ch for ch in text).strip()
+    return flat if len(flat) <= limit else flat[: limit - 1] + "…"
+
+
 def cmd_summary(layout: Layout, args) -> int:
     """Short, never-failing overview for the session start hook."""
     try:
@@ -835,9 +845,29 @@ def cmd_summary(layout: Layout, args) -> int:
         active = [e for e in entries if e["meta"]["status"] == "active"]
         due = [e for e in active if e["meta"].get("review_by", "9999-12-31") < today]
         print(f"- Memory: {len(active)} active entries ({layout.rel(layout.index)}); {len(due)} past review_by")
-        for s in all_states(layout):
-            if s.get("status") not in CLOSED_STATUSES:
-                print(f"- Open work: {s['work_id']} [{s['status']}] tier {s['tier']}, step: {s['step'] or '-'}")
+        # State files are repository content and this output becomes session context: print only
+        # entries that validate, and no control characters, so a crafted file cannot inject text.
+        if layout.state.is_dir():
+            for path in sorted(layout.state.glob("*.json")):
+                try:
+                    s = json.loads(path.read_text(encoding="utf-8"))
+                    valid = isinstance(s, dict) and not check_state(s, expected_id=path.stem)
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    valid = False
+                if not valid:
+                    name = path.name if WORK_ID_RE.match(path.stem) else "a state file"
+                    print(f"- Open work: {name} is invalid; run: python3 scripts/memory.py validate")
+                    continue
+                if s["status"] in CLOSED_STATUSES:
+                    continue
+                step = printable(s["step"]) or "-"
+                line = f"- Open work: {s['work_id']} [{s['status']}] tier {s['tier']}, step: {step}"
+                age = (now() - parse_ts(s["updated"])).days
+                if age >= STALE_DAYS:
+                    line += (f" (stale: not updated for {age} days. Once its PR is"
+                             f" confirmed merged: python3 scripts/memory.py state set {s['work_id']}"
+                             " status=done pr=<url>)")
+                print(line)
     except Exception:  # the hook must never break a session
         print("- Memory: unreadable, run: python3 scripts/memory.py validate")
     return 0

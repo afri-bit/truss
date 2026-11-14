@@ -5,10 +5,10 @@ title: Check ADR numbers and lint toolchain before opening a PR
 summary: Parallel branches can take the same ADR number; check origin/develop first. The cloud golangci-lint cannot load this repo's Go 1.27.3 config.
 topics: [adr, lint, process]
 created: 2026-11-12T22:56:24Z
-updated: 2026-11-12T22:56:24Z
+updated: 2026-11-14T12:16:48Z
 author: claude
 source: conversation
-status: active
+status: superseded
 confidence: high
 related: [ADR-0007, specs/010-run-tracking-and-queue]
 ---
