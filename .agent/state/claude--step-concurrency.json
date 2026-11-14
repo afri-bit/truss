@@ -3,8 +3,8 @@
   "title": "Specify and plan step concurrency (spec 004)",
   "tier": 2,
   "branch": "claude/truss-cursor-to-claude-18fzh9",
-  "status": "in_progress",
-  "step": "pr-b-tests",
+  "status": "done",
+  "step": "merged",
   "steps_done": [
     "speckit-specify",
     "speckit-clarify",
@@ -25,5 +25,5 @@
   ],
   "pr": null,
   "created": "2026-11-01T09:30:00Z",
-  "updated": "2026-11-01T12:00:00Z"
+  "updated": "2026-11-14T12:08:17Z"
 }

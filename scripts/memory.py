@@ -27,6 +27,7 @@ MEMORY_STATUSES = ("active", "superseded", "archived")
 CONFIDENCES = ("high", "medium", "low")
 WORK_STATUSES = ("planned", "in_progress", "blocked", "in_review", "done", "abandoned")
 CLOSED_STATUSES = ("done", "abandoned")
+STALE_DAYS = 7  # open work not updated for this long is flagged at session start
 EVENTS = (
     "work_started",
     "step_done",
@@ -837,7 +838,12 @@ def cmd_summary(layout: Layout, args) -> int:
         print(f"- Memory: {len(active)} active entries ({layout.rel(layout.index)}); {len(due)} past review_by")
         for s in all_states(layout):
             if s.get("status") not in CLOSED_STATUSES:
-                print(f"- Open work: {s['work_id']} [{s['status']}] tier {s['tier']}, step: {s['step'] or '-'}")
+                line = f"- Open work: {s['work_id']} [{s['status']}] tier {s['tier']}, step: {s['step'] or '-'}"
+                age = (now() - parse_ts(s["updated"])).days if s.get("updated") else None
+                if age is not None and age >= STALE_DAYS:
+                    line += (f" (stale: not updated for {age} days; the PR is the record. If it merged,"
+                             f" close it: state set {s['work_id']} status=done)")
+                print(line)
     except Exception:  # the hook must never break a session
         print("- Memory: unreadable, run: python3 scripts/memory.py validate")
     return 0

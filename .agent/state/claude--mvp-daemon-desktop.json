@@ -3,8 +3,8 @@
   "title": "MVP: jobs and schedules, daemon, registry, TRUSS Desktop (specs 005-007)",
   "tier": 2,
   "branch": "claude/cool-dijkstra-9ydyl3",
-  "status": "in_progress",
-  "step": "awaiting-review",
+  "status": "done",
+  "step": "merged",
   "steps_done": [
     "schema-and-engine",
     "daemon-and-api",
@@ -32,7 +32,7 @@
     "Align docs/agents.md and the /feature skill with constitution 2.0.0",
     "Automated UI test for TRUSS Desktop"
   ],
-  "pr": null,
+  "pr": "https://github.com/afri-bit/truss/pull/4",
   "created": "2026-11-11T22:00:00Z",
-  "updated": "2026-11-12T00:30:00Z"
+  "updated": "2026-11-14T12:08:17Z"
 }

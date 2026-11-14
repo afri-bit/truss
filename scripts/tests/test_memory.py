@@ -272,6 +272,16 @@ class WorkState(Base):
         self.assertEqual(code, 0)
         self.assertIn("unreadable", out)
 
+    def test_summary_flags_work_untouched_for_a_week_as_stale(self):
+        self.init()
+        self.run_cli("state", "set", "chore--example", "status=in_progress")
+        _, out, _ = self.run_cli("summary")
+        self.assertNotIn("stale", out)
+        with mock.patch.dict(os.environ, {"MEMORY_NOW": "2026-11-06T09:15:01Z"}):
+            _, out, _ = self.run_cli("summary")
+        self.assertIn("Open work: chore--example", out)
+        self.assertIn("stale: not updated for 7 days", out)
+
 
 class EventLog(Base):
     def test_log_appends_to_the_month_file(self):
