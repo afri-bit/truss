@@ -72,6 +72,6 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 ### Security
 
-- `truss run` no longer writes the run log through a symbolic link planted at `.truss/run.log.tmp`; a repository could carry such a link and overwrite a file outside the folder (specs/002-local-run-log FR-018).
+- `truss run` no longer writes through symbolic links a repository can carry in `.truss`. A link planted at `.truss/run.log.tmp` used to receive the run log, overwriting a file outside the folder. A `.truss`, `.truss/data` or `.truss/data/cache` that is a link is now refused before any step starts; before, the run log, data and cache went into the folder the link pointed to (specs/002-local-run-log FR-018).
 
 [Unreleased]: https://github.com/afri-bit/truss/commits/main

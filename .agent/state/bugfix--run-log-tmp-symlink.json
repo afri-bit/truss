@@ -4,10 +4,18 @@
   "tier": 2,
   "branch": "bugfix/run-log-tmp-symlink",
   "status": "in_progress",
-  "step": "review",
-  "steps_done": [],
-  "requirements": [],
-  "specs": [],
+  "step": "review-fixes",
+  "steps_done": [
+    "fix and tests",
+    "first review"
+  ],
+  "requirements": [
+    "FR-018"
+  ],
+  "specs": [
+    "specs/002-local-run-log",
+    "specs/008-workspace-and-cache"
+  ],
   "owner_agent": "orchestrator",
   "blockers": [],
   "open_questions": [],
@@ -16,5 +24,5 @@
   ],
   "pr": null,
   "created": "2026-11-14T12:39:42Z",
-  "updated": "2026-11-14T12:39:42Z"
+  "updated": "2026-11-14T12:44:33Z"
 }
