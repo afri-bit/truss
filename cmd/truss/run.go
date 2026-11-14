@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -86,15 +90,16 @@ func execute(ctx, runCtx context.Context, def pipeline.Pipeline, cwd string, env
 	if a, absErr := filepath.Abs(cwd); absErr == nil {
 		abs = a
 	}
-	if err := os.MkdirAll(filepath.Join(abs, ".truss"), 0o755); err != nil { // #nosec G301 -- same mode as the run log folder
-		fmt.Fprintf(stderr, "error: prepare data folder: %s\n", err.Error())
-		return 1, api.RunFailed, err.Error()
-	}
 	dataDir := filepath.Join(abs, ".truss", "data")
 	cacheDir := filepath.Join(dataDir, "cache")
-	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
-		fmt.Fprintf(stderr, "error: prepare data folder: %s\n", err.Error())
-		return 1, api.RunFailed, err.Error()
+	for _, d := range []struct {
+		path string
+		mode fs.FileMode
+	}{{filepath.Join(abs, ".truss"), 0o755}, {dataDir, 0o700}, {cacheDir, 0o700}} {
+		if err := realDir(d.path, d.mode); err != nil {
+			fmt.Fprintf(stderr, "error: prepare data folder: %s\n", err.Error())
+			return 1, api.RunFailed, err.Error()
+		}
 	}
 	env = append(append([]string(nil), env...), "TRUSS_DATA_DIR="+dataDir, "TRUSS_CACHE_DIR="+cacheDir)
 
@@ -155,16 +160,11 @@ func interrupted(ctx context.Context, tr *tracker, err error, stderr io.Writer) 
 
 func openRunLog(cwd string, stdout, extra io.Writer) (*runlog.Log, *os.File, string, string, error) {
 	dir := filepath.Join(cwd, ".truss")
-	// The project-local .truss folder keeps the umask-governed 0755 it has always had;
-	// tightening it is a behavior change for a separate decision.
-	if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 -- see above
+	if err := realDir(dir, 0o755); err != nil {
 		return nil, nil, "", "", fmt.Errorf("prepare run log: %w", err)
 	}
-	tmpPath := filepath.Join(dir, "run.log.tmp")
 	dest := filepath.Join(dir, "run.log")
-	// The name is fixed, but os.Create follows a symlink a checkout may plant at
-	// .truss/run.log.tmp; tracked as a follow-up (execution safety).
-	f, err := os.Create(tmpPath) // #nosec G304 -- fixed name under .truss; see above
+	f, tmpPath, err := createTemp(dir, "run.log.", ".tmp")
 	if err != nil {
 		return nil, nil, "", "", fmt.Errorf("prepare run log: %w", err)
 	}
@@ -173,6 +173,57 @@ func openRunLog(cwd string, stdout, extra io.Writer) (*runlog.Log, *os.File, str
 		out = io.MultiWriter(stdout, f, extra)
 	}
 	return runlog.New(out, time.Now), f, tmpPath, dest, nil
+}
+
+// realDir makes sure path is a directory of its own, creating it with mode when
+// it is missing (its parent must exist). A symbolic link or Windows junction is
+// refused, as is anything that is not a directory: a checkout can carry a link
+// at .truss or .truss/data, and TRUSS must not write the run log, data or cache
+// into the folder it points to (specs/002-local-run-log FR-018).
+//
+// The project-local .truss folder keeps the 0755 (less umask) it always had;
+// tightening it is a behavior change left for a separate decision.
+func realDir(path string, mode fs.FileMode) error {
+	// Create first: Mkdir never follows a link, and finding the folder already
+	// there (another run may have just made it) is fine once it checks out.
+	err := os.Mkdir(path, mode) // #nosec G301 -- .truss keeps 0755; data and cache use 0700
+	if err == nil || !errors.Is(err, fs.ErrExist) {
+		return err
+	}
+	info, err := os.Lstat(path)
+	switch {
+	case err != nil:
+		return err
+	case info.Mode()&(fs.ModeSymlink|fs.ModeIrregular) != 0:
+		return fmt.Errorf("%s is a link or other reparse point; TRUSS does not write through links in .truss", path)
+	case !info.IsDir():
+		return fmt.Errorf("%s is not a directory", path)
+	}
+	return nil
+}
+
+// createTemp creates a new file prefix<random>suffix in dir. O_EXCL means it
+// never opens an existing file, so a symbolic link a checkout planted in .truss
+// is not followed. Unlike os.CreateTemp it keeps the usual 0666 mode less the
+// umask, so the saved run log has the permissions it always had.
+func createTemp(dir, prefix, suffix string) (*os.File, string, error) {
+	var lastErr error
+	for range 10 {
+		var b [8]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			return nil, "", err
+		}
+		path := filepath.Join(dir, prefix+hex.EncodeToString(b[:])+suffix)
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666) // #nosec G302 G304 -- new file under .truss; mode as os.Create
+		if err == nil {
+			return f, path, nil
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			return nil, "", err
+		}
+		lastErr = err
+	}
+	return nil, "", lastErr
 }
 
 func commitRunLog(tmp *os.File, tmpPath, dest string) error {
@@ -193,7 +244,8 @@ func replaceFile(tmpPath, dest string) error {
 	if err == nil {
 		return nil
 	}
-	if _, statErr := os.Stat(dest); statErr != nil {
+	// Lstat: a link at dest (even a dangling one) is moved aside, never followed.
+	if _, statErr := os.Lstat(dest); statErr != nil {
 		return err
 	}
 	backup := dest + ".bak"

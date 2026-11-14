@@ -78,9 +78,7 @@ func assertLogUntouched(t *testing.T, logPath string, previous []byte) {
 	if !bytes.Equal(got, previous) {
 		t.Fatalf("run log changed to %q, want %q", got, previous)
 	}
-	if _, err := os.Stat(logPath + ".tmp"); !os.IsNotExist(err) {
-		t.Fatalf("temporary run log left behind: %v", err)
-	}
+	assertNoTemporaryLog(t, filepath.Dir(logPath))
 }
 
 func TestRun_CancelledContextEndsStepsAndKeepsLog(t *testing.T) {

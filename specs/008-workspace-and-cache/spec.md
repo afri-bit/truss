@@ -46,7 +46,8 @@ Tier 2 (pipeline schema, process environment, a CLI command). The user-facing te
   unregister. Registering the name again finds the old contents.
 - **FR-007** `truss run` creates `.truss/data/` and `.truss/data/cache/` in the current
   directory (the folder that already holds `run.log`) and sets the same two variables to
-  their absolute paths. **Decision:** a separate `data` folder keeps step files apart from
+  their absolute paths. If `.truss`, `.truss/data` or `.truss/data/cache` is a symbolic link, the
+  run fails before any step starts (specs/002-local-run-log FR-018). **Decision:** a separate `data` folder keeps step files apart from
   TRUSS's own `run.log`, and the rule "cache is `$TRUSS_DATA_DIR/cache`" holds in both modes.
   The folders are per project and per current directory, not per pipeline name. If they cannot
   be created `truss run` exits 1 with `error: prepare data folder: ...` before any step runs.
