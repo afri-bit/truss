@@ -27,6 +27,7 @@ while [ $# -gt 0 ]; do
 	--only)
 		[ $# -ge 2 ] && [ -n "$2" ] || { echo "$usage" >&2; exit 2; }
 		set -f # no glob expansion of the names
+		[ -n "$(printf '%s' "$2" | tr -d ', ')" ] || { echo "$usage" >&2; exit 2; }
 		for name in $(printf '%s' "$2" | tr ',' ' '); do
 			case " $checks " in *" $name "*) ;; *) echo "verify.sh: unknown check '$name'; $usage" >&2; exit 2 ;; esac
 		done

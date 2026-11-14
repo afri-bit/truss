@@ -36,7 +36,7 @@ chmod +x "$work/fakelint/golangci-lint"
 expect() {
 	local name="$1" want="$2" line="$3" path="$4"
 	shift 4
-	out="$(cd "$work/repo" && PATH="$path" GOPATH="$work/gopath" GOBIN="" GOTOOLCHAIN=local GOFLAGS=-mod=mod \
+	out="$(cd "$work/repo" && PATH="$path" GOENV=off GOPATH="$work/gopath" GOBIN="" GOTOOLCHAIN=local GOFLAGS=-mod=mod \
 		bash scripts/verify.sh "$@" 2>&1)"
 	code=$?
 	if [ "$code" -ne "$want" ]; then
@@ -65,6 +65,7 @@ expect "wrong lint version is not a pass" 1 '^lint +fail .*not v2\.15\.0' "$work
 expect "missing go is not a pass" 1 '^vet +missing' "$work/bin" --only vet
 expect "an unknown check name is a usage error" 2 "unknown check 'lnt'" "$ok" --only lnt
 expect "an empty --only is a usage error" 2 'usage' "$ok" --only ''
+expect "an --only without names is a usage error" 2 'usage' "$ok" --only ,
 expect "an unknown option is a usage error" 2 'usage' "$ok" --bogus
 
 if [ "$failures" -ne 0 ]; then
