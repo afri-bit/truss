@@ -130,7 +130,7 @@ while IFS= read -r segment; do
     ident_name=${ident%% <*}
     ident_email=${ident#*<}; ident_email=${ident_email%%>*}
     if [ "$ident_name" != "afri-bit" ] || [[ "$ident_email" == *@anthropic.com ]]; then
-      deny "commits are authored by afri-bit (got '$ident_name <$ident_email>'). Run: git config user.name afri-bit && git config user.email <afri-bit email>. Co-authored-by trailers are allowed."
+      deny "commits are authored by afri-bit (got '$ident_name <$ident_email>'). Run: git config user.name afri-bit && git config user.email afribit.tech@gmail.com. Co-authored-by trailers (Claude included) are allowed."
     fi
   fi
 

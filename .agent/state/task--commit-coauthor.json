@@ -1,0 +1,18 @@
+{
+  "work_id": "task--commit-coauthor",
+  "title": "Commit identity: maintainer email; Claude may co-author",
+  "tier": 0,
+  "branch": "task/commit-coauthor",
+  "status": "in_progress",
+  "step": "review",
+  "steps_done": [],
+  "requirements": [],
+  "specs": [],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [],
+  "pr": null,
+  "created": "2026-11-14T13:15:26Z",
+  "updated": "2026-11-14T13:15:26Z"
+}

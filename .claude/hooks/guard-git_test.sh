@@ -48,6 +48,7 @@ check "deleting a claude/ branch is not creating one" 0 "git branch -D claude/x"
 
 check "commit by afri-bit allowed" 0 "git commit -m 'feat: x'"
 check "co-author trailer allowed" 0 "git commit -m 'feat: x' -m 'Co-authored-by: A B <a@b.c>'"
+check "claude as co-author allowed" 0 "git commit -m 'feat: x' -m 'Co-authored-by: Claude <noreply@anthropic.com>'"
 git -C "$work" config user.name Claude
 check "commit as another name denied" 2 "git commit -m 'feat: x'"
 git -C "$work" config user.name afri-bit

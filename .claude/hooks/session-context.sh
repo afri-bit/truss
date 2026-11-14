@@ -16,7 +16,7 @@ fi
 author=$(git config user.name 2>/dev/null || true)
 email=$(git config user.email 2>/dev/null || true)
 if [ "$author" != "afri-bit" ] || [[ "$email" == *@anthropic.com ]]; then
-  echo "- WARNING: git identity is '${author:-unset} <${email:-unset}>'. Commits must be authored by afri-bit: git config user.name afri-bit && git config user.email <afri-bit email> (guard-git.sh blocks commits otherwise)."
+  echo "- WARNING: git identity is '${author:-unset} <${email:-unset}>'. Commits must be authored by afri-bit: git config user.name afri-bit && git config user.email afribit.tech@gmail.com (guard-git.sh blocks commits otherwise)."
 fi
 if [ -f .specify/feature.json ] && command -v jq >/dev/null 2>&1; then
   feature=$(jq -r '.feature_directory // empty' .specify/feature.json 2>/dev/null)
