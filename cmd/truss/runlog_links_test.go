@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -82,6 +83,19 @@ func TestRun_PlantedLogLinkIsReplacedNotFollowed(t *testing.T) {
 	}
 }
 
+// assertNoTemporaryLog fails if a temporary run log (run.log*.tmp, any name
+// this or an earlier version used) is left in the .truss folder trussDir.
+func assertNoTemporaryLog(t *testing.T, trussDir string) {
+	t.Helper()
+	left, err := filepath.Glob(filepath.Join(trussDir, "run.log*.tmp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Fatalf("temporary run log left behind: %s", strings.Join(left, ", "))
+	}
+}
+
 func TestRun_LeavesNoTemporaryLog(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "pipeline.yaml")
@@ -91,13 +105,67 @@ func TestRun_LeavesNoTemporaryLog(t *testing.T) {
 	if code, _, errOut := invoke(t, dir, []string{"run", path}); code != 0 {
 		t.Fatalf("exit = %d, stderr = %s", code, errOut)
 	}
-	entries, err := os.ReadDir(filepath.Join(dir, ".truss"))
-	if err != nil {
+	assertNoTemporaryLog(t, filepath.Join(dir, ".truss"))
+}
+
+func TestRun_FailedRunLeavesNoTemporaryLog(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pipeline.yaml")
+	if err := os.WriteFile(path, []byte(validPipeline("exit 3")), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".tmp") {
-			t.Fatalf("temporary log left behind: %s", e.Name())
-		}
+	if code, _, _ := invoke(t, dir, []string{"run", path}); code != 1 {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+	readRunLog(t, dir) // FR-011: a failed run still saves its log
+	assertNoTemporaryLog(t, filepath.Join(dir, ".truss"))
+}
+
+// A link at .truss (or .truss/data) would send the run log, data and cache into
+// a folder the checkout chose, such as ~/.bashrc.d. Such a folder is refused
+// before any Step starts.
+func TestRun_LinkedTrussFoldersAreRefused(t *testing.T) {
+	for _, linked := range []string{".truss", filepath.Join(".truss", "data"), filepath.Join(".truss", "data", "cache")} {
+		t.Run(filepath.ToSlash(linked), func(t *testing.T) {
+			dir := t.TempDir()
+			victim := t.TempDir()
+			const keep = "do not touch\n"
+			if err := os.WriteFile(filepath.Join(victim, "run.log"), []byte(keep), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if parent := filepath.Dir(filepath.Join(dir, linked)); parent != dir {
+				if err := os.MkdirAll(parent, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			plantLink(t, victim, filepath.Join(dir, linked))
+			marker := filepath.Join(dir, "ran.txt")
+			run := "echo x > '" + marker + "'"
+			if runtime.GOOS == "windows" {
+				run = "echo x> \"" + marker + "\""
+			}
+			path := filepath.Join(dir, "pipeline.yaml")
+			if err := os.WriteFile(path, []byte(validPipeline(run)), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			code, _, errOut := invoke(t, dir, []string{"run", path})
+			if code != 1 || !strings.Contains(errOut, "link") {
+				t.Fatalf("exit = %d, stderr = %q; want 1 and an error naming the link", code, errOut)
+			}
+			if _, err := os.Stat(marker); !os.IsNotExist(err) {
+				t.Fatalf("a step ran: %v", err)
+			}
+			entries, err := os.ReadDir(victim)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != 1 {
+				t.Fatalf("files appeared in the link target: %v", entries)
+			}
+			if got, _ := os.ReadFile(filepath.Join(victim, "run.log")); string(got) != keep {
+				t.Fatalf("run.log in the link target changed to %q", got)
+			}
+		})
 	}
 }
