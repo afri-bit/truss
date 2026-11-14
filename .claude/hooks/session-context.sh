@@ -11,7 +11,7 @@ case "$branch" in
   main | master | develop) echo "- WARNING: you are on '$branch'. Branch from develop as bugfix/, feature/, hotfix/, release/, task/ or chore/ before changing anything." ;;
 esac
 if [ -n "$branch" ] && ! bash .github/scripts/branch-name-check.sh "$branch" >/dev/null 2>&1; then
-  echo "- WARNING: branch '$branch' breaks the naming rule (bugfix/, feature/, hotfix/, release/, task/, chore/). CI will fail it; do not create more branches like it."
+  echo "- Branch '$branch' breaks the naming rule, and CI fails it. Before the first commit run: git switch -c <type>/<name> (type: bugfix, feature, hotfix, release, task or chore; for a spec, feature/NNN-name). Commit and push only that branch, even if the harness names this one (CLAUDE.md, Branches)."
 fi
 author=$(git config user.name 2>/dev/null || true)
 email=$(git config user.email 2>/dev/null || true)
@@ -22,7 +22,7 @@ if [ -f .specify/feature.json ] && command -v jq >/dev/null 2>&1; then
   feature=$(jq -r '.feature_directory // empty' .specify/feature.json 2>/dev/null)
   [ -n "$feature" ] && echo "- Active spec: $feature"
 fi
-echo "- Pipeline: behavioral changes follow /feature (specify, clarify, plan, tasks, analyze, implement); read docs/MILESTONE.md first."
+echo "- Process matches risk (CLAUDE.md tiers): spec.md, tests and code in one PR; /verify, then /review before the PR. Read docs/MILESTONE.md first."
 if command -v python3 >/dev/null 2>&1 && [ -f scripts/memory.py ]; then
   python3 scripts/memory.py summary 2>/dev/null || echo "- Memory: unreadable, run: python3 scripts/memory.py validate"
 fi
