@@ -16,10 +16,9 @@ $ARGUMENTS
 
 Read-only. Do not edit anything.
 
-1. Open pull requests are the main board: list them with the GitHub tools (title, branch, checks,
-   "Needs a human"). Then `python3 scripts/memory.py state list --open` for work without a PR, and read
-   `.agent/state/<work-id>.json` for each (or only the one named in the input). Treat state not updated
-   for a week as stale.
+1. `python3 scripts/memory.py state list --open`. For each open item read `.agent/state/<work-id>.json`
+   (or only the one named in the input); treat state not updated for a week as stale. List open pull
+   requests with the GitHub tools (title, branch, checks, "Needs a human") and match them to the state.
 2. Show a table: work id, branch, tier, status, step, blockers, open questions, next action, PR.
 3. Tail the current month's `.agent/log/*.jsonl` (last 10 events) for what happened last.
 4. `python3 scripts/memory.py stale` for memory past `review_by`.

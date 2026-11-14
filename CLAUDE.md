@@ -14,8 +14,9 @@ this repository. The full picture (roster, flow, gates, hooks, memory) is in `do
   (constitution 2.0.0, [ADR 0005](docs/decisions/0005-specs-record-they-do-not-gate.md)).
 - It implements and integrates the work itself by default, and delegates to the agents in
   `.claude/agents/` when that adds value: independent review always, a design opinion or truly
-  independent parallel work sometimes. Delegation is a tool, not an obligation. Repository agents
-  cannot start other agents (their `tools` lists leave out `Agent`).
+  independent parallel work sometimes. Delegation is a tool, not an obligation. No subagent starts
+  another agent (repository agents leave `Agent` out of their tools; `lead` runs only as the main
+  session).
 - A delegation states the goal, the spec path, the files or packages in scope, the rules to
   follow, the expected output, and what **not** to touch, and returns the **handoff report** from
   `docs/agents.md`: Done, Checks, Decisions, Needs human, Follow-ups.
@@ -23,17 +24,18 @@ this repository. The full picture (roster, flow, gates, hooks, memory) is in `do
   the code. A PR that was not independently reviewed says so at the top.
 - Mode: **supervised**. A person starts every session and reviews every PR. Unattended mode (the
   `lead` agent, `agent.yml`, `agent-gate.yml`) is a disabled placeholder; do not enable it.
-- Chat is not a record. Decisions go in the spec, an ADR, the PR description or memory.
+- Chat is not a record. Decisions go in the spec, an ADR, the work state, the log or memory; the PR
+  description repeats what the reviewer needs.
 
 ### Risk classes (process matches risk)
 
 | Tier | Class | Flow |
 |---|---|---|
-| **0** | Chore: formatting, typos, dependency maintenance, equivalent refactors, tooling, docs | Branch, change, `/verify`, PR. No spec. |
+| **0** | Chore: formatting, typos, dependency maintenance, equivalent refactors, tooling, docs | Branch, change, `/verify`, `/review`, PR. No spec. |
 | **1** | Feature: new capability or behavioral change | Code, tests and `specs/NNN-name/spec.md` in one PR, in whatever order works. |
 | **2** | Contract or execution safety: process execution, cancellation, exit codes, secrets handling, the pipeline schema, CLI output, the run-log format, the daemon API | Tier 1 plus a compatibility note, an ADR for a contract or boundary decision, `security-reviewer` and `portability-reviewer` in `/review`. The full Spec Kit pipeline below is recommended. |
 
-Propose the tier with a one-line reason and state it in the PR. When unsure, take the
+Propose the tier with a one-line reason; record it in the work state and the PR. When unsure, take the
 higher tier. A tier can be raised mid-way, never silently lowered. `docs/MILESTONE.md` decides
 whether a feature belongs in the current release; do not start one that does not.
 
@@ -89,8 +91,9 @@ Agents work unattended inside these limits. The list with enforcement is in `doc
 ### Where things live
 
 - Memory: `.agent/` (see `.agent/README.md`). At the start of a task run `/recall`; save lasting
-  facts with `/remember`; close work with `/handoff`; clean up with `/memory-review`. The PR is the
-  record of where a piece of work stands; a work-state file is optional (multi-session work).
+  facts with `/remember`; close work with `/handoff`; clean up with `/memory-review`. Each branch has
+  one work-state file (constitution, Shared workspace); keep it short and set `status=done` once the
+  PR merges. Open work not updated for 7 days is flagged at session start.
 - Other skills: `/milestone-status` (release scope versus specs and code), `/release-readiness`
   (read-only; never tags).
 - Rules (loaded by file path): `.claude/rules/` (the agent setup itself: `agent-team.md`). Agents: `.claude/agents/`. Skills:

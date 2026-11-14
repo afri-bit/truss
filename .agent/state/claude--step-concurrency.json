@@ -19,11 +19,8 @@
   "owner_agent": "orchestrator",
   "blockers": [],
   "open_questions": [],
-  "next_actions": [
-    "specify, clarify, planner, plan, tasks, analyze",
-    "PR-B: tests first, then pipeline, engine, cli, docs"
-  ],
-  "pr": null,
+  "next_actions": [],
+  "pr": "https://github.com/afri-bit/truss/pull/3",
   "created": "2026-11-01T09:30:00Z",
-  "updated": "2026-11-14T12:08:17Z"
+  "updated": "2026-11-14T12:21:18Z"
 }

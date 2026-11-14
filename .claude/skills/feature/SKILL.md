@@ -29,13 +29,15 @@ dependency, spend, credentials, or a decision the constitution reserves to a hum
   `chore/`). For a spec, `feature/NNN-name`. On a harness branch (`claude/...`), switch first.
 - `/recall` the topic. Read `docs/MILESTONE.md`; if the request is outside the current release, stop
   and report it.
-- Classify with a one-line reason; it goes in the PR. When unsure take the higher tier; never lower it
-  silently.
+- Classify with a one-line reason and record it:
+  `python3 scripts/memory.py state init <work-id> --title "..." --tier <0|1|2> --branch <branch>`
+  (one work state per branch; it also goes in the PR). When unsure take the higher tier; never lower
+  it silently.
 
 | Tier | Class | For |
 |---|---|---|
-| 0 | Chore | Formatting, typos, dependency maintenance, equivalent refactors, tooling, docs; a bugfix whose spec already covers the behavior |
-| 1 | Feature | New capability or behavioral change |
+| 0 | Chore | Formatting, typos, dependency maintenance, equivalent refactors, tooling, docs |
+| 1 | Feature | New capability or behavioral change, including a bugfix (start from a failing regression test) |
 | 2 | Contract / execution safety | Process execution, cancellation, exit codes, secrets handling, the pipeline schema, CLI output, the run-log format, the daemon API |
 
 ## 1. Build
@@ -44,7 +46,7 @@ dependency, spend, credentials, or a decision the constitution reserves to a hum
 |---|---|
 | 0 | Make the change. If observable behavior would change, it is tier 1. |
 | 1 | Write or update `specs/NNN-name/spec.md` (short is fine) and the tests with the code. Test first is recommended. |
-| 2 | Tier 1, plus: a compatibility note in the spec; `/speckit-clarify` or questions to the maintainer for open product questions; an `architect` opinion and `/adr` for a contract, boundary or dependency decision (`/consult` when it is contested). For a large or unclear change the Spec Kit steps (`/speckit-plan`, `-tasks`, `-analyze`) help; they are optional. |
+| 2 | Tier 1, plus: a compatibility note in the spec; `/speckit-clarify` or questions to the maintainer for open product questions; `/consult` (two separate written opinions) and `/adr` for every contract, execution-safety or dependency decision. For a large or unclear change the Spec Kit steps (`/speckit-plan`, `-tasks`, `-analyze`) help; they are optional. |
 
 - Parallel work only for units that share no files and have a fixed interface: `/fan-out`.
 - If code and spec disagree, name the discrepancy before changing either side.
@@ -60,7 +62,7 @@ dependency, spend, credentials, or a decision the constitution reserves to a hum
 
 `/git-commit`, push the branch, `/pr-description`, open the PR against `develop`. The PR states the
 tier, links the spec, lists "Needs a human" first, pastes the verify table, and gives `Reviewed` and
-`HEAD`. Add `/remember` for a lasting lesson; `/handoff` if the work continues in another session.
+`HEAD`. `/handoff` updates the work state (`pr=<url>`); `/remember` a lasting lesson.
 Never merge, tag or release. Report the PR link and what needs the maintainer.
 
 ## Spec Kit notes

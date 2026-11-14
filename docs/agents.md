@@ -30,12 +30,13 @@ The binding text is the constitution's "Agentic Operation" section; this page is
 ## Roster
 
 The main session is the **orchestrator and the builder** (model alias `opusplan`): it implements and
-integrates the change itself and delegates where an agent adds value. Repository agents do not start
-agents (their `tools` lists leave out `Agent`).
+integrates the change itself and delegates where an agent adds value. No subagent starts another
+agent: repository agents leave `Agent` out of their tools (`lead` runs only as the main session), and
+a brief to a built-in agent says so.
 
-**Status** says how the PR history shows each agent used (2026-11): *core* agents run on most
-changes; *optional* ones are kept for when their own context, tools or model help, and are reviewed
-again with usage data before any is removed.
+**Status** is a judgement from the PR descriptions of PRs #6 to #20 (2026-11): *core* agents are
+named in most of them; *optional* ones rarely or never. Optional agents stay available and are
+reviewed again with usage data before any is removed.
 
 | Agent | Status | Model | Access | Use for |
 |---|---|---|---|---|
@@ -61,8 +62,8 @@ again with usage data before any is removed.
 | Go code, tests, workflows, tasks tagged `high` | sonnet |
 | Mechanical edits, docs, checks, tasks tagged `low` | haiku |
 
-- The `planner` tags each task `low` or `high`; the orchestrator passes `haiku` or `sonnet` as the
-  Agent `model`. An untagged task runs on sonnet.
+- When a `tasks.md` or a plan tags a task `low` or `high`, the orchestrator passes `haiku` or
+  `sonnet` as the Agent `model`. An untagged task runs on sonnet.
 - Never `low`: process execution, cancellation, secret handling, contract changes, concurrency, a
   new pattern. When unsure, `high`.
 - Escalate `low` to sonnet after two failures; sonnet to opus after two failures on a design problem.
@@ -74,7 +75,7 @@ they do not gate code. `/feature` runs this flow.
 
 | Tier | Class | Flow |
 |---|---|---|
-| 0 | Chore | branch, change, `/verify`, PR. No spec |
+| 0 | Chore | branch, change, `/verify`, `/review`, PR. No spec |
 | 1 | Feature | `spec.md`, tests and code in one PR (any order; test first recommended), `/verify`, `/review`, fix, `/review delta`, PR |
 | 2 | Contract or execution safety | Tier 1 plus a compatibility note, an ADR where a contract or boundary is decided, security and portability review, "Needs a human" list. Spec Kit (`/speckit-plan`, `-tasks`, `-analyze`) and `planner` are recommended for a large or unclear change, never required |
 
@@ -89,8 +90,9 @@ Tools enforce at every tier: hooks, permissions, CI and the agent gate.
 
 ## Agent team and orchestration
 
-- The main session is the orchestrator: it classifies the work, runs the pipeline through skills and
-  delegates. Subagents never start subagents.
+- The main session is the orchestrator and the builder: it classifies the work, implements and
+  integrates it, and delegates for an independent view or genuinely independent units. Subagents
+  never start agents.
 - Independent tasks go out in parallel in one turn (`/fan-out`); dependent tasks wait. After parallel
   workers, the orchestrator checks cross-references and runs `/verify`.
 - Loops are bounded: 3 rounds per quality loop and 3 attempts per task. Escalate in order: retry with
@@ -104,8 +106,8 @@ Agents talk through artifacts, not shared context.
 |---|---|---|
 | Delegation brief | Goal, spec path, scope, rules, expected output, what not to touch | Orchestrator |
 | Handoff report | Done, Checks, Decisions, Needs human, Follow-ups | Every agent |
-| PR description | Where the work stands: needs-a-human, checks, reviewed commit, follow-ups | Main session |
-| Work state `.agent/state/` (optional) | Step, blockers, next actions for work that spans sessions | `/handoff` |
+| Work state `.agent/state/` | One file per branch: tier, step, blockers, next actions | Main session, `/handoff` |
+| PR description | What the reviewer needs: needs-a-human, checks, reviewed commit, follow-ups | Main session |
 | Event log `.agent/log/` | Decisions, handoffs, PRs, memory changes | Anyone, via the tool |
 | Memory `.agent/memory/` | Durable facts and lessons | `/remember`, `memory-keeper` |
 | ADR `docs/decisions/` | A decision with context and consequences | `architect`, `/adr` |
@@ -117,21 +119,24 @@ Agents talk through artifacts, not shared context.
 
 ## Shared workspace
 
-Open pull requests are the board you see on a phone, so the PR description is the record of where a
-piece of work stands. `.agent/` holds what outlives a PR: memory (facts and lessons), and optionally a
-work-state file for work that spans sessions before a PR exists. One branch has one owner session, so
-parallel sessions (separate branches, cloud sessions or worktrees) do not conflict. Open work not
-updated for 7 days is flagged as stale at session start. `/recall` starts a session; `/team-status`
-shows open PRs and state; `/handoff` when work continues elsewhere. Chat is not a record: anything a
-later session needs goes into the PR, memory or an ADR.
+`.agent/` is the shared board for every session and agent, committed and reviewed like code. One
+branch has one owner session and one work-state file, so parallel sessions (separate branches, cloud
+sessions or worktrees) do not conflict. Keep the state short and set `status=done` once the PR
+merges; open work not updated for 7 days is flagged as stale at session start, and the summary prints
+only state files that validate. Open pull requests are the view on a phone, so the PR description
+repeats what the reviewer needs. `/recall` starts a session; `/team-status` shows open PRs and state;
+`/handoff` ends it. Chat is not a record: anything a later session needs goes into the work state, the
+log, memory or an ADR.
 
 ### Agent teams and direct messaging
 
 Not used by default. Claude Code's agent teams are experimental; enabling them
 (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) turns named subagents into teammates that share the lead's
-permission mode and do not survive a resumed session. Try them only for a demonstrated need, such as
-debugging with competing hypotheses or an adversarial review, in a separate cloud environment, and
-record what was learned. Separate features run best as separate cloud sessions and PRs.
+permission mode and, in-process, do not survive a resumed session (Claude Code agent-teams
+documentation, 2026-11). Turning them on changes the permission model, so it needs the maintainer's
+approval. Try them only for a demonstrated need, such as debugging with competing hypotheses or an
+adversarial review, in a separate cloud environment, and record what was learned. Separate features
+run best as separate cloud sessions and PRs.
 
 ## Quality gates
 
@@ -187,7 +192,7 @@ Details: [`.agent/README.md`](../.agent/README.md) and `.claude/rules/agent-memo
 | Part | Format | Use |
 |---|---|---|
 | Memory `.agent/memory/MEM-nnnn-*.md` | Markdown + YAML front matter | Durable facts, preferences, lessons, outcomes |
-| Work state `.agent/state/<work-id>.json` | JSON, one file per branch, optional | Tier, step, blockers, next actions, PR, for work that spans sessions |
+| Work state `.agent/state/<work-id>.json` | JSON, one file per branch | Tier, step, steps done, blockers, next actions, PR |
 | Event log `.agent/log/YYYY-MM.jsonl` | JSON Lines, append only | Decisions, handoffs, PRs |
 
 `/recall` at the start of a task, `/remember` for a lasting fact, `/handoff` at the end,

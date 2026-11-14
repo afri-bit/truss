@@ -22,16 +22,18 @@ Parallel work pays only when units are truly independent; otherwise one session 
 2. Independence check: no two units edit the same file, and none touches execution safety or a public
    contract without a finished design. Anything else runs one at a time in this session.
 3. For each unit, a delegation brief: goal, spec path, files in scope, the interface, rules, the
-   failing test to write first, expected output, what not to touch. Pick the agent (`go-engineer`,
-   `test-writer`, `devops-engineer`, or a general agent) and pass a `model` only if the unit is clearly
-   mechanical (haiku) or hard (opus).
+   failing test to write first, expected output, what not to touch, and "do not start agents". Prefer
+   a repository agent (`go-engineer`, `test-writer`, `devops-engineer`). Pass a `model` only if the
+   unit is clearly mechanical (haiku) or hard (opus); never haiku for process execution, secrets,
+   concurrency or a public contract (constitution, Agent team).
 4. Spawn all workers **in one turn**, each with `isolation: worktree`.
 5. When all report: read each handoff report, merge the worktrees one at a time, and check
    cross-references yourself (symbols, imports, docs and tests that refer to another worker's change).
    Workers cannot see each other's edits.
 6. `/verify` after the merge. On failure: retry the unit with the full error, then a stronger model,
    then `/consult`, then the maintainer.
-7. Tick tasks in `tasks.md` if there is one. Note in the PR that the work was fanned out and how.
+7. Tick tasks in `tasks.md` if there is one, update the work state, and note in the PR that the work
+   was fanned out and how.
    `/remember` a lesson if a collision or surprise happened.
 
 Separate features that need not land in one PR are better as separate cloud sessions and PRs.

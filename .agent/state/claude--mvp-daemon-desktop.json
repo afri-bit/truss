@@ -27,12 +27,8 @@
     "Daemon and Desktop are verified on Linux only; macOS and Windows need CI",
     "No independent /review was run on this branch"
   ],
-  "next_actions": [
-    "Maintainer reviews the branch",
-    "Align docs/agents.md and the /feature skill with constitution 2.0.0",
-    "Automated UI test for TRUSS Desktop"
-  ],
+  "next_actions": [],
   "pr": "https://github.com/afri-bit/truss/pull/4",
   "created": "2026-11-11T22:00:00Z",
-  "updated": "2026-11-14T12:08:17Z"
+  "updated": "2026-11-14T12:21:18Z"
 }
