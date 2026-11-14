@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -160,11 +164,8 @@ func openRunLog(cwd string, stdout, extra io.Writer) (*runlog.Log, *os.File, str
 	if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 -- see above
 		return nil, nil, "", "", fmt.Errorf("prepare run log: %w", err)
 	}
-	tmpPath := filepath.Join(dir, "run.log.tmp")
 	dest := filepath.Join(dir, "run.log")
-	// The name is fixed, but os.Create follows a symlink a checkout may plant at
-	// .truss/run.log.tmp; tracked as a follow-up (execution safety).
-	f, err := os.Create(tmpPath) // #nosec G304 -- fixed name under .truss; see above
+	f, tmpPath, err := createTemp(dir, "run.log.", ".tmp")
 	if err != nil {
 		return nil, nil, "", "", fmt.Errorf("prepare run log: %w", err)
 	}
@@ -173,6 +174,30 @@ func openRunLog(cwd string, stdout, extra io.Writer) (*runlog.Log, *os.File, str
 		out = io.MultiWriter(stdout, f, extra)
 	}
 	return runlog.New(out, time.Now), f, tmpPath, dest, nil
+}
+
+// createTemp creates a new file prefix<random>suffix in dir. O_EXCL means it
+// never opens an existing file, so a symbolic link a checkout planted in .truss
+// is not followed. Unlike os.CreateTemp it keeps the usual 0666 mode less the
+// umask, so the saved run log has the permissions it always had.
+func createTemp(dir, prefix, suffix string) (*os.File, string, error) {
+	var lastErr error
+	for range 10 {
+		var b [8]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			return nil, "", err
+		}
+		path := filepath.Join(dir, prefix+hex.EncodeToString(b[:])+suffix)
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666) // #nosec G302 G304 -- new file under .truss; mode as os.Create
+		if err == nil {
+			return f, path, nil
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			return nil, "", err
+		}
+		lastErr = err
+	}
+	return nil, "", lastErr
 }
 
 func commitRunLog(tmp *os.File, tmpPath, dest string) error {
