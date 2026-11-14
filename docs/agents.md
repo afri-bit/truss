@@ -213,7 +213,7 @@ repeats the constitution or a spec.
 | `/verify` | Quality gate: `scripts/verify.sh`, same result every run |
 | `/review` | Independent parallel review; records the commit reviewed; `delta <sha>` re-reviews fixes |
 | `/adr` | Numbered decision record |
-| `/git-commit` | Clustered conventional commits authored by afri-bit; `Co-authored-by` allowed |
+| `/git-commit` | Clustered conventional commits authored by afri-bit (afribit.tech@gmail.com); Claude as `Co-authored-by` allowed |
 | `/pr-description` | Short phone-readable PR text |
 | `/recall`, `/remember`, `/handoff`, `/memory-review` | Shared memory and state |
 

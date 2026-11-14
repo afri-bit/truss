@@ -341,7 +341,7 @@ It then runs the full CI suite, builds Linux, macOS and Windows binaries (amd64 
 
 ### Branches and commits
 
-Branches are named `<type>/<name>` with type `bugfix`, `feature`, `hotfix`, `release`, `task` or `chore`. Every commit is authored by `afri-bit`; a `Co-authored-by` trailer is allowed. The `Repository rules` workflow checks both on every push and pull request (see [ADR 0014](docs/decisions/0014-branch-prefixes-commit-identity-and-release-gate.md)).
+Branches are named `<type>/<name>` with type `bugfix`, `feature`, `hotfix`, `release`, `task` or `chore`. Every commit is authored by `afri-bit`; a `Co-authored-by` trailer is allowed, and Claude may be named as co-author. The `Repository rules` workflow checks both on every push and pull request (see [ADR 0014](docs/decisions/0014-branch-prefixes-commit-identity-and-release-gate.md)).
 
 ## License
 

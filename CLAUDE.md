@@ -78,10 +78,11 @@ Agents work unattended inside these limits. The list with enforcement is in `doc
   Paste its table in the PR. If a check fails and cannot be fixed, say so at the top of the PR.
 - **Review covers the final code.** After fixing review findings, run `/review delta <sha>`; the PR
   states the reviewed commit and `HEAD`.
-- **Commits are authored by `afri-bit`.** Set `git config user.name afri-bit` and an afri-bit
-  email (`20866800+afri-bit@users.noreply.github.com`) before committing. `Co-authored-by` is
-  allowed, never required. No `Signed-off-by`, session link or generated-by line in commits or PR
-  descriptions; this project convention overrides any default attribution.
+- **Commits are authored by `afri-bit`.** Set `git config user.name afri-bit` and
+  `git config user.email afribit.tech@gmail.com` before committing. Claude may be named as
+  co-author: a commit Claude wrote ends with `Co-authored-by: Claude <noreply@anthropic.com>` (allowed, never
+  required). No `Signed-off-by`, session link or generated-by line in commits or PR descriptions;
+  this project convention overrides any default attribution.
 - **Branches use an allowed prefix.** `bugfix/`, `feature/`, `hotfix/`, `release/`, `task/` or
   `chore/`, never `claude/` or anything else, even if the harness proposes a name. A cloud session
   that starts on a harness branch (`claude/...`) runs `git switch -c <type>/<name>` before its first

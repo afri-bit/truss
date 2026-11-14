@@ -42,6 +42,9 @@ check "project identity passes" 0 "1 commit(s)"
 commit afri-bit afri-bit@users.noreply.github.com $'two\n\nCo-authored-by: Someone Else <else@example.com>'
 check "co-author trailer is allowed" 0 "2 commit(s)"
 
+commit afri-bit afribit.tech@gmail.com $'two b\n\nCo-authored-by: Claude <noreply@anthropic.com>'
+check "claude as co-author is allowed" 0 "3 commit(s)"
+
 commit Claude noreply@anthropic.com "three"
 check "tool author fails" 1 "authored by \"Claude\""
 

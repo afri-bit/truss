@@ -5,10 +5,10 @@ title: Commits are authored by afri-bit; Co-authored-by allowed
 summary: Every commit is authored by afri-bit; Co-authored-by trailers are allowed but never required; no Signed-off-by, session links or generated-by lines.
 topics: [git, owner-preferences]
 created: 2026-11-13T14:16:45Z
-updated: 2026-11-13T14:16:45Z
+updated: 2026-11-14T13:15:18Z
 author: orchestrator
 source: maintainer, 2026-11-13
-status: active
+status: superseded
 confidence: high
 supersedes: MEM-0001
 related: [ADR-0014]

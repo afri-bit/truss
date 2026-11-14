@@ -48,6 +48,16 @@ check "deleting a claude/ branch is not creating one" 0 "git branch -D claude/x"
 
 check "commit by afri-bit allowed" 0 "git commit -m 'feat: x'"
 check "co-author trailer allowed" 0 "git commit -m 'feat: x' -m 'Co-authored-by: A B <a@b.c>'"
+check "claude as co-author allowed" 0 "git commit -m 'feat: x' -m 'Co-authored-by: Claude <noreply@anthropic.com>'"
+check "commit --author denied" 2 "git commit --author='Claude <noreply@anthropic.com>' -m 'feat: x'"
+check "commit --author=... denied" 2 "git commit -m 'feat: x' --author=\"Someone <a@b.c>\""
+check "abbreviated --auth denied" 2 "git commit --auth=Zed -m 'feat: x'"
+check "author env override denied" 2 "GIT_AUTHOR_NAME=Claude git commit -m 'feat: x'"
+check "author email env override denied" 2 "env GIT_AUTHOR_EMAIL=x@anthropic.com git commit -m 'feat: x'"
+check "committer env override denied" 2 "GIT_COMMITTER_NAME=Claude git commit -m 'feat: x'"
+check "git -c user.name denied" 2 "git -c user.name=Claude commit -m 'feat: x'"
+check "git -c user.email denied" 2 "git -c user.email=x@anthropic.com commit -m 'feat: x'"
+check "git -c other setting allowed" 0 "git -c core.quotepath=off commit -m 'feat: x'"
 git -C "$work" config user.name Claude
 check "commit as another name denied" 2 "git commit -m 'feat: x'"
 git -C "$work" config user.name afri-bit

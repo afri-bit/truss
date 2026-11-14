@@ -32,7 +32,7 @@ One fact per file. Type guides what to write:
 
 | Type | Holds | Body sections |
 |---|---|---|
-| `semantic` | A stable fact or preference: "commits carry no tool attribution" | What, Why it matters, How to apply |
+| `semantic` | A stable fact or preference: "commits are authored by afri-bit" | What, Why it matters, How to apply |
 | `procedural` | A how-to or lesson: "verify cross-references after parallel workers" | What, Why it matters, How to apply |
 | `episodic` | Something that happened: "PR 1 merged" | What happened, Outcome, Lesson |
 
