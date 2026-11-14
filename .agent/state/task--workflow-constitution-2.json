@@ -4,7 +4,7 @@
   "tier": 0,
   "branch": "task/workflow-constitution-2",
   "status": "in_review",
-  "step": "review-fixes",
+  "step": "pr-open",
   "steps_done": [],
   "requirements": [],
   "specs": [],
@@ -14,7 +14,7 @@
   "next_actions": [
     "Open the PR after the delta review; constitution amendment for optional work state is the maintainer's call"
   ],
-  "pr": null,
+  "pr": "https://github.com/afri-bit/truss/pull/22",
   "created": "2026-11-14T12:21:18Z",
-  "updated": "2026-11-14T12:21:18Z"
+  "updated": "2026-11-14T12:24:48Z"
 }
