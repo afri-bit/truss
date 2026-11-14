@@ -70,7 +70,7 @@ Agents work unattended inside these limits. The list with enforcement is in `doc
   anything that needs a human at the top of the description.
 - **Stay on your issue.** Unrelated fixes go in the PR as follow-ups, not in the branch.
 - **Run the checks yourself** before pushing: `bash scripts/verify.sh` (`/verify`) runs gofmt, vet,
-  golangci-lint, `go test -race`, the tooling tests and, when the CLI changed, the end-to-end script.
+  golangci-lint, `go test -race`, the tooling tests and the end-to-end script.
   Paste its table in the PR. If a check fails and cannot be fixed, say so at the top of the PR.
 - **Review covers the final code.** After fixing review findings, run `/review delta <sha>`; the PR
   states the reviewed commit and `HEAD`.

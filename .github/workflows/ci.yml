@@ -126,6 +126,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # scripts/verify_test.sh needs go and gofmt.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
 
       - name: Memory, state and gate tests
         run: python3 -m unittest discover -s scripts/tests
