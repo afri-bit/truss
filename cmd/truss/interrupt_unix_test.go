@@ -64,8 +64,9 @@ func TestMain_InterruptEndsStepsAndKeepsLog(t *testing.T) {
 			if err := cmd.Start(); err != nil {
 				t.Fatalf("start truss: %v", err)
 			}
-			exited := make(chan error, 1)
-			go func() { exited <- cmd.Wait() }()
+			// Wait's error is not needed: the exit code is checked from ProcessState below.
+			exited := make(chan struct{})
+			go func() { _ = cmd.Wait(); close(exited) }()
 			// Never leave processes behind, whatever the outcome.
 			t.Cleanup(func() {
 				_ = cmd.Process.Kill()

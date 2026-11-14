@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -437,7 +438,7 @@ func TestRun_InterruptDuringRetryWaitReturnsTheContextError(t *testing.T) {
 	p := pipeline.Pipeline{Version: "1", Name: "t", Steps: []pipeline.Step{
 		{ID: "a", Run: helperCmd("exit", "1"), Retries: 2, RetryDelay: time.Hour}}}
 	_, err := Run(ctx, p, t.TempDir(), nil, rec)
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v", err)
 	}
 }

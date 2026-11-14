@@ -92,7 +92,7 @@ func (d Dir) Ensure() error {
 		return fmt.Errorf("prepare TRUSS home: %w", err)
 	}
 	if runtime.GOOS != "windows" {
-		if err := os.Chmod(string(d), 0o700); err != nil {
+		if err := os.Chmod(string(d), 0o700); err != nil { // #nosec G302 -- a directory: 0700 is owner-only and needs the x bit
 			return fmt.Errorf("make the TRUSS home private (%s): %w", d, err)
 		}
 	}

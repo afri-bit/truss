@@ -155,12 +155,14 @@ func interrupted(ctx context.Context, tr *tracker, err error, stderr io.Writer) 
 
 func openRunLog(cwd string, stdout, extra io.Writer) (*runlog.Log, *os.File, string, string, error) {
 	dir := filepath.Join(cwd, ".truss")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// The project-local .truss folder keeps the umask-governed 0755 it has always had;
+	// tightening it is a behavior change for a separate decision.
+	if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 -- see above
 		return nil, nil, "", "", fmt.Errorf("prepare run log: %w", err)
 	}
 	tmpPath := filepath.Join(dir, "run.log.tmp")
 	dest := filepath.Join(dir, "run.log")
-	f, err := os.Create(tmpPath)
+	f, err := os.Create(tmpPath) // #nosec G304 -- fixed name inside the working directory's .truss folder
 	if err != nil {
 		return nil, nil, "", "", fmt.Errorf("prepare run log: %w", err)
 	}

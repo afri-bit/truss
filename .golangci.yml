@@ -21,6 +21,11 @@ linters:
         text: "G304"
       - path: _test\.go
         linters: [gosec]
+      # Raw system calls for resource figures without cgo or x/sys (ADR 0012, 0013):
+      # unsafe pointers to kernel buffers and narrowing of syscall return codes are the point.
+      - path: internal/metrics/(libsystem_darwin|source_windows)\.go
+        linters: [gosec]
+        text: "G103|G115"
 
 formatters:
   enable:
