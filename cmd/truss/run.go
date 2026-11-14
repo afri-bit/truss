@@ -184,14 +184,18 @@ func openRunLog(cwd string, stdout, extra io.Writer) (*runlog.Log, *os.File, str
 // The project-local .truss folder keeps the 0755 (less umask) it always had;
 // tightening it is a behavior change left for a separate decision.
 func realDir(path string, mode fs.FileMode) error {
+	// Create first: Mkdir never follows a link, and finding the folder already
+	// there (another run may have just made it) is fine once it checks out.
+	err := os.Mkdir(path, mode) // #nosec G301 -- .truss keeps 0755; data and cache use 0700
+	if err == nil || !errors.Is(err, fs.ErrExist) {
+		return err
+	}
 	info, err := os.Lstat(path)
 	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return os.Mkdir(path, mode) // #nosec G301 -- .truss keeps 0755; data and cache use 0700
 	case err != nil:
 		return err
 	case info.Mode()&(fs.ModeSymlink|fs.ModeIrregular) != 0:
-		return fmt.Errorf("%s is a link; TRUSS does not write through links in .truss", path)
+		return fmt.Errorf("%s is a link or other reparse point; TRUSS does not write through links in .truss", path)
 	case !info.IsDir():
 		return fmt.Errorf("%s is not a directory", path)
 	}

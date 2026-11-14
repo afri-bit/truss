@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -167,5 +169,36 @@ func TestRun_LinkedTrussFoldersAreRefused(t *testing.T) {
 				t.Fatalf("run.log in the link target changed to %q", got)
 			}
 		})
+	}
+}
+
+// Two runs that start together in a fresh checkout both create .truss and its
+// data folders; finding a folder the other run just made is not an error.
+func TestRun_TwoRunsInAFreshFolderBothSucceed(t *testing.T) {
+	for i := range 20 {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "pipeline.yaml")
+		if err := os.WriteFile(path, []byte(validPipeline(echoHello())), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		type result struct {
+			code   int
+			stderr string
+		}
+		results := make(chan result, 2)
+		for range 2 {
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
+				defer cancel()
+				var stdout, stderr bytes.Buffer
+				code := Run(ctx, []string{"run", path}, dir, os.Environ(), &stdout, &stderr)
+				results <- result{code, stderr.String()}
+			}()
+		}
+		for range 2 {
+			if r := <-results; r.code != 0 {
+				t.Fatalf("attempt %d: exit = %d, stderr = %s", i, r.code, r.stderr)
+			}
+		}
 	}
 }
