@@ -8,7 +8,8 @@
 <!-- What and why. Spec: `specs/NNN-name/`. Closes #N. -->
 
 ## Checks
-- gofmt / vet / lint / test -race / e2e:
+- `scripts/verify.sh` (paste its table, including the commit line):
+- Reviewed: <!-- commit the last /review covered --> · HEAD: <!-- current commit; if they differ, a delta review covers it or say why not -->
 - Open tasks: <!-- unticked task IDs from tasks.md, or "none" -->
 
 ## Notes

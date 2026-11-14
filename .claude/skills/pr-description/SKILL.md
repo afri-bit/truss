@@ -34,7 +34,8 @@ $ARGUMENTS
 - <concrete change and why>. Spec: `specs/NNN-name/`. Closes #N.
 
 ## Checks
-- gofmt / vet / lint / test -race / e2e: <pass, or what failed and why>
+- `scripts/verify.sh`: <its table and commit line, or what failed and why>
+- Reviewed: <commit the last /review covered> · HEAD: <current commit; a delta review covers any difference>
 - Open tasks: <unticked task IDs from tasks.md, or "none">
 
 ## Notes

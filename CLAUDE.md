@@ -69,9 +69,11 @@ Agents work unattended inside these limits. The list with enforcement is in `doc
   PR without asking. The maintainer reviews the PR, not the steps before it. Never merge. List
   anything that needs a human at the top of the description.
 - **Stay on your issue.** Unrelated fixes go in the PR as follow-ups, not in the branch.
-- **Run the checks yourself** before pushing (`/verify`): `gofmt -l .`, `go vet ./...`,
-  `golangci-lint run ./...`, `go test -race ./...`, and `.github/scripts/e2e-test.sh` when the CLI
-  changed. If a check fails and cannot be fixed, say so at the top of the PR.
+- **Run the checks yourself** before pushing: `bash scripts/verify.sh` (`/verify`) runs gofmt, vet,
+  golangci-lint, `go test -race`, the tooling tests and the end-to-end script.
+  Paste its table in the PR. If a check fails and cannot be fixed, say so at the top of the PR.
+- **Review covers the final code.** After fixing review findings, run `/review delta <sha>`; the PR
+  states the reviewed commit and `HEAD`.
 - **Commits are authored by `afri-bit`.** Set `git config user.name afri-bit` and an afri-bit
   email (`20866800+afri-bit@users.noreply.github.com`) before committing. `Co-authored-by` is
   allowed, never required. No `Signed-off-by`, session link or generated-by line in commits or PR

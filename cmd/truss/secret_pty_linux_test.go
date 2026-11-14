@@ -118,7 +118,7 @@ func startPrompt(t *testing.T, ctx context.Context, s *session, name string) *pr
 		buf := make([]byte, 4096)
 		for {
 			n, err := master.Read(buf)
-			p.shown.Write(buf[:n])
+			_, _ = p.shown.Write(buf[:n])
 			if err != nil {
 				return
 			}

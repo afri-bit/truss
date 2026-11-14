@@ -16,8 +16,8 @@
 - Commit with `/git-commit`: one topic per commit, conventional subject, bullet body.
 - Keep a PR under about 400 changed lines (excluding generated files and lockfiles) or say why.
 - Unrelated fixes go in another branch; list them as follow-ups in the PR.
-- Before opening or updating a PR run `gofmt -l .`, `go vet ./...`, `go test -race ./...`,
-  `golangci-lint run ./...`, and the end-to-end script when the CLI changed (`/verify`).
+- Before opening or updating a PR run `bash scripts/verify.sh` (`/verify`): gofmt, vet,
+  golangci-lint, `go test -race`, tooling tests and the end-to-end script.
 - Open the PR yourself once checks and independent review pass. The maintainer reviews the PR,
   not the steps before it. Never merge, tag, or publish a release.
 - Never skip hooks (`--no-verify`), force-push, rewrite pushed history or delete remote branches.

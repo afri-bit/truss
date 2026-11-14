@@ -1,7 +1,7 @@
 ---
 name: "verify"
-description: "Run TRUSS's quality gate (gofmt, go vet, golangci-lint, go test -race, memory check, and the end-to-end script when the CLI changed) and report a compact result. Use before pushing or opening a PR."
-argument-hint: "Optional: 'e2e' to include the built-binary end-to-end script"
+description: "Run TRUSS's quality gate with scripts/verify.sh (gofmt, go vet, golangci-lint for Linux, Windows and macOS files, go test -race, agent tooling and script tests, and the end-to-end script) and report the result. Use before pushing or opening a PR."
+argument-hint: "Optional: a subset such as 'gofmt,vet,lint' (default: every check)"
 user-invocable: true
 disable-model-invocation: false
 ---
@@ -14,13 +14,17 @@ $ARGUMENTS
 
 # Verify
 
-Delegate to the `check-runner` agent so long logs stay out of the main conversation.
+The gate is a script, so its result is the same every time and does not depend on an agent's
+summary.
 
-1. Include the end-to-end script if the input says `e2e`, or if `git diff develop...HEAD --name-only`
-   shows changes under `cmd/`, `internal/executor/`, `internal/runlog/`, `.github/scripts/`, or the
-   built binary's behavior may change. Include `release-check_test.sh` if release scripts changed.
-2. Spawn `check-runner` with the checks to run (see its definition).
-3. Relay its summary. If something failed, show the first actionable errors and propose the fix, but
-   never disable, skip or weaken a check or a test.
-4. If a tool is missing locally (for example `golangci-lint` or the required Go toolchain), say so
-   plainly; CI on Linux, macOS and Windows remains the authority.
+1. Run `bash scripts/verify.sh`. Every check runs by default, the end-to-end script included (about a
+   minute in total). `--only gofmt,vet` runs a subset while iterating; before a PR run them all.
+2. Relay its summary table as printed, including the `commit` and `result` lines. Paste the same
+   lines into the PR under "Checks".
+3. If a check failed, show the first actionable errors from its output and propose the fix. Never
+   disable, skip or weaken a check or a test.
+4. A `missing` tool is a failure, not a pass. In a cloud session, `golangci-lint` comes from the
+   environment's setup script; if it is missing, install it as the script's message says and run
+   again. CI on Linux, macOS and Windows remains the authority for code paths of other systems.
+
+The `check-runner` agent can still run the same checks when a separate context is useful.

@@ -119,8 +119,8 @@ the log, memory or an ADR.
 
 | Gate | Where | Fails when |
 |---|---|---|
-| Format and vet | CI, `/verify` | `gofmt -l .` prints anything, `go vet` complains |
-| Lint | CI, `/verify` | `golangci-lint` (includes `gosec`) |
+| Format and vet | CI, `/verify` (`scripts/verify.sh`) | `gofmt -l .` prints anything, `go vet` complains |
+| Lint | CI (blocking), `/verify` | `golangci-lint` v2.15.0 (includes `gosec`) on Linux, Windows and macOS files |
 | Tests | CI on 3 OSes, `/verify` | any failure; skipped or weakened tests are rejected in review |
 | End to end | `.github/scripts/e2e-test.sh` | built-binary behavior differs |
 | Memory | CI `agent-tooling` | invalid memory, state or log; stale index; secret-like content |
@@ -187,8 +187,8 @@ repeats the constitution or a spec.
 | `/milestone-status` | Release scope versus specs, tasks and code |
 | `/release-readiness` | Can this version be tagged? Read-only; never tags |
 | `/speckit-*` | Spec Kit: specify, clarify, plan, tasks, analyze, implement, converge, checklist, constitution, taskstoissues, git helpers |
-| `/verify` | Quality gate via `check-runner` |
-| `/review` | Independent parallel review |
+| `/verify` | Quality gate: `scripts/verify.sh`, same result every run |
+| `/review` | Independent parallel review; records the commit reviewed; `delta <sha>` re-reviews fixes |
 | `/adr` | Numbered decision record |
 | `/git-commit` | Clustered conventional commits authored by afri-bit; `Co-authored-by` allowed |
 | `/pr-description` | Short phone-readable PR text |

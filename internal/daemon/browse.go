@@ -55,7 +55,7 @@ func (d *Daemon) browse(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return browseError(path, err)
 	}
-	info, err := os.Stat(resolved)
+	info, err := os.Stat(resolved) // #nosec G703 -- loopback-only, checkBrowsePath-validated absolute path (ADR 0010)
 	if err != nil {
 		return browseError(path, err)
 	}
@@ -83,7 +83,7 @@ func (d *Daemon) browse(w http.ResponseWriter, r *http.Request) error {
 			continue
 		}
 		// Stat follows a link to its target; a broken link fails and is left out.
-		st, err := os.Stat(filepath.Join(resolved, name))
+		st, err := os.Stat(filepath.Join(resolved, name)) // #nosec G703 -- an entry of the validated directory above
 		if err != nil {
 			continue
 		}
@@ -114,7 +114,7 @@ func (d *Daemon) browse(w http.ResponseWriter, r *http.Request) error {
 // readNames reads directory entries in batches, so a huge folder costs a
 // bounded amount of memory and time. cut is true when it stopped early.
 func readNames(ctx context.Context, dir string) (names []os.DirEntry, cut bool, err error) {
-	f, err := os.Open(dir) // #nosec G304 -- a listing of a directory the user chose; only names are read
+	f, err := os.Open(dir) // #nosec G304 G703 -- a listing of a directory the user chose; only names are read
 	if err != nil {
 		return nil, false, err
 	}

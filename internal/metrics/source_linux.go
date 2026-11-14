@@ -17,7 +17,7 @@ func newSource() (source, string) {
 	if _, err := os.Stat("/proc/stat"); err != nil {
 		return nil, "/proc is not available"
 	}
-	return procfs{root: "/proc", page: uint64(os.Getpagesize())}, ""
+	return procfs{root: "/proc", page: uint64(os.Getpagesize())}, "" // #nosec G115 -- the page size is positive
 }
 
 // procfs reads a Linux /proc tree. root is "/proc" in production and a
@@ -93,7 +93,7 @@ type stat struct {
 }
 
 func (p procfs) readStat(dir string) (stat, bool) {
-	raw, err := os.ReadFile(filepath.Join(p.root, dir, "stat"))
+	raw, err := os.ReadFile(filepath.Join(p.root, dir, "stat")) // #nosec G304 -- a /proc/<pid>/stat file
 	if err != nil {
 		return stat{}, false
 	}

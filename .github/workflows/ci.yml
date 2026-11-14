@@ -34,26 +34,6 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      # Baseline: golangci-lint has never run in CI. It is non-blocking until
-      # the baseline findings (two known on develop: cmd/truss/run.go G301 at
-      # line 88 and G304 at line 93) are fixed or recorded; then drop continue-on-error.
-      # Built with go install so it uses the runner's Go (the repo's Go version
-      # is newer than prebuilt release binaries). Ubuntu only to keep the matrix cheap.
-      - name: golangci-lint
-        if: runner.os == 'Linux'
-        continue-on-error: true
-        shell: bash
-        run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
-          "$(go env GOPATH)/bin/golangci-lint" run ./...
-
-      # A separate step so Windows-only files are linted even when the Linux run reports findings.
-      - name: golangci-lint (Windows files)
-        if: runner.os == 'Linux'
-        continue-on-error: true
-        shell: bash
-        run: GOOS=windows "$(go env GOPATH)/bin/golangci-lint" run ./...
-
       # -race needs cgo. Windows runners may lack gcc; then run without -race.
       - name: Choose race flag
         id: race
@@ -86,6 +66,29 @@ jobs:
           bin="bin/truss$(go env GOEXE)"
           go build -o "$bin" ./cmd/truss
           bash .github/scripts/e2e-test.sh "$bin"
+
+      # Blocking. Last, and run even after a failure, so test and lint results
+      # are both reported. Built with go install so it uses the runner's Go (the
+      # repo's Go version is newer than prebuilt release binaries). Ubuntu only
+      # to keep the matrix cheap; other systems' files are linted with GOOS below.
+      # Keep the version in step with scripts/verify.sh and the cloud environment.
+      - name: golangci-lint
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+          "$(go env GOPATH)/bin/golangci-lint" run ./...
+
+      # Separate steps so Windows- and macOS-only files are linted even when the Linux run reports findings.
+      - name: golangci-lint (Windows files)
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        shell: bash
+        run: GOOS=windows "$(go env GOPATH)/bin/golangci-lint" run ./...
+
+      - name: golangci-lint (macOS files)
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        shell: bash
+        run: GOOS=darwin "$(go env GOPATH)/bin/golangci-lint" run ./...
 
   # Browser tests for TRUSS Desktop (specs/013-desktop-polish). Linux only: the
   # suite is portable Node, but Chromium on three runners costs more than it
@@ -123,6 +126,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # scripts/verify_test.sh needs go and gofmt.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
 
       - name: Memory, state and gate tests
         run: python3 -m unittest discover -s scripts/tests
@@ -137,3 +144,4 @@ jobs:
         run: |
           bash .claude/hooks/guard-git_test.sh
           bash .github/scripts/release-check_test.sh
+          bash scripts/verify_test.sh
