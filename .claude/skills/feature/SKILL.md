@@ -24,7 +24,7 @@ spend, credentials, or a decision the constitution reserves to a human.
 
 ## Preconditions
 
-- Not on `develop`, `main` or `master`. Branch from `develop` as `feature/`, `bugfix/` or `hotfix/`
+- Not on `develop`, `main` or `master`. Branch from `develop` as `bugfix/`, `feature/`, `hotfix/`, `release/`, `task/` or `chore/` (never `claude/`)
   (`.claude/rules/git-workflow.md`). If the input is empty, ask for the change in one sentence.
 - `/recall` for the topic. Read `docs/MILESTONE.md` and the constitution if not read this session.
 - If the request is outside the current release, stop and report it; do not start a spec.

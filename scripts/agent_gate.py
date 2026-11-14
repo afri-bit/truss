@@ -25,7 +25,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-BRANCH_RE = re.compile(r"^(feature|bugfix|hotfix)/[a-z0-9][a-z0-9._-]*$")
+BRANCH_RE = re.compile(r"^(bugfix|feature|hotfix|release|task|chore)/[a-z0-9][a-z0-9._-]*$")
 SPEC_BRANCH_RE = re.compile(r"^feature/(\d{3}-[a-z0-9-]+)$")
 CODE_PATHS = (re.compile(r"^cmd/"), re.compile(r"^internal/"))
 # Agents never change these; a human makes the change (listed at the top of the PR).
@@ -64,8 +64,9 @@ def evaluate(root: str, base: str, head: str, branch: str, author: str, agents: 
     agent = is_agent(branch, author, agents)
 
     # G1 branch name
-    if not branch.startswith(HARNESS_PREFIX) and not BRANCH_RE.match(branch):
-        fails.append(f"G1 branch '{branch}' must start with feature/, bugfix/ or hotfix/.")
+    # No exemption for the harness prefix: claude/... is not an allowed branch name.
+    if not BRANCH_RE.match(branch):
+        fails.append(f"G1 branch '{branch}' must start with bugfix/, feature/, hotfix/, release/, task/ or chore/.")
 
     # G6 memory and state files are valid
     memory = Path(root, "scripts/memory.py")

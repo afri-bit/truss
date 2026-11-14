@@ -6,6 +6,7 @@ package webui
 import (
 	"embed"
 	"io/fs"
+	"strings"
 )
 
 //go:embed assets
@@ -13,6 +14,14 @@ var assets embed.FS
 
 //go:embed demo
 var demo embed.FS
+
+//go:embed VERSION
+var version string
+
+// Version is TRUSS Desktop's own version, kept in the VERSION file next to this package so that
+// it is separate from the Go module version in go.mod. A release tag must match both (see
+// .github/scripts/release-check.sh).
+func Version() string { return strings.TrimSpace(version) }
 
 // Files returns the application's files, with index.html at the root.
 func Files() fs.FS {

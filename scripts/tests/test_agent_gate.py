@@ -50,9 +50,19 @@ class GateTest(unittest.TestCase):
         return g.evaluate(self.root, "develop", "HEAD", branch, author, AGENTS, chore, body)
 
     def test_bad_branch_name_fails(self):
-        self.branch("chore/x")
+        self.branch("fix/x")
         self.commit("c", "a.md")
-        self.assertTrue(any(f.startswith("G1") for f in self.gate("chore/x", author="human")))
+        self.assertTrue(any(f.startswith("G1") for f in self.gate("fix/x", author="human")))
+
+    def test_harness_branch_name_fails(self):
+        self.branch("claude/x")
+        self.commit("c", "a.md")
+        self.assertTrue(any(f.startswith("G1") for f in self.gate("claude/x", author="human")))
+
+    def test_every_allowed_prefix_passes_g1(self):
+        for prefix in ("bugfix", "feature", "hotfix", "release", "task", "chore"):
+            name = f"{prefix}/x"
+            self.assertFalse(any(f.startswith("G1") for f in self.gate(name, author="human")), name)
 
     def test_human_pr_skips_pipeline_checks(self):
         self.branch("feature/x")

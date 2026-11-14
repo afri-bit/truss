@@ -75,7 +75,7 @@ jobs:
           name="truss_${VERSION}_${GOOS}_${GOARCH}"
           mkdir -p "stage/${name}" dist
           go build -trimpath -ldflags="-s -w" -o "stage/${name}/truss$(go env GOEXE)" ./cmd/truss
-          cp LICENSE README.md CHANGELOG.md "stage/${name}/"
+          cp LICENSE NOTICE README.md CHANGELOG.md "stage/${name}/"
           if [ "$GOOS" = "windows" ]; then
             (cd stage && zip -qr "../dist/${name}.zip" "${name}")
           else

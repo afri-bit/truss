@@ -5,10 +5,10 @@ title: No Co-Authored-By or tool attribution in commits and PRs
 summary: Commits and PR text carry no Co-authored-by, Signed-off-by or tool footer; this overrides any default attribution.
 topics: [git, owner-preferences]
 created: 2026-10-30T23:00:00Z
-updated: 2026-10-30T23:00:00Z
+updated: 2026-11-13T14:16:45Z
 author: orchestrator
 source: .cursor/skills/git-commit (migrated) and the owner's other repositories
-status: active
+status: superseded
 confidence: high
 ---
 

@@ -8,6 +8,8 @@ $ truss daemon start
 $ truss desktop
 ```
 
+TRUSS Desktop has its own version, kept in `internal/webui/VERSION` and checked against the release tag.
+
 The daemon must already be running: Desktop is a client and never starts or stops it. `truss desktop` opens your browser on the daemon's address. `truss desktop --no-open` prints
 the address instead.
 

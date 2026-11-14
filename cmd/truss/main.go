@@ -1,3 +1,4 @@
+// Command truss is the TRUSS command line: it runs pipelines, manages the daemon and opens TRUSS Desktop.
 package main
 
 import (

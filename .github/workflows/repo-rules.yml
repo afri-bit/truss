@@ -1,0 +1,51 @@
+name: Repository rules
+
+# Hard rules from the constitution (Branching) and .claude/rules/git-workflow.md.
+# Make both jobs required checks in the branch ruleset for develop and main.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-rules-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  branch-name:
+    name: Branch name
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts
+      - name: Branch uses an allowed prefix
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: bash .github/scripts/branch-name-check.sh "$BRANCH"
+
+  commit-identity:
+    name: Commit identity
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Commits are authored by afri-bit
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: bash .github/scripts/commit-identity-check.sh "$BASE" "$HEAD"
+
+  rule-scripts:
+    name: Rule script tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: bash .github/scripts/branch-name-check_test.sh
+      - run: bash .github/scripts/commit-identity-check_test.sh
