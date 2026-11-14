@@ -3,9 +3,11 @@
   "title": "Commit identity: maintainer email; Claude may co-author",
   "tier": 0,
   "branch": "task/commit-coauthor",
-  "status": "in_progress",
-  "step": "review",
-  "steps_done": [],
+  "status": "in_review",
+  "step": "pr-open",
+  "steps_done": [
+    "review and delta reviews"
+  ],
   "requirements": [],
   "specs": [],
   "owner_agent": "orchestrator",
@@ -14,5 +16,5 @@
   "next_actions": [],
   "pr": null,
   "created": "2026-11-14T13:15:26Z",
-  "updated": "2026-11-14T13:15:26Z"
+  "updated": "2026-11-14T13:19:47Z"
 }
