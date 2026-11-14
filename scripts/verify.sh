@@ -26,9 +26,11 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 	--only)
 		[ $# -ge 2 ] && [ -n "$2" ] || { echo "$usage" >&2; exit 2; }
-		for name in $(echo "$2" | tr ',' ' '); do
+		set -f # no glob expansion of the names
+		for name in $(printf '%s' "$2" | tr ',' ' '); do
 			case " $checks " in *" $name "*) ;; *) echo "verify.sh: unknown check '$name'; $usage" >&2; exit 2 ;; esac
 		done
+		set +f
 		only=",$2,"; shift ;;
 	-h | --help) sed -n '2,/^set -u/p' "$0" | sed '$d'; exit 0 ;;
 	*) echo "$usage" >&2; exit 2 ;;
