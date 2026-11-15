@@ -5,12 +5,19 @@
 //   - docs/images/logo.svg -> src/assets/logo.svg and public/favicon.svg
 //   - Desktop's fonts    -> public/fonts/*  (IBM Plex, SIL OFL 1.1; the site and Desktop share them)
 // Everything it writes is ignored by git. Run by `npm run dev` and `npm run build`.
-import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+//
+// Environment: SYNC_STRICT=1 fails on a problem the docs have (CI sets it); SYNC_REPO and SYNC_SITE
+// replace the repository and site folders (the tests use them); TRUSS_DOCS_BRANCH is the branch the
+// GitHub links point at (default main).
+//
+// Limits: only fenced code (``` or ~~~) is recognised as code, so use fences, not indentation.
+import { cp, lstat, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const site = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const repo = resolve(site, '..');
+const here = dirname(fileURLToPath(import.meta.url));
+const site = process.env.SYNC_SITE ? resolve(process.env.SYNC_SITE) : resolve(here, '..');
+const repo = process.env.SYNC_REPO ? resolve(process.env.SYNC_REPO) : resolve(site, '..');
 const docsDir = join(repo, 'docs');
 const outDocs = join(site, 'src', 'content', 'docs', 'docs');
 const REPO_URL = 'https://github.com/afri-bit/truss';
@@ -38,29 +45,44 @@ const warn = (msg) => {
 const exists = async (p) => stat(p).then(() => true, () => false);
 const isDir = async (p) => stat(p).then((s) => s.isDirectory(), () => false);
 
+// What the site publishes must be a plain file of the repository: a link planted in docs/ would
+// otherwise publish whatever it points at (the logo becomes public/favicon.svg).
+async function copyRegular(src, dst) {
+  const info = await lstat(src);
+  if (!info.isFile()) throw new Error(`sync: ${src} is not a regular file (links are not followed)`);
+  await mkdir(dirname(dst), { recursive: true });
+  await cp(src, dst);
+}
+
 // A link in a docs file becomes a link between site pages, or a link into the repository on GitHub.
 // Site links are relative (../<slug>/), so they work under any base path.
-async function rewriteTarget(target, fromFile) {
-  if (/^([a-z][a-z0-9+.-]*:|#|\/\/)/i.test(target)) return target; // external, mailto, anchor
+async function rewriteTarget(rawTarget, fromFile) {
+  const angle = rawTarget.startsWith('<') && rawTarget.endsWith('>');
+  const target = angle ? rawTarget.slice(1, -1) : rawTarget;
+  const keep = (value) => (angle ? `<${value}>` : value); // a target written in <...> stays in <...>
+  if (/^([a-z][a-z0-9+.-]*:|#|\/\/)/i.test(target)) return rawTarget; // external, mailto, anchor
   const hashAt = target.indexOf('#');
   const path = hashAt === -1 ? target : target.slice(0, hashAt);
   const hash = hashAt === -1 ? '' : target.slice(hashAt);
-  if (path === '') return target;
+  if (path === '') return rawTarget;
 
   // Resolve against the file's folder, as a path inside the repository.
   const repoPath = posix.normalize(posix.join('docs', posix.dirname(fromFile), path));
-  if (repoPath.startsWith('docs/images/')) return `../images/${repoPath.slice('docs/images/'.length)}${hash}`;
-  if (repoPath.startsWith('docs/') && slugOf.has(repoPath.slice('docs/'.length))) {
-    return `../${slugOf.get(repoPath.slice('docs/'.length))}/${hash}`;
+  if (repoPath.startsWith('..')) return rawTarget; // outside the repository: leave it
+  if (repoPath.startsWith('docs/images/') && repoPath !== 'docs/images/logo.svg') {
+    if (!(await exists(join(repo, repoPath)))) warn(`${fromFile}: image not found: ${target}`);
+    return keep(`../images/${repoPath.slice('docs/images/'.length)}${hash}`);
   }
-  if (repoPath.startsWith('..')) return target; // outside the repository: leave it
+  if (repoPath.startsWith('docs/') && slugOf.has(repoPath.slice('docs/'.length))) {
+    return keep(`../${slugOf.get(repoPath.slice('docs/'.length))}/${hash}`);
+  }
   const onDisk = join(repo, repoPath);
   if (!(await exists(onDisk))) {
     warn(`${fromFile}: link target not found in the repository: ${target}`);
-    return target;
+    return rawTarget;
   }
   const kind = (await isDir(onDisk)) ? 'tree' : 'blob';
-  return `${REPO_URL}/${kind}/${BRANCH}/${repoPath.replace(/\/$/, '')}${hash}`;
+  return keep(`${REPO_URL}/${kind}/${BRANCH}/${repoPath.replace(/\/$/, '')}${hash}`);
 }
 
 const stripMarkdown = (s) =>
@@ -71,14 +93,24 @@ const stripMarkdown = (s) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+const closesFence = (m, marker) => m && m[1][0] === marker[0] && m[1].length >= marker.length && m[2].trim() === '';
+
 function describe(lines) {
   // The first plain paragraph after the title.
-  let para = [];
-  let inFence = false;
+  const para = [];
+  let fence = null;
   for (const line of lines) {
-    if (line.startsWith('```')) inFence = !inFence;
-    if (inFence || line.startsWith('```')) continue;
-    if (/^(#|>|\||\s*[-*] |\d+\. |<)/.test(line)) {
+    const f = line.match(FENCE);
+    if (fence) {
+      if (closesFence(f, fence)) fence = null;
+      continue;
+    }
+    if (f) {
+      fence = f[1];
+      continue;
+    }
+    if (/^(#|>|\||\s*[-*] |\s*\d+\. |<)/.test(line)) {
       if (para.length) break;
       continue;
     }
@@ -91,10 +123,34 @@ function describe(lines) {
   const text = stripMarkdown(para.join(' '));
   if (text.length <= 160) return text;
   const cut = text.slice(0, 157);
-  return `${cut.slice(0, cut.lastIndexOf(' '))}...`;
+  const at = cut.lastIndexOf(' ');
+  return `${at > 0 ? cut.slice(0, at) : cut}...`;
 }
 
 const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// [text](target "title"), ![alt](<target with spaces>), titles in "", '' or ().
+const INLINE = /\]\(\s*(<[^>]*>|[^)\s]+)((?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?)\s*\)/g;
+// [ref]: target "title"
+const DEFINITION = /^( {0,3}\[[^\]]+\]:\s*)(<[^>]*>|\S+)(.*)$/;
+
+async function rewriteLine(line, fromFile) {
+  const def = line.match(DEFINITION);
+  if (def) return `${def[1]}${await rewriteTarget(def[2], fromFile)}${def[3]}`;
+  // Inline code spans are left alone.
+  const parts = line.split(/(`+[^`]*`+)/);
+  for (let i = 0; i < parts.length; i += 2) {
+    const found = [...parts[i].matchAll(INLINE)];
+    let rebuilt = '';
+    let last = 0;
+    for (const m of found) {
+      rebuilt += `${parts[i].slice(last, m.index)}](${await rewriteTarget(m[1], fromFile)}${m[2]})`;
+      last = m.index + m[0].length;
+    }
+    parts[i] = rebuilt + parts[i].slice(last);
+  }
+  return parts.join('');
+}
 
 async function transform(page) {
   const source = await readFile(join(docsDir, page.file), 'utf8');
@@ -103,64 +159,48 @@ async function transform(page) {
   while (lines.length && lines[0].trim() === '') lines.shift();
 
   const out = [];
-  let fence = null; // the fence line that opened a code block
-  let mermaid = null; // collected lines of a mermaid block
+  let fence = null; // the opening fence marker of a code block
+  let mermaid = null; // the marker and collected lines of a mermaid block
   for (const line of lines) {
+    const f = line.match(FENCE);
     if (mermaid) {
-      if (line.startsWith('```')) {
-        out.push('', `<pre class="mermaid">${escapeHtml(mermaid.join('\n'))}</pre>`, '');
+      if (closesFence(f, mermaid.marker)) {
+        out.push('', `<pre class="mermaid">${escapeHtml(mermaid.lines.join('\n'))}</pre>`, '');
         mermaid = null;
       } else {
-        mermaid.push(line);
+        mermaid.lines.push(line);
       }
       continue;
     }
     if (fence) {
-      if (line.startsWith('```')) fence = null;
+      if (closesFence(f, fence)) fence = null;
       out.push(line);
       continue;
     }
-    if (/^```\s*mermaid\s*$/.test(line)) {
-      mermaid = [];
-      continue;
-    }
-    if (line.startsWith('```')) {
-      fence = line;
-      out.push(line);
-      continue;
-    }
-    // Links outside code: [text](target) and ![alt](target); inline code spans are left alone.
-    const parts = line.split(/(`[^`]*`)/);
-    for (let i = 0; i < parts.length; i += 2) {
-      const pending = [];
-      parts[i].replace(/\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g, (m, target, title, offset) => {
-        pending.push({ m, target, title, offset });
-        return m;
-      });
-      let rebuilt = '';
-      let last = 0;
-      for (const p of pending) {
-        rebuilt += parts[i].slice(last, p.offset) + `](${await rewriteTarget(p.target, page.file)}${p.title})`;
-        last = p.offset + p.m.length;
+    if (f) {
+      if (f[2].trim() === 'mermaid') {
+        mermaid = { marker: f[1], lines: [] };
+      } else {
+        fence = f[1];
+        out.push(line);
       }
-      parts[i] = rebuilt + parts[i].slice(last);
+      continue;
     }
-    out.push(parts.join(''));
+    out.push(await rewriteLine(line, page.file));
   }
 
-  const body = out.join('\n');
   const description = describe(lines);
   const front = [
     '---',
     `title: ${JSON.stringify(page.title)}`,
     description ? `description: ${JSON.stringify(description)}` : null,
-    `editUrl: ${REPO_URL}/edit/${BRANCH}/docs/${page.file}`,
+    `editUrl: ${JSON.stringify(`${REPO_URL}/edit/${BRANCH}/docs/${page.file}`)}`,
     '---',
     '',
   ]
     .filter((l) => l !== null)
     .join('\n');
-  await writeFile(join(outDocs, `${page.slug}.md`), `${front}${body}\n`);
+  await writeFile(join(outDocs, `${page.slug}.md`), `${front}${out.join('\n')}\n`);
 }
 
 await rm(outDocs, { recursive: true, force: true });
@@ -172,18 +212,19 @@ const imagesOut = join(site, 'src', 'content', 'docs', 'images');
 await rm(imagesOut, { recursive: true, force: true });
 await mkdir(imagesOut, { recursive: true });
 for (const name of await readdir(join(docsDir, 'images'))) {
-  if (name !== 'logo.svg') await cp(join(docsDir, 'images', name), join(imagesOut, name));
+  if (name !== 'logo.svg') await copyRegular(join(docsDir, 'images', name), join(imagesOut, name));
 }
 
 // The logo, as the site's logo and its favicon.
-await mkdir(join(site, 'src', 'assets'), { recursive: true });
-await cp(join(docsDir, 'images', 'logo.svg'), join(site, 'src', 'assets', 'logo.svg'));
-await cp(join(docsDir, 'images', 'logo.svg'), join(site, 'public', 'favicon.svg'));
+await copyRegular(join(docsDir, 'images', 'logo.svg'), join(site, 'src', 'assets', 'logo.svg'));
+await copyRegular(join(docsDir, 'images', 'logo.svg'), join(site, 'public', 'favicon.svg'));
 
 // Desktop's fonts (IBM Plex Sans and Mono, SIL OFL 1.1, licence included).
+const fontsSrc = join(repo, 'internal', 'webui', 'assets', 'fonts');
 const fontsOut = join(site, 'public', 'fonts');
 await rm(fontsOut, { recursive: true, force: true });
-await cp(join(repo, 'internal', 'webui', 'assets', 'fonts'), fontsOut, { recursive: true });
+await mkdir(fontsOut, { recursive: true });
+for (const name of await readdir(fontsSrc)) await copyRegular(join(fontsSrc, name), join(fontsOut, name));
 
 console.log(`sync: ${pages.length} pages, images, logo and fonts`);
 if (warnings.length && process.env.SYNC_STRICT === '1') {

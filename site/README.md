@@ -13,6 +13,7 @@ npm ci          # exact versions from package-lock.json
 npm run dev     # http://localhost:4321/truss/ with live reload
 npm run build   # static site in site/dist
 npm run preview # serve what build made
+npm test        # the sync script's tests (run by CI)
 ```
 
 `npm run dev` and `npm run build` first run `scripts/sync.mjs`, which makes the docs pages from
@@ -34,9 +35,18 @@ writes is ignored by git. To add a page, add it to `pages` in `scripts/sync.mjs`
 | `src/scripts/` | The home page's script (about 3.5 KB gzipped) and the docs' diagram renderer |
 | `scripts/sync.mjs` | Builds the generated parts from the repository |
 
+## Privacy and trust
+
+- Astro sends anonymous usage data on a build unless you turn it off: `npx astro telemetry disable`,
+  or set `ASTRO_TELEMETRY_DISABLED=1` (CI does). The published site makes no third-party request.
+- `docs/` is trusted, reviewed content: raw HTML in a docs file reaches the site unchanged. `sync.mjs`
+  refuses to copy a symbolic link, so a link planted in `docs/images/` is not published.
+- CI installs with `npm ci --ignore-scripts`.
+
 ## The brand
 
-Amber on graphite: the logo's mark and TRUSS Desktop's own tokens, set in IBM Plex. Graphite carries
+Amber on graphite: the logo's mark and TRUSS Desktop's own tokens, set in IBM Plex (code blocks use
+syntax themes made from the same palette, `src/styles/code-themes.mjs`). Graphite carries
 the interface; amber is the one accent; green, blue and red appear only to show the state of a step,
 as in Desktop. There is no violet anywhere (Starlight's purple is remapped). Change a colour in
 `tokens.css` and both the docs and the home page follow. Text pairs are at least 4.5:1 in both schemes.

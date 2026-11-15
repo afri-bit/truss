@@ -1,6 +1,6 @@
 ---
 // The workflow of one run, drawn like TRUSS Desktop's run view: steps in stages, a status icon on
-// each, elbow lines for `needs`. Server side it is the finished run; src/scripts/run.ts drives it.
+// each, elbow lines for `needs`. Server side it is the finished run; src/scripts/home.ts drives it.
 import { STEPS, edges, nodePos, stages, duration } from '../lib/run';
 ---
 
@@ -8,7 +8,7 @@ import { STEPS, edges, nodePos, stages, duration } from '../lib/run';
   class="graph"
   viewBox="0 0 640 262"
   role="img"
-  aria-label="Workflow of the ci pipeline in three stages. lint/vet, test/unit and docs/build run side by side, then release/build, then release/publish. Every step succeeds."
+  aria-label="Workflow of the release pipeline in three stages. lint/vet, test/unit and docs/build run side by side, then release/build, then release/publish. Every step succeeds."
 >
   {stages.map((s) => <text class="stage" x={s.x} y="14">{s.label}</text>)}
   {

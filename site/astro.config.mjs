@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import { trussDark, trussLight } from './src/styles/code-themes.mjs';
 
 // Where the site is served. GitHub Pages serves a project at /<repo>/; set SITE_URL and SITE_BASE
 // for another host (for example SITE_BASE=/ on a domain of its own).
@@ -22,7 +23,8 @@ export default defineConfig({
       components: { Footer: './src/components/DocsFooter.astro' },
       tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 },
       lastUpdated: false,
-      expressiveCode: { styleOverrides: { borderRadius: '6px' } },
+      // Code blocks: the brand's own syntax themes (no violet), in Starlight's frame.
+      expressiveCode: { themes: [trussDark, trussLight], styleOverrides: { borderRadius: '6px' } },
       head: [
         { tag: 'meta', attrs: { name: 'theme-color', content: '#0c0e12' } },
       ],

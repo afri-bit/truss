@@ -1,6 +1,6 @@
 ---
 // The page's dealt moment: scrolling through this section reads a pipeline file top to bottom and
-// builds the graph TRUSS draws from it (src/scripts/moment.ts). Server side, and without script,
+// builds the graph TRUSS draws from it (src/scripts/home.ts). Server side, and without script,
 // under reduced motion and on a phone, the finished picture stands and nothing is hidden.
 const lines: [number, string][] = [
   [0, 'version: "1"'],
@@ -102,9 +102,11 @@ const paint = (line: string): string => {
               </g>
             </svg>
           </div>
-          <div class="term" data-at="5" role="img" aria-label="Output of truss validate">
+          <div class="term" data-at="5" role="group" aria-label="Output of truss validate">
             <p><span class="term__p">$</span> truss validate</p>
+            <p>truss.yaml is valid: project demo</p>
             <p>.truss/flows/ci.yaml is valid: pipeline ci, 3 steps, concurrency 2</p>
+            <p class="term__d">schedule 30 1 * * * (local time, missed: run)</p>
             <p class="term__d">step lint/vet</p>
             <p class="term__d">step test/unit</p>
             <p class="term__d">step release/build needs lint/vet, test/unit</p>

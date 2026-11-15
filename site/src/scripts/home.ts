@@ -16,9 +16,22 @@ const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
     root.classList.toggle('nav-open', open);
     toggle.setAttribute('aria-expanded', String(open));
   };
-  toggle.addEventListener('click', () => set(!root.classList.contains('nav-open')));
+  toggle.addEventListener('click', () => {
+    const open = !root.classList.contains('nav-open');
+    set(open);
+    if (open) document.querySelector<HTMLElement>('#site-nav a')?.focus(); // the sheet is first in the focus order
+  });
   document.querySelectorAll('#site-nav a').forEach((a) => a.addEventListener('click', () => set(false)));
-  addEventListener('keydown', (e) => e.key === 'Escape' && set(false));
+  addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !root.classList.contains('nav-open')) return;
+    set(false);
+    toggle.focus();
+  });
+  // Tabbing out of the open sheet closes it, so focus never lands on the page behind it.
+  document.querySelector('.nav')?.addEventListener('focusout', (e) => {
+    const next = (e as FocusEvent).relatedTarget as Node | null;
+    if (next && !document.querySelector('.nav')!.contains(next)) set(false);
+  });
   matchMedia('(min-width: 1024px)').addEventListener('change', (e) => e.matches && set(false));
 })();
 
@@ -37,6 +50,7 @@ function driveRun(host: HTMLElement) {
   const elapsed = q<HTMLElement>('[data-elapsed], [data-elapsed-side]');
   const progress = q<HTMLElement>('[data-progress]');
   const now = q<HTMLElement>('[data-now]');
+  const nowLabel = q<HTMLElement>('[data-now-label]');
   const bar = q<HTMLElement>('[data-bar]');
   const live = q<HTMLElement>('[data-live]');
   const lines = host.querySelector<HTMLElement>('[data-lines]');
@@ -75,7 +89,9 @@ function driveRun(host: HTMLElement) {
     const okCount = STEPS.filter((s) => state.get(s.id) === 'ok').length;
     for (const el of progress) setText(el, `${okCount} / ${STEPS.length} steps`);
     const running = STEPS.filter((s) => state.get(s.id) === 'running').map((s) => s.id);
-    for (const el of now) setText(el, running.length ? running.join(', ') : done ? 'none' : '–');
+    // Desktop shows "Running now" while a run goes on and "Ended <time>" once it is done.
+    for (const el of nowLabel) setText(el, done ? 'Ended' : 'Running now');
+    for (const el of now) setText(el, done ? stamp(SUMMARY_AT) : running.length ? running.join(', ') : '–');
     for (const el of bar) el.style.transform = `scaleX(${Math.max(0, Math.min(1, (t - first) / (SUMMARY_AT - first)))})`;
     for (const el of live) {
       setText(el, done ? 'done' : 'live');
@@ -96,32 +112,37 @@ function driveRun(host: HTMLElement) {
 
   const pause = host.querySelector<HTMLButtonElement>('[data-pause]');
   let paused = false;
-  pause?.addEventListener('click', () => {
-    paused = !paused;
-    pause.setAttribute('aria-pressed', String(paused));
-    pause.setAttribute('aria-label', paused ? 'Play the animation' : 'Pause the animation');
-  });
-
   let t = -900; // the graph assembles first (the hero's entrance), then the run starts
   let last = performance.now();
   let resetTimer = 0;
+  let raf = 0;
   const frame = (clock: number) => {
     const dt = Math.min(clock - last, 100);
     last = clock;
-    if (!paused) {
-      t += dt * speed;
-      if (t > CYCLE) {
-        t = 0;
-        host.classList.add('is-reset'); // dims, then rewrites: the window is never empty
-        clearTimeout(resetTimer);
-        resetTimer = window.setTimeout(() => host.classList.remove('is-reset'), 260);
-      }
-      apply(t);
+    t += dt * speed;
+    if (t > CYCLE) {
+      t = 0;
+      host.classList.add('is-reset'); // dims, then rewrites: the window is never empty
+      clearTimeout(resetTimer);
+      resetTimer = window.setTimeout(() => host.classList.remove('is-reset'), 260);
     }
-    requestAnimationFrame(frame);
+    apply(t);
+    raf = requestAnimationFrame(frame);
   };
+  pause?.addEventListener('click', () => {
+    paused = !paused;
+    // `is-paused` also stops the spinners and the moving lines, which are CSS animations.
+    host.classList.toggle('is-paused', paused);
+    pause.setAttribute('aria-pressed', String(paused));
+    pause.setAttribute('aria-label', paused ? 'Play the animation' : 'Pause the animation');
+    cancelAnimationFrame(raf);
+    if (!paused) {
+      last = performance.now();
+      raf = requestAnimationFrame(frame);
+    }
+  });
   apply(t);
-  requestAnimationFrame(frame);
+  raf = requestAnimationFrame(frame);
 }
 
 function logLine(l: (typeof LOG)[number], i: number): HTMLLIElement {

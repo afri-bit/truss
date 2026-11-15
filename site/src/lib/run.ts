@@ -3,6 +3,10 @@
 // the page is whole without script; client side, as a loop) and TRUSS Desktop's run view is the
 // model for both. Times are milliseconds from the start of one cycle.
 
+// The pipeline these windows run. (The pipeline section shows a different, smaller one: `ci`.)
+export const PIPELINE = 'release';
+export const RUN_ID = '20261116-091402-3aefdd';
+
 export type RunStep = {
   id: string; // job/step, as TRUSS names it
   job: string;
@@ -51,7 +55,9 @@ export const stages = [
   { x: 456, label: 'stage 3 · 1 step' },
 ];
 
+// Desktop shows a step's time with one decimal; the run log writes three, as TRUSS prints it.
 export const duration = (s: RunStep): string => `${((s.end - s.start) / 1000).toFixed(1)}s`;
+const precise = (ms: number): string => `${(ms / 1000).toFixed(3)}s`;
 
 const START_CLOCK = 9 * 3600 + 14 * 60 + 2; // 09:14:02
 
@@ -64,18 +70,25 @@ export const stamp = (ms: number): string => {
 export type LogLine = { at: number; id: string | null; text: string; kind: 'meta' | 'out' | 'ok' | 'sum' };
 
 export const LOG: LogLine[] = (() => {
-  const lines: LogLine[] = [];
+  // A run log opens with the setup lines (spec 002), then each step.
+  const lines: LogLine[] = [
+    'environment ready',
+    'os linux',
+    'arch amd64',
+    'shell /bin/sh',
+    'directory /home/me/release',
+  ].map((text) => ({ at: 0, id: null, text: `setup ${text}`, kind: 'meta' as const }));
   for (const s of STEPS) {
     lines.push({ at: s.start, id: s.id, text: 'started', kind: 'meta' });
     s.output.forEach((o, i) =>
       lines.push({ at: s.start + 350 + i * 420, id: s.id, text: `| ${o}`, kind: 'out' }),
     );
-    lines.push({ at: s.end, id: s.id, text: `finished duration ${duration(s)} exit 0`, kind: 'ok' });
+    lines.push({ at: s.end, id: s.id, text: `finished duration ${precise(s.end - s.start)} exit 0`, kind: 'ok' });
   }
   lines.push({
     at: SUMMARY_AT,
     id: null,
-    text: `summary succeeded steps ${STEPS.length} duration ${((SUMMARY_AT - 700) / 1000).toFixed(1)}s`,
+    text: `summary succeeded steps ${STEPS.length} duration ${precise(SUMMARY_AT - STEPS[0].start)}`,
     kind: 'sum',
   });
   return lines.sort((a, b) => a.at - b.at);

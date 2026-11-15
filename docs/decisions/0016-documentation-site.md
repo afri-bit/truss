@@ -44,8 +44,15 @@ settings.
 
 - Good: search, a sidebar, light and dark docs, and a home page that shows the product.
 - Good: one source for the docs. The product is unaffected.
-- Bad: a Node toolchain and about 390 packages for the site. That is a supply-chain surface. It is
-  kept out of the product and pinned by lockfile.
+- Bad: a Node toolchain and a large tree for the site: the lockfile lists 479 entries (about 390 install on
+  one platform; the rest are optional per-platform binaries). That is a supply-chain surface. It is
+  kept out of the product and pinned by lockfile, every entry has an integrity hash and comes from
+  the npm registry, `npm audit` reports nothing, and CI installs with `--ignore-scripts`.
+- Bad: Astro sends anonymous usage data on a build unless told not to; CI sets
+  `ASTRO_TELEMETRY_DISABLED=1` and `site/README.md` says how to turn it off locally.
+- Licences: some build tools carry other licences than Apache 2.0. `elkjs` (inside Mermaid's browser
+  bundle) is EPL-2.0 or GPL-3.0-or-later, the libvips binaries are LGPL-3.0, and `khroma` states no
+  licence. None is part of the TRUSS binary or its module.
 - Bad: another CI job. Astro 7 and Starlight are young and may need updates.
 - Follow-ups: deploy to GitHub Pages (needs repository settings); a share image for social cards,
   if wanted; a dependency update routine (for example Dependabot for `site/`); a link and

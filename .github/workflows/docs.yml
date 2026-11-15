@@ -29,19 +29,29 @@ jobs:
   build:
     name: Build the site (ubuntu-latest)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: site
+    env:
+      ASTRO_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: site/package-lock.json
 
+      # --ignore-scripts: nothing in the tree needs an install script on Linux, and a later
+      # lockfile change must not be able to run code on the runner.
       - name: Install
-        run: npm ci --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Test the docs sync
+        run: npm test
 
       - name: Build
         run: npm run build

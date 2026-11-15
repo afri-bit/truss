@@ -2,6 +2,7 @@
 // TRUSS Desktop's run view as live HTML, built from the same parts and tokens as the product
 // (internal/webui/assets/style.css). A shorter loop than the hero's: the run, then the finished frame.
 import { url } from '../lib/url';
+import { PIPELINE, RUN_ID, SUMMARY_AT, stamp } from '../lib/run';
 import RunGraph from './RunGraph.astro';
 import RunSteps from './RunSteps.astro';
 import RunLog from './RunLog.astro';
@@ -15,14 +16,14 @@ const nav = ['Dashboard', 'Pipelines', 'Runs', 'Monitor', 'Settings'];
       <div>
         <h2 id="desktop-h">TRUSS Desktop shows every run</h2>
         <p class="lead">
-          Pipelines, step graphs and a live log in your browser, served by the same binary. It reads the daemon, so
-          the terminal and Desktop always show the same state.
+          Pipelines, step graphs and a live log in your browser, served by the same binary. It reads the daemon,
+          which also records the runs you start in your shell with <code>truss run --track</code>.
         </p>
       </div>
       <a class="btn btn--secondary" href={url('docs/desktop/')}>See Desktop</a>
     </div>
 
-    <div class="dt" data-run data-speed="2.2" data-visual role="group" aria-label="TRUSS Desktop, run view of the ci pipeline">
+    <div class="dt" data-run data-speed="2.2" data-visual role="group" aria-label="TRUSS Desktop, run view of the release pipeline">
       <aside class="dt__side" aria-hidden="true">
         <div class="dt__logo"><img src={url('favicon.svg')} width="22" height="22" alt="" /><b>TRUSS</b><span>Desktop</span></div>
         <ul class="dt__nav">
@@ -30,7 +31,7 @@ const nav = ['Dashboard', 'Pipelines', 'Runs', 'Monitor', 'Settings'];
         </ul>
         <div class="dt__active">
           <p>Active runs</p>
-          <div class="dt__run"><span>ci</span><span data-elapsed-side>6.0s</span></div>
+          <div class="dt__run"><span>{PIPELINE}</span><span data-elapsed-side>6.0s</span></div>
           <div class="bar"><i data-bar></i></div>
         </div>
         <div class="dt__daemon"><span class="dot"></span>Daemon running<small>127.0.0.1:7878</small></div>
@@ -38,24 +39,24 @@ const nav = ['Dashboard', 'Pipelines', 'Runs', 'Monitor', 'Settings'];
 
       <div class="dt__main">
         <div class="dt__top" aria-hidden="true">
-          <span class="dt__crumb">Runs / ci / <b>20261116-091402</b></span>
+          <span class="dt__crumb">Runs / {PIPELINE} / <b>{RUN_ID.slice(0, 14)}</b></span>
           <span class="dt__conn"><span class="dot"></span>connected 3 ms</span>
         </div>
 
         <div class="dt__title">
-          <h3>20261116-091402-3aefdd</h3>
+          <p class="dt__id">{RUN_ID}</p>
           <span class="chip chip--ok" data-status>succeeded</span>
-          <p>manual run of ci</p>
+          <p>manual run of {PIPELINE}</p>
         </div>
 
         <dl class="dt__stats">
           <div><dt>Progress</dt><dd data-progress>5 / 5 steps</dd></div>
-          <div><dt>Running now</dt><dd data-now>none</dd></div>
+          <div><dt data-now-label>Ended</dt><dd data-now>{stamp(SUMMARY_AT)}</dd></div>
           <div><dt>Elapsed</dt><dd data-elapsed>6.0s</dd></div>
         </dl>
 
         <div class="dt__panel">
-          <div class="dt__panel-h"><b>Workflow</b><span>steps run in stages; a stage waits for the one before</span></div>
+          <div class="dt__panel-h"><b>Workflow</b><span>a step starts when the steps it needs have succeeded</span></div>
           <div class="run__graph run__graph--dt"><RunGraph /></div>
           <div class="run__steps run__steps--dt"><RunSteps /></div>
         </div>

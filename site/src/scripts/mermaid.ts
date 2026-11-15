@@ -36,8 +36,13 @@ if (blocks.length > 0) {
     await mermaid.run({ nodes: blocks });
   };
 
-  void draw();
-  new MutationObserver(() => void draw()).observe(document.documentElement, {
+  // One draw at a time, so a quick theme toggle cannot start two over the same nodes.
+  let queue: Promise<void> = Promise.resolve();
+  const redraw = () => {
+    queue = queue.then(draw).catch(() => undefined);
+  };
+  redraw();
+  new MutationObserver(redraw).observe(document.documentElement, {
     attributes: true,
     attributeFilter: ['data-theme'],
   });

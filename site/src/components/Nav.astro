@@ -9,6 +9,9 @@ import { url, REPO } from '../lib/url';
       <img src={url('favicon.svg')} width="32" height="32" alt="" />
       <span class="brand__name">TRUSS</span>
     </a>
+    <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+      <span></span><span></span>
+    </button>
     <nav class="nav__links" id="site-nav" aria-label="Main">
       <a href="#pipelines">Pipelines</a>
       <a href="#daemon">Daemon</a>
@@ -18,8 +21,5 @@ import { url, REPO } from '../lib/url';
       <a class="btn btn--primary nav__sheet-cta" href={url('docs/getting-started/')}>Get TRUSS</a>
     </nav>
     <a class="btn btn--primary nav__cta" href={url('docs/getting-started/')}>Get TRUSS</a>
-    <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
-      <span></span><span></span>
-    </button>
   </div>
 </header>

@@ -7,11 +7,15 @@
     "sync": "node scripts/sync.mjs",
     "dev": "npm run sync && astro dev",
     "build": "npm run sync && astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "test": "node --test scripts/sync.test.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "0.43.1",
     "astro": "7.4.12",
     "mermaid": "12.3.0"
+  },
+  "engines": {
+    "node": ">=22.23.4"
   }
 }

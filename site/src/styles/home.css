@@ -119,6 +119,7 @@ h3 {
 }
 p code,
 .lead code {
+  white-space: nowrap;
   font-size: 0.86em;
   padding: 1px 6px;
   border-radius: var(--r-sm);
@@ -260,9 +261,14 @@ p code,
   display: none;
 }
 .nav__cta {
+  order: 2;
   margin-left: auto;
 }
+.nav__links {
+  order: 1;
+}
 .nav__toggle {
+  order: 3;
   display: none;
   width: 44px;
   height: 44px;
@@ -294,7 +300,9 @@ p code,
   transform: translateY(-4px) rotate(-45deg);
 }
 @media (max-width: 1023px) {
-  .nav__toggle {
+  /* Without script the links stay out of the bar (the footer and the main button reach every
+     page); with script a toggle opens them. */
+  .js .nav__toggle {
     display: block;
   }
   .nav__links {
@@ -792,27 +800,35 @@ p code,
 
 .pause {
   position: absolute;
-  right: 12px;
-  bottom: 12px;
+  right: 6px;
+  bottom: 6px;
   z-index: 2;
   display: none;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--tr-text);
+  cursor: pointer;
+}
+/* The disc is 32px; the target around it is 44px. */
+.pause::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
   border: 1px solid var(--tr-line-2);
   border-radius: 50%;
   background: var(--tr-surface-3);
-  color: var(--tr-text);
-  cursor: pointer;
-  transition:
-    background-color var(--m-in) var(--ease),
-    transform var(--m-in) var(--ease);
+  transition: background-color var(--m-in) var(--ease);
 }
 .js .pause {
   display: grid;
 }
 .pause svg {
+  position: relative;
   width: 16px;
   height: 16px;
   fill: none;
@@ -831,9 +847,8 @@ p code,
   display: block;
 }
 @media (hover: hover) and (pointer: fine) {
-  .pause:hover {
+  .pause:hover::before {
     background: var(--tr-line-2);
-    transform: translateY(-1px);
   }
 }
 
@@ -1119,20 +1134,37 @@ p code,
   transform-origin: left center;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .tl__pulse {
-    animation: tl-pulse 3.6s linear infinite;
-  }
-  .tl__ring {
+  .js .tl__ring {
     animation: tl-ring 3.6s linear infinite;
   }
-  .tl__runbar {
+  .js .tl__runbar {
     animation: tl-run 3.6s linear infinite;
+  }
+}
+@supports (offset-path: path('M0 0')) {
+  @media (prefers-reduced-motion: no-preference) {
+    .js .tl__pulse {
+      animation: tl-pulse 3.6s linear infinite;
+    }
   }
 }
 .is-paused .tl__pulse,
 .is-paused .tl__ring,
-.is-paused .tl__runbar {
+.is-paused .tl__runbar,
+.is-paused .s-running .spin,
+.is-paused .edge-flow.on {
   animation-play-state: paused;
+}
+.tl-list {
+  display: none;
+  list-style: none;
+  padding: 0;
+  gap: var(--s-4);
+  color: var(--tr-text-2);
+}
+.tl-list b {
+  font: 500 14px var(--tr-mono);
+  color: var(--tr-ink);
 }
 @keyframes tl-pulse {
   0% {
@@ -1178,8 +1210,8 @@ p code,
   }
 }
 .pause--card {
-  right: 12px;
-  bottom: 12px;
+  right: 6px;
+  bottom: 6px;
 }
 @media (max-width: 899px) {
   .sec > .wrap.schedule__in {
@@ -1336,8 +1368,10 @@ p code,
   gap: var(--s-3);
   padding: 20px 20px 0;
 }
-.dt__title h3 {
+.dt__title .dt__id {
+  flex-basis: auto;
   font: 600 18px var(--tr-mono);
+  color: var(--tr-ink);
 }
 .dt__title p {
   flex-basis: 100%;
@@ -1402,8 +1436,8 @@ p code,
   height: 148px;
 }
 .dt .pause {
-  right: 28px;
-  bottom: 28px;
+  right: 22px;
+  bottom: 22px;
 }
 @media (max-width: 899px) {
   .desktop__head {
@@ -1558,12 +1592,13 @@ p code,
 .foot__col ul {
   list-style: none;
   display: grid;
-  gap: 10px;
+  gap: 0;
   padding: 0;
 }
 .flink {
-  display: inline-block;
-  padding-bottom: 2px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   font-size: 15px;
   color: var(--tr-text-2);
 }
@@ -1577,8 +1612,8 @@ p code,
   color: var(--tr-text-3);
 }
 .foot__legal .flink {
+  min-height: 0;
   font-size: 13px;
-  padding-bottom: 0;
   color: var(--tr-text-3);
 }
 @media (max-width: 899px) {
@@ -1609,6 +1644,39 @@ p code,
   }
   .log__lines {
     height: 148px;
+  }
+  .log .ln__t {
+    display: none; /* the time costs the line its words on a phone */
+  }
+  .chip {
+    height: auto;
+    min-height: 22px;
+    padding-block: 3px;
+    white-space: normal;
+  }
+  .win--tall .node .job,
+  .win--tall .node .time {
+    font-size: 14px;
+  }
+  .win--tall .node .step {
+    font-size: 17px;
+  }
+  .tl {
+    display: none; /* its labels would draw at about 5px */
+  }
+  .tl-list {
+    display: grid;
+  }
+  .schedule__visual {
+    padding: var(--s-5) var(--s-4);
+  }
+  .codebar {
+    padding: var(--s-3) var(--s-2) var(--s-3) var(--s-4);
+    overflow-x: visible;
+  }
+  .codebar code {
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
   .dt__stats {
     grid-template-columns: 1fr;
@@ -1654,4 +1722,17 @@ p code,
 .is-reset .log__lines,
 .is-reset .steps {
   opacity: 0.45;
+}
+
+/* Text for assistive technology only. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }

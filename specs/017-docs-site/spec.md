@@ -7,6 +7,10 @@ a sidebar and a brand, and a home page that shows the product (decision 2026-11-
 `docs/MILESTONE.md`. Decision: [ADR 0016](../../docs/decisions/0016-documentation-site.md). The site
 lives in `site/`; see `site/README.md`.
 
+Builds on [spec 016](../016-project-layout/spec.md): the docs and the getting-started page describe
+the project layout. The same branch carries the repository's own pipelines (`.truss/flows/`, a chore
+with no spec of its own).
+
 **Compatibility note.** None. The site is documentation tooling. The TRUSS binary, the pipeline
 file, the CLI and the daemon API do not change, and building TRUSS never needs Node.
 
@@ -36,12 +40,15 @@ file, the CLI and the daemon API do not change, and building TRUSS never needs N
   Desktop's fonts. Generated files are ignored by git. With `SYNC_STRICT=1` a link to a file that does
   not exist fails the build.
 - **FR-003** The brand is amber on graphite: the colours of TRUSS Desktop and the logo, set in IBM
-  Plex, replacing Starlight's default theme in both schemes. No violet appears. Text pairs are at
-  least 4.5:1.
+  Plex, replacing Starlight's default theme in both schemes, code blocks included (they use syntax
+  themes made from the brand palette). No violet appears anywhere. Text pairs are at least 4.5:1.
+  The docs follow the system scheme; the home page is dark.
 - **FR-004** The home page is complete without script: every picture is drawn in its finished
   state. Under reduced motion nothing moves. It moves in four places only: the hero's entrance (once),
   the pipeline section read as it is scrolled, two replayed runs and one diagram, and hover. Anything
-  that keeps moving has a pause button. Nothing reveals on scroll.
+  that keeps moving has a pause button, and pausing stops everything that moves in it. Nothing reveals
+  on scroll, with one exception: the pipeline section shows the parts of a file as the scroll reaches
+  them (and shows all of it on a phone, under reduced motion and without script).
 - **FR-005** The home page states only facts the product and its docs state. It shows no customer,
   quote, rating or figure the project cannot back.
 - **FR-006** The site works under a base path (`SITE_URL`, `SITE_BASE`; default
@@ -52,16 +59,30 @@ file, the CLI and the daemon API do not change, and building TRUSS never needs N
 ## Not in this spec
 
 Publishing (GitHub Pages needs the repository's settings), a share image for social cards, a
-dependency update routine for `site/`, and a link and accessibility check in CI.
+dependency update routine for `site/`, and an accessibility check in CI.
 
 ## Verification
 
+- `npm test` (`site/scripts/sync.test.mjs`, 11 tests, run by CI): link rewriting (between docs, to
+  GitHub, images, reference-style, angle brackets, titles), code left alone (inline, backtick and
+  tilde fences), Mermaid blocks, front matter, strict mode on a missing link or image, and a
+  symbolic link refused.
 - Built and viewed in Chrome at 1440, 1024 and 390 pixels: no console error, no failed request, no
-  horizontal overflow; with reduced motion every run shows its finished frame and no pause button;
-  with script off every node, log line and the validate output are present.
-- All Mermaid diagrams of the architecture page draw; docs pages have no console error in either scheme.
-- `SYNC_STRICT=1` fails on a bad link (tested against a copy of the tree).
-- Contrast of the colour pairs measured (4.8 to 10.5:1). The home page loads about 6 KB HTML, 6 KB
-  CSS and 3.5 KB script, gzipped.
-- Not proved: Safari and Firefox rendering (`offset-path` is used by the schedule diagram), the CI
-  job (first run is the pull request), publishing.
+  horizontal overflow. With reduced motion every run shows its finished frame and no pause button
+  shows; with script off every node, log line and the validate output are present.
+- Pausing a run stops its spinners and flowing lines as well as its clock; the schedule diagram loops
+  only when script runs, so its pause button always exists.
+- No violet: every computed colour (text, background, border, fill, stroke) of 9 pages in both schemes,
+  about 131,000 values, was scanned for hues 255 to 335, with none found. The same scan finds a
+  planted violet on all 18 page and scheme combinations.
+- All Mermaid diagrams draw; docs pages have no console error in either scheme.
+- Text contrast: every measured pair is at least 4.5:1 in both schemes (the lowest rendered pair is 4.56:1;
+  the light scheme's muted text was darkened to 5.25:1 on its tightest surface).
+- The home page loads about 6 KB HTML, 6 KB CSS and 3.5 KB script, gzipped.
+- The product windows show what TRUSS prints: three-decimal durations and the setup lines in the log,
+  the real `truss validate` output for the file shown, Desktop's 14-character run id in the
+  breadcrumb, and "Ended" for a finished run.
+- Reviews: independent reviews ran on `a3e9d2a` (general, spec, security); their findings are fixed in
+  the commits after it.
+- Not proved: Safari and Firefox rendering (`offset-path` is used by the schedule diagram, with a
+  `@supports` guard), a screen-reader pass, the CI job (first run is the pull request), publishing.

@@ -10,7 +10,7 @@ import RunLog from './RunLog.astro';
     <div class="hero__copy">
       <p class="pill" data-e style="--i:0">Open source, Apache 2.0</p>
       <h1 id="hero-h">
-        <span class="l"><span>Local pipeline runner</span></span>
+        <span class="l"><span>Local pipeline runner</span></span>{' '}
         <span class="l"><span>for developers</span></span>
       </h1>
       <p class="lead" data-e style="--i:1">
@@ -21,14 +21,14 @@ import RunLog from './RunLog.astro';
         <a class="btn btn--primary" href={url('docs/getting-started/')}>Get TRUSS</a>
         <a class="btn btn--secondary" href={url('docs/pipeline-reference/')}>Read the pipeline reference</a>
       </div>
-      <p class="fact" data-e style="--i:3">Go standard library and one YAML parser. No server, no account.</p>
+      <p class="fact" data-e style="--i:3">Go standard library and one YAML parser. No remote server, no account.</p>
     </div>
 
     <div class="hero__visual">
-      <div class="win" data-run data-speed="1" data-visual role="group" aria-label="Run view of the ci pipeline">
+      <div class="win" data-run data-speed="1" data-visual role="group" aria-label="Run view of the release pipeline">
         <div class="win__bar">
           <span class="win__dots" aria-hidden="true"><i></i><i></i><i></i></span>
-          <span class="win__title">ci</span>
+          <span class="win__title">release</span>
           <span class="chip chip--ok" data-status>succeeded</span>
           <span class="win__meta" data-elapsed>6.0s</span>
         </div>
