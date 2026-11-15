@@ -4,7 +4,7 @@
   "tier": 2,
   "branch": "feature/016-project-layout",
   "status": "in_progress",
-  "step": "tier 2 reviews (reviewer, spec-reviewer, security-reviewer, portability-reviewer) ran on 16c474e; findings are being fixed",
+  "step": "delta reviews done; final fixes",
   "steps_done": [],
   "requirements": [],
   "specs": [
@@ -12,9 +12,18 @@
   ],
   "owner_agent": "orchestrator",
   "blockers": [],
-  "open_questions": [],
-  "next_actions": [],
+  "open_questions": [
+    "Should `truss run --help` print help (now a flow name)?",
+    "Keep register --all without a confirmation prompt?",
+    "Non-blocking open for named pipes (check-then-open race): this PR or follow-up?"
+  ],
+  "next_actions": [
+    "open PR against develop",
+    "CI first proof on Windows and macOS",
+    "dogfood pipelines in .truss/flows",
+    "docs site (Starlight) on its own branch"
+  ],
   "pr": null,
   "created": "2026-11-15T22:07:03Z",
-  "updated": "2026-11-15T22:32:58Z"
+  "updated": "2026-11-15T22:45:36Z"
 }
