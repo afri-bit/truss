@@ -62,7 +62,11 @@ func (s *session) ok(args ...string) string {
 
 func (s *session) write(name, body string) {
 	s.t.Helper()
-	if err := os.WriteFile(filepath.Join(s.dir, name), []byte(body), 0o600); err != nil {
+	path := filepath.Join(s.dir, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		s.t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		s.t.Fatal(err)
 	}
 }
@@ -71,12 +75,12 @@ var runID = regexp.MustCompile(`\d{8}-\d{6}-[0-9a-f]{6}`)
 
 func TestCLI_RegisterTriggerLogsUnregister(t *testing.T) {
 	s := newSession(t, true)
-	s.write("truss.yaml", validPipeline(echoHello()))
+	s.write("pipeline.yaml", validPipeline(echoHello()))
 
 	if out := s.ok("pipelines"); !strings.Contains(out, "no pipelines registered") {
 		t.Fatalf("pipelines = %q", out)
 	}
-	if out := s.ok("register"); !strings.HasPrefix(out, "registered hello-world (") {
+	if out := s.ok("register", "pipeline.yaml"); !strings.HasPrefix(out, "registered hello-world (") {
 		t.Fatalf("register = %q", out)
 	}
 	if out := s.ok("pipelines"); !strings.Contains(out, "hello-world  ready") {
@@ -123,8 +127,8 @@ func TestCLI_RegisterUnderAnotherName(t *testing.T) {
 
 func TestCLI_FollowedFailedRunExitsOne(t *testing.T) {
 	s := newSession(t, true)
-	s.write("truss.yaml", validPipeline("exit 4"))
-	s.ok("register")
+	s.write("pipeline.yaml", validPipeline("exit 4"))
+	s.ok("register", "pipeline.yaml")
 	code, out, errOut := s.truss("trigger", "hello-world", "-f")
 	if code != 1 || !strings.Contains(out, "summary failed") || !strings.Contains(errOut, "hello-world failed at hello (exit 4)") {
 		t.Fatalf("exit %d\nstdout: %s\nstderr: %s", code, out, errOut)
@@ -133,8 +137,8 @@ func TestCLI_FollowedFailedRunExitsOne(t *testing.T) {
 
 func TestCLI_RegisterRejectsAnInvalidDefinition(t *testing.T) {
 	s := newSession(t, true)
-	s.write("truss.yaml", "version: \"1\"\npipeline: {name: x}\nsteps: []\n")
-	code, _, errOut := s.truss("register")
+	s.write("pipeline.yaml", "version: \"1\"\npipeline: {name: x}\nsteps: []\n")
+	code, _, errOut := s.truss("register", "pipeline.yaml")
 	if code != 1 || errOut != "error: pipeline must contain one or more steps\n" {
 		t.Fatalf("exit %d, stderr %q", code, errOut)
 	}
@@ -142,7 +146,7 @@ func TestCLI_RegisterRejectsAnInvalidDefinition(t *testing.T) {
 
 func TestCLI_DaemonCommandsExplainAMissingDaemon(t *testing.T) {
 	s := newSession(t, false)
-	for _, args := range [][]string{{"pipelines"}, {"register"}, {"trigger", "x"}, {"runs"}, {"logs", "x"}, {"cancel", "x"}, {"desktop", "--no-open"}} {
+	for _, args := range [][]string{{"pipelines"}, {"register", "x.yaml"}, {"trigger", "x"}, {"runs"}, {"logs", "x"}, {"cancel", "x"}, {"desktop", "--no-open"}} {
 		code, _, errOut := s.truss(args...)
 		if code != 1 || !strings.Contains(errOut, "truss daemon start") {
 			t.Errorf("truss %v: exit %d, stderr %q", args, code, errOut)
@@ -191,7 +195,7 @@ func TestCLI_BadArgumentsPrintUsage(t *testing.T) {
 
 func TestCLI_ValidateDescribesTheDefinition(t *testing.T) {
 	s := newSession(t, false)
-	s.write("truss.yaml", `version: "1"
+	s.write(".truss/flows/nightly.yaml", `version: "1"
 pipeline: {name: nightly, concurrency: 2}
 on:
   schedule:
@@ -205,11 +209,12 @@ jobs:
     steps:
       - {id: publish, run: make publish}
 `)
-	want := "truss.yaml is valid: pipeline nightly, 2 steps, concurrency 2\n" +
+	want := ".truss/flows/nightly.yaml is valid: pipeline nightly, 2 steps, concurrency 2\n" +
 		"schedule 0 9 * * 1-5 (local time, missed: skip)\n" +
 		"step build/compile\n" +
 		"step ship/publish needs build/compile\n"
-	if out := s.ok("validate"); out != want {
+	s.write("truss.yaml", projectFile)
+	if out := s.ok("validate", "nightly"); out != want {
 		t.Fatalf("validate =\n%s", out)
 	}
 	s.write("bad.yaml", "version: \"1\"\npipeline: {name: x}\non: {schedule: [{cron: \"99 * * * *\"}]}\nsteps: [{id: a, run: b}]\n")

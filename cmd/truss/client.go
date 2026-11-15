@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/afri-bit/truss/internal/api"
 	"github.com/afri-bit/truss/internal/home"
+	"github.com/afri-bit/truss/internal/project"
 )
 
 // followEvery is how often a followed run log is read again.
@@ -24,26 +26,75 @@ func (in invocation) dial(ctx context.Context) (*api.Client, error) {
 	return api.Dial(ctx, h)
 }
 
+// register makes pipelines known to the daemon: one by name or path, or every
+// flow of the project with --all (spec 016 FR-012).
 func (in invocation) register(ctx context.Context) int {
-	pos, flags, err := options(in.args, []string{"name"}, nil)
+	pos, flags, err := options(in.args, []string{"name"}, []string{"all"})
 	if err != nil || len(pos) > 1 {
 		return in.usage()
+	}
+	all := flags["all"] != ""
+	_, named := flags["name"]
+	if all && (named || len(pos) > 0) {
+		if named {
+			return in.fail(errors.New("--name cannot be used with --all"))
+		}
+		return in.usage()
+	}
+	var files []pipelineFile
+	switch {
+	case all:
+		proj, err := project.Open(workingRoot(in.cwd))
+		if err != nil {
+			return in.fail(err)
+		}
+		flows, err := proj.Flows()
+		if err != nil {
+			return in.fail(err)
+		}
+		if len(flows) == 0 {
+			return in.fail(errors.New("nothing to register; " + project.AvailableText(nil)))
+		}
+		for _, f := range flows {
+			files = append(files, pipelineFile{path: f.Path, display: ".truss/flows/" + f.File, stem: f.Name})
+		}
+	case len(pos) == 0:
+		return in.fail(needFlowError(in.cwd, "register"))
+	default:
+		file, err := resolveFile(in.cwd, pos[0])
+		if err != nil {
+			return in.fail(err)
+		}
+		files = append(files, file)
 	}
 	c, err := in.dial(ctx)
 	if err != nil {
 		return in.fail(err)
 	}
-	p, err := c.Register(ctx, api.RegisterRequest{Path: definitionPath(in.cwd, pos), Name: flags["name"]})
-	if err != nil {
-		return in.fail(err)
-	}
-	fmt.Fprintf(in.stdout, "registered %s (%s)\n", p.Name, p.Path)
-	for _, s := range p.Schedules {
-		if s.Next != nil {
-			fmt.Fprintf(in.stdout, "schedule %s: next run %s\n", s.Cron, local(s.Next))
+	code := 0
+	for _, file := range files {
+		p, err := c.Register(ctx, api.RegisterRequest{Path: file.path, Name: flags["name"]})
+		if err != nil {
+			msg := err.Error()
+			var status *api.StatusError
+			if errors.As(err, &status) && status.Code == http.StatusConflict {
+				msg += "; register it under another name with --name"
+			}
+			if all {
+				msg = file.display + ": " + msg
+			}
+			fmt.Fprintf(in.stderr, "error: %s\n", msg)
+			code = 1
+			continue
+		}
+		fmt.Fprintf(in.stdout, "registered %s (%s)\n", p.Name, p.Path)
+		for _, s := range p.Schedules {
+			if s.Next != nil {
+				fmt.Fprintf(in.stdout, "schedule %s: next run %s\n", s.Cron, local(s.Next))
+			}
 		}
 	}
-	return 0
+	return code
 }
 
 func (in invocation) unregister(ctx context.Context) int {

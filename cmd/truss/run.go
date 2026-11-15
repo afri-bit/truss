@@ -22,20 +22,25 @@ import (
 )
 
 // runLocal runs a pipeline definition in this process, without the daemon.
-// It writes the run log to stdout and to .truss/run.log. With track set it
-// also reports the run to the daemon, which must be running (spec 010).
+// pos holds the flow name or path (spec 016). It writes the run log to stdout
+// and to .truss/state/<flow>/run.log. With track set it also reports the run
+// to the daemon, which must be running (spec 010).
 func runLocal(ctx context.Context, pos []string, track bool, cwd string, env []string, stdout, stderr io.Writer) int {
-	path := definitionPath(cwd, pos)
-
-	def, err := pipeline.ParseFile(ctx, path)
+	if len(pos) == 0 {
+		fmt.Fprintf(stderr, "error: %s\n", needFlowError(cwd, "run").Error())
+		return 1
+	}
+	file, err := resolveFile(cwd, pos[0])
 	if err != nil {
 		fmt.Fprintf(stderr, "error: %s\n", err.Error())
 		return 1
 	}
-	if err := pipeline.Validate(def); err != nil {
+	l, err := load(ctx, file)
+	if err != nil {
 		fmt.Fprintf(stderr, "error: %s\n", err.Error())
 		return 1
 	}
+	def := l.def
 
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
@@ -47,7 +52,7 @@ func runLocal(ctx context.Context, pos []string, track bool, cwd string, env []s
 			return 1
 		}
 	}
-	code, status, reason := execute(ctx, runCtx, def, cwd, env, stdout, stderr, tr)
+	code, status, reason := execute(ctx, runCtx, def, file.stem, cwd, env, stdout, stderr, tr)
 	if tr != nil {
 		tr.finish(status, reason)
 	}
@@ -83,31 +88,23 @@ func startTracking(ctx context.Context, def pipeline.Pipeline, env []string, std
 // execute runs the pipeline and returns the exit code and how the run ended
 // (an api run status and reason) for the tracker. ctx is the caller's;
 // runCtx also ends when the daemon cancels a tracked run.
-func execute(ctx, runCtx context.Context, def pipeline.Pipeline, cwd string, env []string, stdout, stderr io.Writer, tr *tracker) (int, string, string) {
-	// Steps get a project-local data folder, the counterpart of the daemon's
-	// per-pipeline one (specs/008-workspace-and-cache).
-	abs := cwd
-	if a, absErr := filepath.Abs(cwd); absErr == nil {
-		abs = a
+func execute(ctx, runCtx context.Context, def pipeline.Pipeline, stem, cwd string, env []string, stdout, stderr io.Writer, tr *tracker) (int, string, string) {
+	// Generated files live in .truss/state/<flow>/ under the working directory;
+	// steps get its data folder, the counterpart of the daemon's per-pipeline
+	// one (specs/008-workspace-and-cache, specs/016-project-layout).
+	abs := workingRoot(cwd)
+	st, err := prepareState(abs, stem, stderr)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: prepare state folder: %s\n", err.Error())
+		return 1, api.RunFailed, err.Error()
 	}
-	dataDir := filepath.Join(abs, ".truss", "data")
-	cacheDir := filepath.Join(dataDir, "cache")
-	for _, d := range []struct {
-		path string
-		mode fs.FileMode
-	}{{filepath.Join(abs, ".truss"), 0o755}, {dataDir, 0o700}, {cacheDir, 0o700}} {
-		if err := realDir(d.path, d.mode); err != nil {
-			fmt.Fprintf(stderr, "error: prepare data folder: %s\n", err.Error())
-			return 1, api.RunFailed, err.Error()
-		}
-	}
-	env = append(append([]string(nil), env...), "TRUSS_DATA_DIR="+dataDir, "TRUSS_CACHE_DIR="+cacheDir)
+	env = append(append([]string(nil), env...), "TRUSS_DATA_DIR="+st.Data, "TRUSS_CACHE_DIR="+st.Cache)
 
 	var extra io.Writer
 	if tr != nil {
 		extra = tr
 	}
-	log, tmp, tmpPath, dest, err := openRunLog(cwd, stdout, extra)
+	log, tmp, tmpPath, dest, err := openRunLog(st.Dir, stdout, extra)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: %s\n", err.Error())
 		return 1, api.RunFailed, err.Error()
@@ -158,11 +155,8 @@ func interrupted(ctx context.Context, tr *tracker, err error, stderr io.Writer) 
 	return 1, api.RunFailed, err.Error()
 }
 
-func openRunLog(cwd string, stdout, extra io.Writer) (*runlog.Log, *os.File, string, string, error) {
-	dir := filepath.Join(cwd, ".truss")
-	if err := realDir(dir, 0o755); err != nil {
-		return nil, nil, "", "", fmt.Errorf("prepare run log: %w", err)
-	}
+// openRunLog starts a run log in dir, the pipeline's state folder.
+func openRunLog(dir string, stdout, extra io.Writer) (*runlog.Log, *os.File, string, string, error) {
 	dest := filepath.Join(dir, "run.log")
 	f, tmpPath, err := createTemp(dir, "run.log.", ".tmp")
 	if err != nil {
@@ -175,31 +169,32 @@ func openRunLog(cwd string, stdout, extra io.Writer) (*runlog.Log, *os.File, str
 	return runlog.New(out, time.Now), f, tmpPath, dest, nil
 }
 
-// realDir makes sure path is a directory of its own, creating it with mode when
-// it is missing (its parent must exist). A symbolic link or Windows junction is
-// refused, as is anything that is not a directory: a checkout can carry a link
-// at .truss or .truss/data, and TRUSS must not write the run log, data or cache
-// into the folder it points to (specs/002-local-run-log FR-018).
-//
-// The project-local .truss folder keeps the 0755 (less umask) it always had;
-// tightening it is a behavior change left for a separate decision.
-func realDir(path string, mode fs.FileMode) error {
+// ensureDir makes sure path is a directory of its own, creating it with mode
+// when it is missing (its parent must exist), and reports whether it created
+// it. A symbolic link or Windows junction is refused, as is anything that is
+// not a directory: a checkout can carry a link anywhere under .truss, and
+// TRUSS must not write the run log, data or cache into the folder it points
+// to (specs/002-local-run-log FR-018, specs/016-project-layout FR-014).
+func ensureDir(path string, mode fs.FileMode) (bool, error) {
 	// Create first: Mkdir never follows a link, and finding the folder already
 	// there (another run may have just made it) is fine once it checks out.
-	err := os.Mkdir(path, mode) // #nosec G301 -- .truss keeps 0755; data and cache use 0700
-	if err == nil || !errors.Is(err, fs.ErrExist) {
-		return err
+	err := os.Mkdir(path, mode) // #nosec G301 -- .truss keeps 0755; state uses 0700
+	if err == nil {
+		return true, nil
+	}
+	if !errors.Is(err, fs.ErrExist) {
+		return false, err
 	}
 	info, err := os.Lstat(path)
 	switch {
 	case err != nil:
-		return err
+		return false, err
 	case info.Mode()&(fs.ModeSymlink|fs.ModeIrregular) != 0:
-		return fmt.Errorf("%s is a link or other reparse point; TRUSS does not write through links in .truss", path)
+		return false, fmt.Errorf("%s is a link or other reparse point; TRUSS does not write through links in .truss", path)
 	case !info.IsDir():
-		return fmt.Errorf("%s is not a directory", path)
+		return false, fmt.Errorf("%s is not a directory", path)
 	}
-	return nil
+	return false, nil
 }
 
 // createTemp creates a new file prefix<random>suffix in dir. O_EXCL means it

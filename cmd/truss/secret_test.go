@@ -116,14 +116,14 @@ func TestSecretStoreFile_IsPrivate(t *testing.T) {
 
 func TestRunLocal_UsesTheStoreAndRedactsOutput(t *testing.T) {
 	s := newSession(t, false)
-	s.write("truss.yaml", secretPipelineText())
+	s.write("pipeline.yaml", secretPipelineText())
 	s.setSecret("TRUSS_TEST_TOKEN", canary)
 
-	out := s.ok("run")
+	out := s.ok("run", "pipeline.yaml")
 	if strings.Contains(out, canary) || !strings.Contains(out, "step show | ***") {
 		t.Fatalf("run log:\n%s", out)
 	}
-	saved, err := os.ReadFile(filepath.Join(s.dir, ".truss", "run.log"))
+	saved, err := os.ReadFile(filepath.Join(s.dir, ".truss", "state", "pipeline", "run.log"))
 	if err != nil || strings.Contains(string(saved), canary) || !strings.Contains(string(saved), "***") {
 		t.Fatalf("saved log (%v):\n%s", err, saved)
 	}
@@ -131,8 +131,8 @@ func TestRunLocal_UsesTheStoreAndRedactsOutput(t *testing.T) {
 
 func TestRunLocal_MissingSecretFailsBeforeAnyStep(t *testing.T) {
 	s := newSession(t, false)
-	s.write("truss.yaml", secretPipelineText())
-	code, out, errOut := s.truss("run")
+	s.write("pipeline.yaml", secretPipelineText())
+	code, out, errOut := s.truss("run", "pipeline.yaml")
 	if code != 1 || !strings.Contains(errOut, "TRUSS_TEST_TOKEN") || !strings.Contains(errOut, "truss secret set") {
 		t.Fatalf("exit %d, stderr %q", code, errOut)
 	}
@@ -143,9 +143,9 @@ func TestRunLocal_MissingSecretFailsBeforeAnyStep(t *testing.T) {
 
 func TestValidate_ListsSecretNamesOnly(t *testing.T) {
 	s := newSession(t, false)
-	s.write("truss.yaml", secretPipelineText())
+	s.write("pipeline.yaml", secretPipelineText())
 	s.setSecret("TRUSS_TEST_TOKEN", canary)
-	out := s.ok("validate")
+	out := s.ok("validate", "pipeline.yaml")
 	if !strings.Contains(out, "uses secrets TRUSS_TEST_TOKEN") || strings.Contains(out, canary) {
 		t.Fatalf("validate:\n%s", out)
 	}
@@ -159,8 +159,8 @@ func TestValidate_ListsSecretNamesOnly(t *testing.T) {
 
 func TestDaemon_RunUsesTheStoreAndRedactsLogAndAPI(t *testing.T) {
 	s := newSession(t, true)
-	s.write("truss.yaml", secretPipelineText())
-	s.ok("register")
+	s.write("pipeline.yaml", secretPipelineText())
+	s.ok("register", "pipeline.yaml")
 
 	// Missing: the run fails before any step and says what to do.
 	code, out, errOut := s.truss("trigger", "with-secret", "--follow")

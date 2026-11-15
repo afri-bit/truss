@@ -26,7 +26,7 @@ func invokeEnv(t *testing.T, cwd string, env []string) (int, string, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
 	defer cancel()
 	var stdout, stderr bytes.Buffer
-	code := Run(ctx, []string{"run"}, cwd, env, &stdout, &stderr)
+	code := Run(ctx, []string{"run", "pipeline.yaml"}, cwd, env, &stdout, &stderr)
 	return code, stdout.String(), stderr.String()
 }
 
@@ -57,14 +57,14 @@ func definition(name, limit string, steps ...stepDef) string {
 
 func writeDefinition(t *testing.T, dir, body string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, "truss.yaml"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "pipeline.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func seedLog(t *testing.T, dir string) (string, []byte) {
 	t.Helper()
-	logPath := filepath.Join(dir, ".truss", "run.log")
+	logPath := filepath.Join(dir, ".truss", "state", "pipeline", "run.log")
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -552,7 +552,7 @@ func TestRun_StepsKeepInvokerDirectoryEnvironmentAndRunNothingElse(t *testing.T)
 			}
 			for _, e := range entries {
 				switch e.Name() {
-				case "truss.yaml", ".truss", "only.txt":
+				case "pipeline.yaml", ".truss", "only.txt":
 				default:
 					t.Fatalf("unexpected file %q: a command other than a Step ran", e.Name())
 				}

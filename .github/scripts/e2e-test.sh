@@ -158,18 +158,37 @@ else
 fi
 rm -rf "$work"
 
-# Bare `truss run` loads truss.yaml from the working directory.
+# Spec 016: pipelines live in .truss/flows/ and `truss run <name>` runs one.
 new_dir
-hello_pipeline >"$work/project/truss.yaml"
-run_truss "$work/project" run
+printf 'version: "1"\nproject:\n  name: demo\n' >"$work/project/truss.yaml"
+mkdir -p "$work/project/.truss/flows"
+hello_pipeline >"$work/project/.truss/flows/hello.yaml"
+run_truss "$work/project" run hello
 if [ "$code" -ne 0 ] || ! has_line "step hello | Hello from TRUSS"; then
-	fail "default truss.yaml" "want exit 0 and the hello step"
+	fail "run by name" "want exit 0 and the hello step"
+elif [ ! -f "$work/project/.truss/state/hello/run.log" ]; then
+	fail "run by name" "the run log is not in .truss/state/hello"
+elif [ "$(cat "$work/project/.truss/.gitignore")" != "state/" ]; then
+	fail "run by name" "want .truss/.gitignore to hold state/"
 else
-	pass "default truss.yaml"
+	pass "run by name"
+fi
+run_truss "$work/project" validate
+if [ "$code" -ne 0 ] || [[ "$out" != *"truss.yaml is valid: project demo"* ]] ||
+	[[ "$out" != *".truss/flows/hello.yaml is valid: pipeline hello-world"* ]]; then
+	fail "validate project" "want the project and the pipeline reported"
+else
+	pass "validate project"
+fi
+run_truss "$work/project" run
+if [ "$code" -ne 1 ] || [[ "$err" != *"hello"* ]]; then
+	fail "run without a name" "want exit 1 and the list of pipelines"
+else
+	pass "run without a name"
 fi
 rm -rf "$work"
 
-# Bare `truss run` does not fall back to pipeline.yaml.
+# Bare `truss run` is an error and does not fall back to pipeline.yaml.
 new_dir
 hello_pipeline >"$work/project/pipeline.yaml"
 run_truss "$work/project" run
@@ -212,7 +231,7 @@ rm -rf "$work"
 
 # A failed step stops the pipeline, keeps its exit code, and skips later steps.
 new_dir
-cat >"$work/project/truss.yaml" <<EOF
+cat >"$work/project/pipeline.yaml" <<EOF
 version: "1"
 
 pipeline:
@@ -226,7 +245,7 @@ steps:
   - id: third
     run: echo third> marker.txt
 EOF
-run_truss "$work/project" run
+run_truss "$work/project" run pipeline.yaml
 if [ "$code" -ne 1 ]; then
 	fail "fail-fast" "want exit 1"
 elif ! has_line "step first finished duration *s exit 0" ||
@@ -255,7 +274,7 @@ rm -rf "$work"
 
 # Steps that wait for each other run together under pipeline.concurrency.
 new_dir
-cat >"$work/project/truss.yaml" <<EOF
+cat >"$work/project/pipeline.yaml" <<EOF
 version: "1"
 
 pipeline:
@@ -268,7 +287,7 @@ steps:
   - id: b
     run: '$(mark_and_wait b.ready a.ready)'
 EOF
-run_truss_limited "$work/project" run
+run_truss_limited "$work/project" run pipeline.yaml
 a_started="$(line_no "step a started")"
 b_started="$(line_no "step b started")"
 a_finished="$(line_no "step a finished duration *s exit 0")"
@@ -300,7 +319,7 @@ if $windows; then
 	slow_then="echo x> slow-ran.txt"
 	never_cmd="echo x> never-ran.txt"
 fi
-cat >"$work/project/truss.yaml" <<EOF
+cat >"$work/project/pipeline.yaml" <<EOF
 version: "1"
 
 pipeline:
@@ -316,7 +335,7 @@ steps:
     needs: [bad]
     run: '$never_cmd'
 EOF
-run_truss_limited "$work/project" run
+run_truss_limited "$work/project" run pipeline.yaml
 if [ "$code" -ne 1 ]; then
 	fail "stop on failure" "want exit 1"
 elif ! has_line "error stop-rest failed at bad (exit 3)"; then
@@ -336,10 +355,10 @@ rm -rf "$work"
 
 # A misspelled concurrency field is rejected and leaves the run log alone.
 new_dir
-mkdir "$work/project/.truss"
-printf '2000-01-01 00:00:00 earlier run\n' >"$work/project/.truss/run.log"
-cp "$work/project/.truss/run.log" "$work/before.log"
-cat >"$work/project/truss.yaml" <<EOF
+mkdir -p "$work/project/.truss/state/pipeline"
+printf '2000-01-01 00:00:00 earlier run\n' >"$work/project/.truss/state/pipeline/run.log"
+cp "$work/project/.truss/state/pipeline/run.log" "$work/before.log"
+cat >"$work/project/pipeline.yaml" <<EOF
 version: "1"
 
 pipeline:
@@ -350,14 +369,14 @@ steps:
   - id: touch
     run: echo ran> marker.txt
 EOF
-run_truss "$work/project" run
+run_truss "$work/project" run pipeline.yaml
 if [ "$code" -ne 1 ]; then
 	fail "unknown field" "want exit 1"
 elif [ "$err" != 'error: unknown field "concurency" in pipeline' ]; then
 	fail "unknown field" "want the unknown field error on stderr"
 elif [ -e "$work/project/marker.txt" ]; then
 	fail "unknown field" "a step command ran"
-elif ! cmp -s "$work/before.log" "$work/project/.truss/run.log"; then
+elif ! cmp -s "$work/before.log" "$work/project/.truss/state/pipeline/run.log"; then
 	fail "unknown field" "run log changed"
 else
 	pass "unknown field"
@@ -371,7 +390,7 @@ if $windows; then
 else
 	flaky_run='if [ -f tried ]; then echo second try; else echo x > tried; exit 1; fi'
 fi
-cat >"$work/project/truss.yaml" <<EOF
+cat >"$work/project/pipeline.yaml" <<EOF
 version: "1"
 pipeline:
   name: retry
@@ -381,7 +400,7 @@ steps:
     retries: 2
     retry_delay: 1s
 EOF
-run_truss "$work/project" run
+run_truss "$work/project" run pipeline.yaml
 tries="$(grep -c ' step flaky started$' <<<"$out")"
 if [ "$code" -ne 0 ]; then
 	fail "retries" "want exit 0 after the second attempt"
@@ -397,7 +416,7 @@ rm -rf "$work"
 # continue-on-error and if: a tolerated failure does not fail the run; a step that needs it is
 # skipped unless its condition says otherwise; a false condition skips the step.
 new_dir
-cat >"$work/project/truss.yaml" <<EOF
+cat >"$work/project/pipeline.yaml" <<EOF
 version: "1"
 pipeline:
   name: tolerant
@@ -418,7 +437,7 @@ steps:
     if: env.TRUSS_E2E_DEPLOY == 'yes'
     run: echo deploying
 EOF
-run_truss "$work/project" run
+run_truss "$work/project" run pipeline.yaml
 if [ "$code" -ne 0 ]; then
 	fail "continue-on-error" "want exit 0"
 elif ! has_line "step lint finished duration *s exit 1" ||
@@ -438,7 +457,7 @@ rm -rf "$work"
 
 # A failure still fails the run; only always() and failure() steps start after it.
 new_dir
-cat >"$work/project/truss.yaml" <<EOF
+cat >"$work/project/pipeline.yaml" <<EOF
 version: "1"
 pipeline:
   name: cleanup
@@ -453,7 +472,7 @@ steps:
     if: always()
     run: echo cleaning
 EOF
-run_truss "$work/project" run
+run_truss "$work/project" run pipeline.yaml
 if [ "$code" -ne 1 ]; then
 	fail "always()" "want exit 1"
 elif ! has_line "step tidy | cleaning" || ! has_line "summary failed steps 2 duration *s" ||
@@ -468,7 +487,7 @@ rm -rf "$work"
 
 # An invalid condition is rejected before any step runs.
 new_dir
-cat >"$work/project/truss.yaml" <<EOF
+cat >"$work/project/pipeline.yaml" <<EOF
 version: "1"
 pipeline:
   name: bad
@@ -477,7 +496,7 @@ steps:
     run: echo never
     if: sometimes()
 EOF
-run_truss "$work/project" run
+run_truss "$work/project" run pipeline.yaml
 if [ "$code" -ne 1 ] || [ -n "$out" ] || [[ "$err" != *'step "a" if: unknown function "sometimes"'* ]]; then
 	fail "invalid if" "want exit 1, no log and the diagnostic on stderr"
 else
@@ -488,7 +507,7 @@ rm -rf "$work"
 # pipeline.workdir: steps start in that folder, and the data folders exist.
 new_dir
 mkdir "$work/project/app"
-cat >"$work/project/truss.yaml" <<EOF
+cat >"$work/project/pipeline.yaml" <<EOF
 version: "1"
 
 pipeline:
@@ -499,18 +518,18 @@ steps:
   - id: touch
     run: echo ran> marker.txt
 EOF
-run_truss "$work/project" run
+run_truss "$work/project" run pipeline.yaml
 if [ "$code" -ne 0 ]; then
 	fail "workdir" "want exit 0"
 elif [ ! -e "$work/project/app/marker.txt" ] || [ -e "$work/project/marker.txt" ]; then
 	fail "workdir" "the step did not run in app"
-elif [ ! -d "$work/project/.truss/data/cache" ]; then
+elif [ ! -d "$work/project/.truss/state/pipeline/data/cache" ]; then
 	fail "workdir" "the cache folder was not created"
 else
 	pass "workdir"
 fi
-sed -i.bak 's/workdir: app/workdir: missing/' "$work/project/truss.yaml"
-run_truss "$work/project" run
+sed -i.bak 's/workdir: app/workdir: missing/' "$work/project/pipeline.yaml"
+run_truss "$work/project" run pipeline.yaml
 if [ "$code" -ne 1 ] || ! has_line "summary failed *"; then
 	fail "workdir missing" "want exit 1 and a failed summary"
 else
@@ -520,7 +539,7 @@ rm -rf "$work"
 
 # Jobs: the steps of a job run in order and a job waits for the jobs it needs.
 new_dir
-cat >"$work/project/truss.yaml" <<EOF
+cat >"$work/project/pipeline.yaml" <<EOF
 version: "1"
 
 pipeline:
@@ -543,7 +562,7 @@ jobs:
       - id: publish
         run: echo publishing
 EOF
-run_truss "$work/project" run
+run_truss "$work/project" run pipeline.yaml
 if [ "$code" -ne 0 ]; then
 	fail "jobs" "want exit 0"
 elif ! has_line "step build/package | packaging" || ! has_line "step ship/publish | publishing"; then
@@ -553,7 +572,7 @@ elif ! has_line "summary succeeded steps 3 duration *"; then
 else
 	pass "jobs"
 fi
-run_truss "$work/project" validate
+run_truss "$work/project" validate pipeline.yaml
 if [ "$code" -ne 0 ] || [[ "$out" != *"step ship/publish needs build/package"* ]]; then
 	fail "validate" "want exit 0 and the flattened steps"
 else
@@ -567,7 +586,7 @@ if [ "$code" -ne 0 ] || [[ "$out" != "daemon started"* ]]; then
 	fail "daemon start" "want exit 0 and the started line"
 else
 	pass "daemon start"
-	run_truss "$work/project" register
+	run_truss "$work/project" register pipeline.yaml
 	if [ "$code" -ne 0 ] || [[ "$out" != "registered jobs "* ]]; then
 		fail "register" "want exit 0 and the registered line"
 	else
@@ -586,7 +605,7 @@ else
 		pass "runs"
 	fi
 	# A tracked run executes here, in this shell, and is recorded by the daemon (spec 010).
-	run_truss "$work/project" run --track
+	run_truss "$work/project" run pipeline.yaml --track
 	tracked_id="$(printf '%s' "$err" | sed -n 's/^tracking as run \([^ ]*\) .*/\1/p')"
 	if [ "$code" -ne 0 ] || [ -z "$tracked_id" ] || ! has_line "summary succeeded steps 3 duration *"; then
 		fail "run --track" "want exit 0, the run log on stdout and the run id on stderr"
@@ -625,7 +644,7 @@ if [ "$code" -ne 1 ]; then
 else
 	pass "daemon status"
 fi
-run_truss "$work/project" run --track
+run_truss "$work/project" run pipeline.yaml --track
 if [ "$code" -ne 1 ] || [ -n "$out" ] || [[ "$err" != *"truss daemon start"* ]]; then
 	fail "run --track without a daemon" "want exit 1, no output and the start hint"
 else
@@ -637,7 +656,7 @@ show_cmd='echo token=$E2E_TOKEN'
 if [ "$windows" = true ]; then
 	show_cmd='echo token=%E2E_TOKEN%' # the step runs under cmd.exe
 fi
-cat >"$work/secrets/truss.yaml" <<EOF_SECRETS
+cat >"$work/secrets/pipeline.yaml" <<EOF_SECRETS
 version: "1"
 pipeline:
   name: secrets
@@ -646,7 +665,7 @@ steps:
     run: '$show_cmd'
     secrets: [E2E_TOKEN]
 EOF_SECRETS
-run_truss "$work/secrets" run
+run_truss "$work/secrets" run pipeline.yaml
 if [ "$code" -ne 1 ] || [[ "$err" != *"missing secrets: E2E_TOKEN"* ]] || [[ "$out" == *"started"* ]]; then
 	fail "secret missing" "want exit 1 before any step"
 else
@@ -667,7 +686,7 @@ if [ "$code" -ne 0 ] || [ "$out" != "E2E_TOKEN" ]; then
 else
 	pass "secret list"
 fi
-run_truss "$work/secrets" run
+run_truss "$work/secrets" run pipeline.yaml
 if [ "$code" -ne 0 ] || [[ "$out" == *"e2e-canary-value"* ]] || ! has_line "step show | token=***"; then
 	fail "secret redaction" "want exit 0 and the value replaced by ***"
 else

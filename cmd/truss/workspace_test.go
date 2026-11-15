@@ -20,14 +20,14 @@ func showVars() string {
 func TestRun_StepsSeeProjectLocalDataAndCacheFolders(t *testing.T) {
 	dir := t.TempDir()
 	body := "version: \"1\"\npipeline:\n  name: vars\nsteps:\n  - id: show\n    run: " + showVars() + "\n"
-	if err := os.WriteFile(filepath.Join(dir, "truss.yaml"), []byte(body), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "pipeline.yaml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code, out, errOut := invoke(t, dir, []string{"run"})
+	code, out, errOut := invoke(t, dir, []string{"run", "pipeline.yaml"})
 	if code != 0 {
 		t.Fatalf("exit = %d, stderr = %s", code, errOut)
 	}
-	data := filepath.Join(dir, ".truss", "data")
+	data := filepath.Join(dir, ".truss", "state", "pipeline", "data")
 	for _, want := range []string{"data=" + data, "cache=" + filepath.Join(data, "cache")} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
@@ -48,10 +48,10 @@ func TestRun_WorkdirStartsStepsInThatFolder(t *testing.T) {
 		pwd = "cd"
 	}
 	body := "version: \"1\"\npipeline:\n  name: wd\n  workdir: app\nsteps:\n  - id: where\n    run: " + pwd + "\n"
-	if err := os.WriteFile(filepath.Join(dir, "truss.yaml"), []byte(body), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "pipeline.yaml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code, out, errOut := invoke(t, dir, []string{"run"})
+	code, out, errOut := invoke(t, dir, []string{"run", "pipeline.yaml"})
 	if code != 0 {
 		t.Fatalf("exit = %d, stderr = %s", code, errOut)
 	}
@@ -63,10 +63,10 @@ func TestRun_WorkdirStartsStepsInThatFolder(t *testing.T) {
 func TestRun_MissingWorkdirFailsWithADiagnostic(t *testing.T) {
 	dir := t.TempDir()
 	body := "version: \"1\"\npipeline:\n  name: wd\n  workdir: nope\nsteps:\n  - id: where\n    run: echo hi\n"
-	if err := os.WriteFile(filepath.Join(dir, "truss.yaml"), []byte(body), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "pipeline.yaml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code, out, _ := invoke(t, dir, []string{"run"})
+	code, out, _ := invoke(t, dir, []string{"run", "pipeline.yaml"})
 	if code != 1 || strings.Contains(out, "exit 0") || !strings.Contains(out, "summary failed") {
 		t.Fatalf("exit = %d, out:\n%s", code, out)
 	}
@@ -114,19 +114,20 @@ func TestCacheClear_EmptiesOnlyTheCacheFolder(t *testing.T) {
 
 func TestRun_FailsBeforeAnyStepWhenTheDataFolderCannotBeCreated(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, ".truss"), 0o750); err != nil {
+	state := filepath.Join(dir, ".truss", "state", "pipeline")
+	if err := os.MkdirAll(state, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	// A file where the data folder should be.
-	if err := os.WriteFile(filepath.Join(dir, ".truss", "data"), []byte("x"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(state, "data"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	body := validPipeline("echo ran> marker.txt")
-	if err := os.WriteFile(filepath.Join(dir, "truss.yaml"), []byte(body), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "pipeline.yaml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code, out, errOut := invoke(t, dir, []string{"run"})
-	if code != 1 || !strings.Contains(errOut, "error: prepare data folder:") || strings.Contains(out, "started") {
+	code, out, errOut := invoke(t, dir, []string{"run", "pipeline.yaml"})
+	if code != 1 || !strings.Contains(errOut, "error: prepare state folder:") || strings.Contains(out, "started") {
 		t.Fatalf("exit = %d, stdout = %q, stderr = %q", code, out, errOut)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "marker.txt")); err == nil {

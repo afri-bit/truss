@@ -166,10 +166,10 @@ func TestRun_DefaultFileHonorsNeeds(t *testing.T) {
 	body := "version: \"1\"\npipeline:\n  name: default-file\nsteps:\n" +
 		"  - id: test\n    needs: [build]\n    run: echo test\n" +
 		"  - id: build\n    run: echo build\n"
-	if err := os.WriteFile(filepath.Join(dir, "truss.yaml"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "pipeline.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	code, out, errOut := invoke(t, dir, []string{"run"})
+	code, out, errOut := invoke(t, dir, []string{"run", "pipeline.yaml"})
 	if code != 0 {
 		t.Fatalf("exit = %d, stderr = %s", code, errOut)
 	}
@@ -314,7 +314,7 @@ func TestRun_FailedStepStopsDependentsAndReadySteps(t *testing.T) {
 
 func TestRun_RejectedDefinitionLeavesLogUnchanged(t *testing.T) {
 	dir := t.TempDir()
-	logPath := filepath.Join(dir, ".truss", "run.log")
+	logPath := filepath.Join(dir, ".truss", "state", "pipeline", "run.log")
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -391,7 +391,7 @@ func TestRun_RejectsInvalidDependencyGraph(t *testing.T) {
 			if runtime.GOOS == "windows" {
 				free = "echo x> \"" + marker + "\""
 			}
-			logPath := filepath.Join(dir, ".truss", "run.log")
+			logPath := filepath.Join(dir, ".truss", "state", "pipeline", "run.log")
 			if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 				t.Fatal(err)
 			}
@@ -500,7 +500,7 @@ func TestRun_SecondRunReplacesLog(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("second exit = %d, stderr = %s", code, errOut)
 	}
-	saved := readRunLog(t, dir)
+	saved := stateLog(t, dir, "second")
 	if saved != out {
 		t.Fatalf("saved log =\n%s\nstdout =\n%s", saved, out)
 	}
@@ -524,31 +524,31 @@ func TestRun_LogStaysInWorkingDirectory(t *testing.T) {
 	if saved != out {
 		t.Fatalf("saved log =\n%s\nstdout =\n%s", saved, out)
 	}
-	if _, err := os.Stat(filepath.Join(other, ".truss", "run.log")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(other, ".truss", "state", "pipeline", "run.log")); !os.IsNotExist(err) {
 		t.Fatalf("log written beside the definition: %v", err)
 	}
 }
 
 func readRunLog(t *testing.T, dir string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(dir, ".truss", "run.log"))
+	data, err := os.ReadFile(filepath.Join(dir, ".truss", "state", "pipeline", "run.log"))
 	if err != nil {
 		t.Fatalf("read run log: %v", err)
 	}
 	return string(data)
 }
 
-func TestRun_DefaultTrussYAML(t *testing.T) {
+// Spec 016: truss.yaml is project metadata. It is no longer the default
+// pipeline file, so a bare run does not run it.
+func TestRun_TrussYAMLIsNoLongerTheDefaultPipeline(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "truss.yaml")
-	if err := os.WriteFile(path, []byte(validPipeline(echoHello())), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "truss.yaml"), []byte(validPipeline(echoHello())), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	code, out, errOut := invoke(t, dir, []string{"run"})
-	if code != 0 {
-		t.Fatalf("exit = %d, stderr = %s", code, errOut)
+	if code != 1 || !strings.Contains(errOut, "error:") || strings.Contains(out, "step ") {
+		t.Fatalf("exit = %d, stdout = %q, stderr = %q", code, out, errOut)
 	}
-	assertSuccessReport(t, out, "hello")
 }
 
 func invoke(t *testing.T, cwd string, args []string) (int, string, string) {
@@ -695,7 +695,7 @@ func TestRun_HelpFlagIsAPath(t *testing.T) {
 
 func assertNoRunLog(t *testing.T, dir string) {
 	t.Helper()
-	if _, err := os.Stat(filepath.Join(dir, ".truss", "run.log")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, ".truss", "state", "pipeline", "run.log")); !os.IsNotExist(err) {
 		t.Fatalf("run log exists: %v", err)
 	}
 }

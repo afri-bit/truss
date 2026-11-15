@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 
 	"github.com/afri-bit/truss/internal/pipeline"
+	"github.com/afri-bit/truss/internal/project"
 )
 
 // usageText is the CLI usage printed for help and for unknown invocations.
@@ -16,9 +16,10 @@ const usageText = `TRUSS runs pipelines on your machine.
 usage: truss <command> [arguments]
 
 Run here, without the daemon:
-  run [<path>] [--track]              run a pipeline definition (default: truss.yaml);
+  run <name|path> [--track]           run a pipeline: a name from .truss/flows/ or a file path;
                                       --track also reports it to the daemon (needs it)
-  validate [<path>]                   check a definition without running it
+  validate [<name|path>]              check truss.yaml and every pipeline, or one pipeline,
+                                      without running it
 
 The daemon:
   daemon start [--address <host:port>] [--max-runs <n>]
@@ -35,7 +36,8 @@ Secrets (no daemon needed; values come from standard input, never an argument):
   secret remove <name>                delete a secret
 
 Registered pipelines (these need the daemon):
-  register [<path>] [--name <name>]   make a definition known to the daemon
+  register <name|path> [--name <name>]  make a pipeline known to the daemon
+  register --all                      register every pipeline in .truss/flows/
   unregister <name>                   forget it; its run history stays
   pipelines                           list registered pipelines
   pause <name> | resume <name>        stop or restart a pipeline's schedules
@@ -152,18 +154,6 @@ func isRun(args []string) bool {
 	return len(args) >= 1 && args[0] == "run"
 }
 
-// definitionPath returns the definition a command works on: the first
-// argument, or truss.yaml in the working directory.
-func definitionPath(cwd string, args []string) string {
-	if len(args) == 0 {
-		return filepath.Join(cwd, "truss.yaml")
-	}
-	if filepath.IsAbs(args[0]) {
-		return args[0]
-	}
-	return filepath.Join(cwd, args[0])
-}
-
 // options splits command arguments into positional values and flags.
 // valued lists the flags that take a value; switches lists those that do not.
 // A flag may be written anywhere, as "--name x" or "--name=x".
@@ -201,25 +191,80 @@ func options(args []string, valued, switches []string) (pos []string, flags map[
 	return pos, flags, nil
 }
 
-// validate checks a definition and prints what it would run.
+// validate checks the project file and every pipeline, or one pipeline, and
+// prints what each would run (spec 016 FR-011).
 func (in invocation) validate(ctx context.Context) int {
 	if len(in.args) > 1 {
 		return in.usage()
 	}
-	path := definitionPath(in.cwd, in.args)
-	def, err := pipeline.ParseFile(ctx, path)
+	if len(in.args) == 0 {
+		return in.validateProject(ctx)
+	}
+	if isProjectFile(in.cwd, in.args[0]) {
+		return in.validateMetadata(project.FileName)
+	}
+	file, err := resolveFile(in.cwd, in.args[0])
 	if err != nil {
 		return in.fail(err)
 	}
-	if err := pipeline.Validate(def); err != nil {
+	if err := in.validateFile(ctx, file); err != nil {
 		return in.fail(err)
 	}
-	plan, err := pipeline.Plan(def)
+	return 0
+}
+
+// validateMetadata checks truss.yaml of the working directory.
+func (in invocation) validateMetadata(display string) int {
+	proj, err := project.Open(workingRoot(in.cwd))
 	if err != nil {
 		return in.fail(err)
 	}
-	fmt.Fprintf(in.stdout, "%s is valid: pipeline %s, %d steps, concurrency %d\n", filepath.Base(path), plan.Name, len(plan.Graph), plan.Concurrency)
-	for _, s := range def.Schedules {
+	fmt.Fprintf(in.stdout, "%s is valid: project %s\n", display, proj.Name)
+	return 0
+}
+
+// validateProject checks truss.yaml and every flow. A broken flow is reported
+// and does not stop the others; the exit code is 1 when any failed.
+func (in invocation) validateProject(ctx context.Context) int {
+	proj, err := project.Open(workingRoot(in.cwd))
+	if err != nil {
+		return in.fail(err)
+	}
+	fmt.Fprintf(in.stdout, "%s is valid: project %s\n", project.FileName, proj.Name)
+	flows, err := proj.Flows()
+	if err != nil {
+		return in.fail(err)
+	}
+	if len(flows) == 0 {
+		fmt.Fprintln(in.stdout, "no pipelines in .truss/flows/")
+		return 0
+	}
+	code := 0
+	for _, f := range flows {
+		file := pipelineFile{path: f.Path, display: ".truss/flows/" + f.File, stem: f.Name}
+		if err := in.validateFile(ctx, file); err != nil {
+			fmt.Fprintf(in.stderr, "error: %s: %s\n", file.display, err.Error())
+			code = 1
+		}
+	}
+	return code
+}
+
+// validateFile checks one pipeline file and prints its result.
+func (in invocation) validateFile(ctx context.Context, file pipelineFile) error {
+	l, err := load(ctx, file)
+	if err != nil {
+		return err
+	}
+	plan, err := pipeline.Plan(l.def)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(in.stdout, "%s is valid: pipeline %s, %d steps, concurrency %d\n", file.display, plan.Name, len(plan.Graph), plan.Concurrency)
+	if l.declared != "" && l.declared != file.stem {
+		fmt.Fprintf(in.stdout, "note: %s declares the pipeline name %q, not %q; the run log and the daemon use %q\n", file.display, l.declared, file.stem, l.declared)
+	}
+	for _, s := range l.def.Schedules {
 		zone := "local time"
 		if s.Timezone != "" {
 			zone = s.Timezone
@@ -236,5 +281,5 @@ func (in invocation) validate(ctx context.Context) int {
 		}
 		fmt.Fprintln(in.stdout, line)
 	}
-	return 0
+	return nil
 }
