@@ -66,7 +66,7 @@ $ truss run hello
 2026-11-16 09:00:00 summary succeeded steps 1 duration 0.006s
 ```
 
-`truss run` with no name lists the pipelines it finds. `truss run <path>` runs any pipeline file.
+`truss run` with no name is an error that lists the pipelines it finds (exit 1). `truss run <path>` runs any pipeline file.
 
 TRUSS keeps what a run leaves behind in `.truss/state/<name>/`: the run log, and the data and cache
 folders your steps can use. It also writes `.truss/.gitignore` so that only `state/` is ignored and
@@ -145,7 +145,7 @@ every login (`truss daemon uninstall` takes it back). Details are in [the daemon
 
 ## Put it on a schedule
 
-Add a trigger to the pipeline file and save. The daemon picks the change up by itself.
+Add a trigger to the pipeline file and save. The daemon re-reads the files it already knows, so a change to a registered pipeline takes effect by itself.
 
 ```yaml
 # .truss/flows/nightly.yaml
