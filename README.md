@@ -338,7 +338,7 @@ go build -o bin/truss ./cmd/truss
 bash .github/scripts/e2e-test.sh bin/truss   # the built binary, including a real daemon
 ```
 
-TRUSS checks itself with its own pipelines. `truss run verify` runs the same gate in parallel
+TRUSS checks itself with its own pipelines. `truss run verify` runs the same checks in parallel
 (about 20 seconds), `truss run release-check` checks the version declarations, and `nightly` repeats
 the concurrency tests every night (`truss register --all` puts all three under the daemon). They
 live in [`.truss/flows/`](.truss/flows/); `scripts/verify.sh` stays the gate that CI and the agent hooks use.

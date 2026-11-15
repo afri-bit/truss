@@ -1,6 +1,7 @@
-# Before a release: the version is declared in four places and the release check compares them.
-# Run it on the release branch. It checks that the declarations agree with each other and that
-# the check itself still passes its tests; it does not tag anything.
+# Before a release: the version is declared in four places (go.mod, cmd/truss, Desktop and the
+# changelog). This checks the first three agree and that the release check's own tests pass. It does
+# not check the changelog section: that, and the tag, are for .github/scripts/release-check.sh
+# when the tag is pushed. Nothing here tags anything.
 version: "1"
 
 pipeline:
