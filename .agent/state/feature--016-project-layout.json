@@ -3,16 +3,18 @@
   "title": "Project layout: truss.yaml metadata and .truss/flows",
   "tier": 2,
   "branch": "feature/016-project-layout",
-  "status": "planned",
-  "step": "",
+  "status": "in_progress",
+  "step": "tier 2 reviews (reviewer, spec-reviewer, security-reviewer, portability-reviewer) ran on 16c474e; findings are being fixed",
   "steps_done": [],
   "requirements": [],
-  "specs": [],
+  "specs": [
+    "specs/016-project-layout"
+  ],
   "owner_agent": "orchestrator",
   "blockers": [],
   "open_questions": [],
   "next_actions": [],
   "pr": null,
   "created": "2026-11-15T22:07:03Z",
-  "updated": "2026-11-15T22:07:03Z"
+  "updated": "2026-11-15T22:32:58Z"
 }
