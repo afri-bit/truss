@@ -1,0 +1,30 @@
+---
+// The log of a run, like Desktop's: line numbers, a time, the step, what it said. Server side every
+// line is there; src/scripts/run.ts writes them as the loop reaches them.
+import { LOG, stamp } from '../lib/run';
+---
+
+<div class="log" data-log>
+  <div class="log__bar">
+    <span class="log__title">Log</span>
+    <span class="log__sub">whole run</span>
+    <span class="log__live" data-live>done</span>
+  </div>
+  <ol class="log__lines" data-lines>
+    {
+      LOG.map((l, i) => (
+        <li class={`ln ln--${l.kind}`}>
+          <span class="ln__n">{i + 1}</span>
+          <span class="ln__t">{stamp(l.at)}</span>
+          {l.id ? (
+            <>
+              <span class="ln__s">step {l.id}</span> <span class="ln__x">{l.text}</span>
+            </>
+          ) : (
+            <span class="ln__x">{l.text}</span>
+          )}
+        </li>
+      ))
+    }
+  </ol>
+</div>

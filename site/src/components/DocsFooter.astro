@@ -1,0 +1,10 @@
+---
+// Starlight's footer, plus the script that draws the docs' diagrams. A page without a diagram
+// loads nothing extra.
+import Default from '@astrojs/starlight/components/Footer.astro';
+---
+
+<Default {...Astro.props}><slot /></Default>
+<script>
+  import '../scripts/mermaid.ts';
+</script>

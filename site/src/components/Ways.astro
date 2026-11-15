@@ -1,0 +1,50 @@
+---
+import { url } from '../lib/url';
+
+const ways = [
+  {
+    title: 'Run it in your shell',
+    body: 'No server and no account. TRUSS runs the pipeline in your shell, with your environment, and prints the log as it happens.',
+    code: ['$ truss run ci'],
+    cta: 'See the commands',
+    href: url('docs/cli/'),
+  },
+  {
+    title: 'Let the daemon run it',
+    body: 'A background service with a queue, a history and schedules. Register your pipelines once and one API serves every client.',
+    code: ['$ truss daemon start', '$ truss register --all'],
+    cta: 'See the daemon',
+    href: url('docs/daemon/'),
+  },
+  {
+    title: 'Watch it in Desktop',
+    body: 'A dashboard in your browser, served by the same binary. It shows pipelines, step graphs and live logs.',
+    code: ['$ truss desktop'],
+    cta: 'See Desktop',
+    href: url('docs/desktop/'),
+  },
+];
+---
+
+<section class="sec ways" id="daemon" aria-labelledby="ways-h">
+  <div class="wrap">
+    <h2 id="ways-h">Three ways to run a pipeline</h2>
+    <p class="lead">
+      Start with your shell. Add the daemon when you want schedules and a history, and Desktop when you want to
+      watch.
+    </p>
+    <div class="grid3">
+      {
+        ways.map((w, i) => (
+          <a class="card" href={w.href}>
+            <span class="card__n" aria-hidden="true">{`0${i + 1}`}</span>
+            <h3>{w.title}</h3>
+            <p>{w.body}</p>
+            <pre class="snip"><code>{w.code.join('\n')}</code></pre>
+            <span class="card__cta link">{w.cta}</span>
+          </a>
+        ))
+      }
+    </div>
+  </div>
+</section>

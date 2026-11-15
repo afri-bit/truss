@@ -1,0 +1,37 @@
+---
+// The workflow of one run, drawn like TRUSS Desktop's run view: steps in stages, a status icon on
+// each, elbow lines for `needs`. Server side it is the finished run; src/scripts/run.ts drives it.
+import { STEPS, edges, nodePos, stages, duration } from '../lib/run';
+---
+
+<svg
+  class="graph"
+  viewBox="0 0 640 262"
+  role="img"
+  aria-label="Workflow of the ci pipeline in three stages. lint/vet, test/unit and docs/build run side by side, then release/build, then release/publish. Every step succeeds."
+>
+  {stages.map((s) => <text class="stage" x={s.x} y="14">{s.label}</text>)}
+  {
+    edges.map((e) => (
+      <>
+        <path class="edge done" d={e.d} data-from={e.from} data-to={e.to} />
+        <path class="edge-flow" d={e.d} data-from={e.from} data-to={e.to} />
+      </>
+    ))
+  }
+  {
+    STEPS.map((s) => (
+      <g class="node s-ok" data-id={s.id} transform={`translate(${nodePos[s.id].x} ${nodePos[s.id].y})`}>
+        <rect class="box" width="176" height="52" rx="4" />
+        <g class="ico" transform="translate(24 26)">
+          <circle class="ring" r="9" />
+          <path class="tick" d="M-4.2 0.6 -1.4 3.4 4.4 -3" />
+          <path class="spin" d="M0 -9A9 9 0 0 1 9 0" />
+        </g>
+        <text class="job" x="46" y="22">{s.job}</text>
+        <text class="step" x="46" y="40">{s.step}</text>
+        <text class="time" x="166" y="40" text-anchor="end" data-time>{duration(s)}</text>
+      </g>
+    ))
+  }
+</svg>

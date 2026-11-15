@@ -26,6 +26,7 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 ### Added
 
+- **Documentation site.** The docs are now also a website with search, a sidebar and light and dark schemes, and a home page that shows a pipeline being built and run, schedules with a catch-up run, and TRUSS Desktop. It is built from `docs/` by `site/` (Astro and Starlight, pinned; not part of the product). A new *Getting started* page takes you from install to a scheduled pipeline. The brand is amber on graphite, the colours of TRUSS Desktop (specs/017-docs-site, ADR 0016).
 - **TRUSS Desktop redesign.** Collapsible sidebar, header with breadcrumbs, *Jump to…* and a settings menu, light and dark themes, a Monitor page (health checks, CPU, memory, cores, processes) and a Settings page. The run page shows progress, the running steps, a stage-by-stage step graph with the running step highlighted, and a live log with line numbers, find, wrap and follow. Pipeline cards keep every element in a fixed position (specs/014-desktop-redesign).
 - **Resource figures.** `GET /api/v1/metrics` reports the machine's CPU, per-core load, memory and load average, the daemon's own process, and each running step's processes, with ten minutes of history. Steps carry their process id (`pid`). Linux, macOS and Windows. TRUSS Desktop shows these instead of simulated figures (specs/015-resource-metrics).
 - **`truss desktop --demo`** shows TRUSS Desktop on moving sample data without a daemon, for trying it or reviewing its design. Off by default; Ctrl-C stops it.

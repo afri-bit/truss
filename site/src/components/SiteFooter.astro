@@ -1,0 +1,62 @@
+---
+import { url, REPO } from '../lib/url';
+
+const columns = [
+  {
+    title: 'Product',
+    links: [
+      ['Pipelines', '#pipelines'],
+      ['Daemon', '#daemon'],
+      ['Schedules', '#schedules'],
+      ['Desktop', '#desktop'],
+    ],
+  },
+  {
+    title: 'Documentation',
+    links: [
+      ['Getting started', url('docs/getting-started/')],
+      ['Pipeline file reference', url('docs/pipeline-reference/')],
+      ['Command line reference', url('docs/cli/')],
+      ['Glossary', url('docs/glossary/')],
+    ],
+  },
+  {
+    title: 'Project',
+    links: [
+      ['GitHub', REPO],
+      ['Release scope', `${REPO}/blob/main/docs/MILESTONE.md`],
+      ['Decisions', `${REPO}/tree/main/docs/decisions`],
+      ['License', `${REPO}/blob/main/LICENSE`],
+    ],
+  },
+];
+---
+
+<footer class="foot">
+  <div class="wrap foot__in">
+    <div class="foot__brand">
+      <a class="brand" href={url()} aria-label="TRUSS, home">
+        <img src={url('favicon.svg')} width="32" height="32" alt="" />
+        <span class="brand__name">TRUSS</span>
+      </a>
+      <p>Pipelines that live on your machine.</p>
+    </div>
+    {
+      columns.map((c) => (
+        <div class="foot__col">
+          <h3>{c.title}</h3>
+          <ul>
+            {c.links.map(([label, href]) => (
+              <li><a class="flink" href={href}>{label}</a></li>
+            ))}
+          </ul>
+        </div>
+      ))
+    }
+  </div>
+  <div class="wrap foot__legal">
+    <span>TRUSS</span>
+    <span>{new Date().getFullYear()}</span>
+    <a class="flink" href={`${REPO}/blob/main/LICENSE`}>Apache License 2.0</a>
+  </div>
+</footer>
