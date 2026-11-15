@@ -43,7 +43,8 @@ $ truss run hello
   `truss run build` runs `.truss/flows/build.yaml`.
 - A name that is not found lists the available pipelines. TRUSS never tries the other reading.
 - `truss run` with no argument is an error. It lists the pipelines and exits `1`.
-- `truss run truss.yaml` is an error: `truss.yaml` is the project file, not a pipeline.
+- `truss run truss.yaml` is an error: `truss.yaml` is the project file, not a pipeline. A
+  `truss.yaml` in another folder, given by path, runs like any other pipeline file.
 - A command that needs a project and finds no `truss.yaml` in the working directory names the
   folder it looked in. TRUSS never looks in parent folders.
 
@@ -118,7 +119,7 @@ RUN                     PIPELINE     STATUS     TRIGGER  CREATED              DU
 
 | Command | What it does |
 |---|---|
-| `truss register [<name\|path> \| --all] [--name <name>]` | Tells the daemon about a pipeline. The name defaults to `pipeline.name`, or the file name. `--all` registers every pipeline in the project, each under its pipeline name; `--name` is not allowed with `--all`. With no argument it is an error that lists the pipelines. |
+| `truss register <name> [--name <name>]`, `truss register <path> [--name <name>]`, `truss register --all` | Tells the daemon about a pipeline. The name defaults to `pipeline.name`, or the file name. `--all` registers every pipeline in the project, each under its pipeline name; `--name` is not allowed with `--all`. With no argument it is an error that lists the pipelines. When every pipeline registered, `--all` prints `registered N pipelines (M with schedules)` (`registered 1 pipeline (M with schedules)` for one). It prints no summary when a pipeline failed. |
 | `truss unregister <name>` | Forgets it. The file and the run history stay. |
 | `truss pipelines` | Lists registrations with state, next scheduled run and last run. |
 | `truss pause <name>` | Stops the pipeline's schedules. Manual runs still work. |

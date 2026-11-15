@@ -50,7 +50,7 @@ project:
 | `project.description` | Optional free text. |
 
 Any other field is an error. The error names the field and where it appears, never its value.
-A `truss.yaml` with `steps` or `jobs` is rejected: those belong in a file in `.truss/flows/`.
+A `truss.yaml` in the project root with `steps` or `jobs` is rejected: those belong in a file in `.truss/flows/`.
 
 ### Pipeline files (flows)
 
@@ -58,8 +58,9 @@ A `truss.yaml` with `steps` or `jobs` is rejected: those belong in a file in `.t
   folder is called `flows`; the files are pipelines.
 - The file name without its extension is the name you use on the command line: `truss run build`
   runs `.truss/flows/build.yaml`.
-- Only regular files count. Folders, links, hidden files (names that start with `.`) and other
-  extensions are ignored. The extension is case-sensitive: `.YAML` is not accepted. Links, folders and cloud-sync placeholder files in `.truss/flows` are ignored, so a flow that disappears from the list is probably one of these.
+- Only regular files count. Folders, links, hidden files (names that start with `.`), cloud-sync
+  placeholder files and other extensions are ignored, so a flow that disappears from the list is
+  probably one of these. The extension is case-sensitive: `.YAML` is not accepted.
 - Two files that differ only by letter case, or `build.yaml` next to `build.yml`, are an error.
   The error names both files.
 - A name must start with a letter or digit, then use only letters, digits, `.`, `_` and `-`. It

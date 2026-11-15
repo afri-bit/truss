@@ -73,7 +73,7 @@ Tier 2 (secrets handling, pipeline schema, CLI output). Decision record:
 - **FR-016** In a run of a pipeline that declares secrets, every stored secret value (not only
   the declared ones) that appears in step stdout or stderr is replaced by `***` before it reaches
   the run log, `.truss/run.log`, the daemon's stored log, the API and Desktop, and before the
-  in-memory step results.
+  in-memory step results. *Changed by [spec 016](../016-project-layout/spec.md): The file is `.truss/state/<flow>/run.log`.*
 - **FR-017** A value split across several output chunks is still replaced. Stdout and stderr are matched separately, so output on one never releases a
   half-seen value on the other. Output is held back
   only while its tail could still turn out to be the start of a secret, and released when it

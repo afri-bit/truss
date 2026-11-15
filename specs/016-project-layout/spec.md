@@ -1,20 +1,20 @@
 # Feature Specification: Project layout
 
-**Spec**: `016-project-layout` | **Created**: 2026-11-15 | **Status**: Draft
+**Spec**: `016-project-layout` | **Created**: 2026-11-15 | **Status**: Implemented (Windows path cases and case-sensitive-volume behavior are verified by CI only)
 
 **Input**: A folder can hold one `truss.yaml`, so a project cannot hold several pipelines by
 convention, and `.truss/` mixes generated state with anything worth committing. The maintainer
 wants a project with many pipelines, like a workflow folder, and a root file that only says
 "this is a TRUSS project" (decisions 2026-11-15).
 
-Changes [spec 001](../001-host-pipeline-engine/spec.md) (the default file of bare `run` and the required pipeline name), [spec 002](../002-local-run-log/spec.md) (run log path), [spec 008](../008-workspace-and-cache/spec.md)
+Changes [spec 001](../001-host-pipeline-engine/spec.md) (the default file of bare `run` and the required pipeline name), [spec 002](../002-local-run-log/spec.md) (run log path), [spec 003](../003-step-dependencies/spec.md), [spec 004](../004-step-concurrency/spec.md) and [spec 012](../012-secrets/spec.md) (run log path), [spec 008](../008-workspace-and-cache/spec.md)
 (data and cache path), [spec 010](../010-run-tracking-and-queue/spec.md) (run log path) and the default file of `run`, `validate` and `register`
-([spec 005](../005-jobs-schedules-and-step-settings/spec.md), [spec 006](../006-daemon-registry-and-scheduling/spec.md)).
+([spec 005](../005-jobs-schedules-and-step-settings/spec.md), [spec 006](../006-daemon-registry-and-scheduling/spec.md)). Plan, tasks, research and quickstart files of older specs are history and still name the old paths.
 Decisions: [ADR 0015](../../docs/decisions/0015-project-layout.md). Release scope: `docs/MILESTONE.md`.
 User documentation: `docs/pipeline-reference.md`, `docs/cli.md`, `docs/daemon.md`.
 
-**Compatibility note.** Breaking, and allowed: nothing is tagged. A `truss.yaml` that contains
-`steps` or `jobs` is no longer a pipeline file; `truss run <path>` still runs any pipeline file.
+**Compatibility note.** Breaking, and allowed: nothing is tagged. The project's `truss.yaml` (in the
+working directory) that contains `steps` or `jobs` is no longer a pipeline file; `truss run <path>` still runs any pipeline file.
 `.truss/run.log` and `.truss/data` of older builds are left alone and ignored. The pipeline schema
 `version` stays `"1"`; `pipeline.name` becomes optional (a relaxation).
 
@@ -40,9 +40,12 @@ User documentation: `docs/pipeline-reference.md`, `docs/cli.md`, `docs/daemon.md
   `version` (required, `"1"`, as in a pipeline file), `project.name` (required, same characters as a registry name) and
   `project.description` (optional). Any other field is an error that names the field and where it
   appears, never its value.
-- **FR-002** A `truss.yaml` with `steps` or `jobs` is rejected with a message that says pipelines
-  live in `.truss/flows/`. `truss run truss.yaml` says that `truss.yaml` is project metadata, not a
-  pipeline.
+- **FR-002** The project's `truss.yaml` (the one in the working directory) with `steps` or `jobs` is
+  rejected with a message that says pipelines live in `.truss/flows/`. `truss run truss.yaml` says
+  that `truss.yaml` is project metadata, not a pipeline. The refusal also applies when the same file
+  is reached by another spelling, such as `TRUSS.yaml` on a case-insensitive filesystem,
+  `../proj/truss.yaml` or a link to it. A file named `truss.yaml` in another folder, given by path,
+  is an ordinary pipeline file and runs.
 - **FR-003** The project root is the working directory. TRUSS never looks in parent folders. A
   command that needs a project and finds no `truss.yaml` names the folder it looked in.
 
@@ -74,8 +77,10 @@ User documentation: `docs/pipeline-reference.md`, `docs/cli.md`, `docs/daemon.md
   `validate <name|path>` checks one pipeline.
 - **FR-012** `truss register` takes a flow name, a path or `--all`. Without any of them it is an
   error that lists the available flows. `--all` registers every flow, each under its pipeline name
-  (`--name` is not allowed with `--all`). A name already registered for another file is reported
-  with a hint to use `--name`.
+  (`--name` is not allowed with `--all`). After a successful `register --all` (every flow
+  registered, none failed) the CLI prints one line, `registered N pipelines (M with schedules)`, or
+  `registered 1 pipeline (M with schedules)` for one. No summary is printed when any flow failed.
+  A name already registered for another file is reported with a hint to use `--name`.
 
 ### State
 
@@ -104,15 +109,39 @@ folders, a project-name prefix for registry names, registering new flows automat
 Desktop file picker showing `.truss`. `truss cache clear` is unchanged: it empties the daemon's
 cache folder only, not `.truss/state/<flow>/data/cache`. Each is documented as future work.
 
+## Known limitations
+
 - A pipeline run by path whose file stem equals a flow name shares `.truss/state/<stem>/` with that flow.
 - On a case-insensitive filesystem, stems that differ only by case share one state folder.
+- Names are compared without case on macOS and Windows by operating system, not by volume.
+- A pipeline run by path whose file stem is a reserved device name such as `CON`, `CONIN$` or
+  `CONOUT$`, or ends in a dot or space, cannot run, because no state folder can be made.
+- Links, folders and cloud-sync placeholder files in `.truss/flows` are ignored without a message.
+- `truss run --help` is read as a flow name. Open question: should it print help?
 
 ## Success criteria
 
 - **SC-001** In a project with two flows, `truss run <name>` runs the named one and writes
   `.truss/state/<name>/run.log`.
 - **SC-002** No file outside `.truss/state/` and `.truss/.gitignore` is created by a run.
-- **SC-003** A planted link at `.truss`, `.truss/flows`, `.truss/state` or `.truss/.gitignore` is
-  refused and nothing is written through it.
+- **SC-003** A planted link at `.truss`, `.truss/flows`, `.truss/state` or `.truss/state/<flow>` is
+  refused and nothing is written through it. A link (or any other existing file) at `.truss/.gitignore`
+  is never written through; the run goes on, as FR-015 says an existing file is never changed.
 - **SC-004** `docs/pipeline-reference.md`, `docs/cli.md`, `docs/daemon.md`, the README and
   `docs/architecture.md` describe the new layout, and every complete file example in them validates (fragments are not complete files).
+
+## Verification
+
+- `internal/project` tests: metadata and its errors (no value echoed), no lookup in parent folders,
+  links and oversized files refused, flow listing (case and `.yaml`/`.yml` clashes, device names,
+  the 256-entry cap), state paths, and a named pipe refused without hanging (Unix).
+- `cmd/truss/layout_test.go`: run by name, by path and with no argument; a run writes only
+  `.truss/state/` and `.truss/.gitignore`; `.truss/.gitignore` is never overwritten or written through
+  a link; a failed write warns and the run goes on; `validate` for the project and each flow;
+  `register` by name, by path and with `--all`, including the summary line.
+- `internal/daemon` tests: a flow runs in the project root, and a flow without `truss.yaml` runs in
+  its own folder. `.github/scripts/e2e-test.sh` runs the built binary through the project layout.
+- Not yet proved: Windows path cases and case-sensitive-volume behavior. CI on Ubuntu, macOS and
+  Windows is the first proof of those.
+- Reviews: an independent review ran on `16c474e`, and a delta review on `9574d33`. The pull request
+  states the reviewed commit and the final `HEAD`.

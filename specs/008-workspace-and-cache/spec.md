@@ -51,7 +51,7 @@ Tier 2 (pipeline schema, process environment, a CLI command). The user-facing te
   TRUSS's own `run.log`, and the rule "cache is `$TRUSS_DATA_DIR/cache`" holds in both modes.
   The folders are per project and per current directory, not per pipeline name. If they cannot
   be created `truss run` exits 1 with `error: prepare data folder: ...` before any step runs.
-  *Changed by [spec 016](../016-project-layout/spec.md): The folders are `.truss/state/<flow>/data/` and `.truss/state/<flow>/data/cache/`. The error is now `error: prepare state folder: ...`.*
+  *Changed by [spec 016](../016-project-layout/spec.md): The folders are now per pipeline (flow), not per project or per current directory: each flow has its own `.truss/state/<flow>/data/` and `.truss/state/<flow>/data/cache/`. The error is now `error: prepare state folder: ...`.*
 - **FR-008** `truss cache clear <name>` empties the cache by removing `<home>/pipelines/<name>/cache`
   (the next daemon run creates it again), prints
   `cleared the cache of <name>` (or `no cache for <name>` when there is none) and exits 0. It

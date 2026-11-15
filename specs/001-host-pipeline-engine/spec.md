@@ -11,7 +11,7 @@
 
 - Q: How is a Step `run` value executed? → A: One string, executed by the host shell
 - Q: What working directory and environment does a Step inherit? → A: The invoker's working directory and environment
-- Q: Which file does `truss run` load when no path is given? → A: `truss.yaml` in the invoker's working directory. An explicit path may use any filename. *Changed by [spec 016](../016-project-layout/spec.md): Bare `truss run` exits 1 and lists the flows in `.truss/flows/`. `truss.yaml` is project metadata, not a pipeline file.*
+- Q: Which file does `truss run` load when no path is given? → A: `truss.yaml` in the invoker's working directory. An explicit path may use any filename. *Changed by [spec 016](../016-project-layout/spec.md): Bare `truss run` exits 1 and lists the flows in `.truss/flows/`. The project's `truss.yaml` is project metadata, not a pipeline file.*
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -88,7 +88,7 @@ A developer runs a Pipeline whose later Step would also do work. An earlier Step
 ### Functional Requirements
 
 - **FR-001**: Users MUST be able to run a Pipeline by invoking `truss run <path>` with a local Pipeline Definition file. The path MUST be used as given, and the filename MAY be any name.
-- **FR-002**: When the user invokes `truss run` without a path, TRUSS MUST look for `truss.yaml` in the invoker's working directory and load it. If that file is missing or unreadable, TRUSS MUST report a user-visible error and MUST NOT execute any command. This default lookup applies only when no path is given. *Changed by [spec 016](../016-project-layout/spec.md): Bare `truss run` is an error that lists the flows in `.truss/flows/` (exit 1). `truss.yaml` is never a pipeline file.*
+- **FR-002**: When the user invokes `truss run` without a path, TRUSS MUST look for `truss.yaml` in the invoker's working directory and load it. If that file is missing or unreadable, TRUSS MUST report a user-visible error and MUST NOT execute any command. This default lookup applies only when no path is given. *Changed by [spec 016](../016-project-layout/spec.md): Bare `truss run` is an error that lists the flows in `.truss/flows/` (exit 1). The project's `truss.yaml` (in the working directory) is never a pipeline file; a `truss.yaml` in another folder, given by path, is an ordinary pipeline file (spec 016 FR-002).*
 - **FR-003**: TRUSS MUST load the Pipeline Definition from the given local YAML file and parse it into a Pipeline Model. Parsing MUST NOT execute any Step command.
 - **FR-004**: If the file cannot be read or is not valid YAML, TRUSS MUST report a user-visible error and MUST NOT start a Pipeline Run.
 - **FR-005**: Before execution, TRUSS MUST validate the Pipeline Model and reject at least: missing required fields, empty or missing Steps, missing or empty Pipeline name, missing or empty Step `id`, duplicate Step IDs, missing or empty `run`, and missing or unsupported schema version. *Changed by [spec 016](../016-project-layout/spec.md): A missing `pipeline.name` is no longer rejected; it defaults to the file stem (spec 016 FR-008).*

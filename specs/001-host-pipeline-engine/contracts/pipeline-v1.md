@@ -43,4 +43,4 @@ The error names the problem. No Step command runs.
 
 ## Filename
 
-The document may use any filename. `truss.yaml` is only the default lookup when `truss run` is given no path. *Changed by [spec 016](../../016-project-layout/spec.md): `truss.yaml` is project metadata and is never a pipeline file. Bare `truss run` exits 1.*
+The document may use any filename. `truss.yaml` is only the default lookup when `truss run` is given no path. *Changed by [spec 016](../../016-project-layout/spec.md): The project's `truss.yaml` (in the working directory) is project metadata and is never a pipeline file. A `truss.yaml` in another folder, given by path, is an ordinary pipeline file. Bare `truss run` exits 1.*

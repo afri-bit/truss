@@ -75,3 +75,7 @@ unaware of the layout.
 - Still open: a Windows junction test.
 - Still open: drive-relative arguments such as `C:foo.yaml`.
 - Still open: `register --all` and scheduled pipelines (what runs after a `git pull`).
+- Still open: case folding of `.truss`, `flows` and `truss.yaml` decides by operating system, not by
+  volume. A case-sensitive APFS volume folds; Linux with casefold folders does not.
+- Still open: the check-then-open race on named pipes. The non-blocking open is not yet used for the
+  pipeline, project and daemon reads.

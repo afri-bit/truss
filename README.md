@@ -263,7 +263,9 @@ conditions. A file has `steps` or `jobs`, never both. Every field is described i
 | **Daemon** | `truss daemon start` \| `stop` \| `status` | Manage the background service |
 | | `truss daemon install` \| `uninstall` | Start the daemon at login, or stop doing so |
 | | `truss desktop` | Open TRUSS Desktop |
-| **Pipelines** | `truss register [<name\|path> \| --all] [--name <name>]` | Make a pipeline known to the daemon; `--all` takes every pipeline in the project |
+| **Pipelines** | `truss register <name> [--name <name>]` | Make a pipeline known to the daemon |
+| | `truss register <path> [--name <name>]` | Same, for a pipeline file by path |
+| | `truss register --all` | Register every pipeline in the project |
 | | `truss unregister <name>` | Forget it; the file and history stay |
 | | `truss pipelines` | List registrations, next and last run |
 | | `truss pause <name>` \| `resume <name>` | Stop or restart its schedules |
