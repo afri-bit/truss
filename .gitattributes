@@ -1,0 +1,5 @@
+# Check out text files with LF on every OS: gofmt rejects CRLF Go files and bash cannot run CRLF scripts.
+* text=auto eol=lf
+
+# Append-only event logs: keep both sides when branches add lines.
+.agent/log/*.jsonl merge=union

@@ -2,9 +2,15 @@
 # Usage: release-check.sh <tag> <tag-date YYYY-MM-DD> [<notes-file>]
 #
 # Run from the module root. Verifies that <tag> is a semantic version tag
-# and that go.mod and CHANGELOG.md declare the same version as their latest
-# release, dated <tag-date>. On success, writes that CHANGELOG.md section to
-# <notes-file>. Must stay compatible with bash 3.2 (macOS).
+# and that all four declarations of the version agree with it:
+#   - go.mod             "// version: X.Y.Z" (the Go module)
+#   - cmd/truss          "const Version" in version.go (what `truss version` prints)
+#   - TRUSS Desktop      internal/webui/VERSION (kept apart from the Go version)
+#   - CHANGELOG.md       the latest released section, dated <tag-date>, using only
+#                        Keep a Changelog headings (Added, Changed, Deprecated,
+#                        Removed, Fixed, Security)
+# On success, writes that CHANGELOG.md section to <notes-file>.
+# Must stay compatible with bash 3.2 (macOS).
 set -u
 
 if [ $# -lt 2 ] || [ -z "$1" ] || [ -z "$2" ]; then
@@ -62,6 +68,30 @@ else
 	fi
 fi
 
+# The Go constant that `truss version` prints.
+if [ ! -f cmd/truss/version.go ]; then
+	fail "cmd/truss/version.go not found"
+else
+	const_version="$(sed -n 's#^const Version = "\(.*\)"[[:space:]]*$#\1#p' cmd/truss/version.go | head -n 1)"
+	if [ -z "$const_version" ]; then
+		fail "cmd/truss/version.go has no 'const Version = \"X.Y.Z\"' line"
+	elif [ "$const_version" != "$version" ]; then
+		fail "cmd/truss Version $const_version does not match tag $tag"
+	fi
+fi
+
+# TRUSS Desktop has its own version file, separate from the Go module version.
+if [ ! -f internal/webui/VERSION ]; then
+	fail "internal/webui/VERSION not found"
+else
+	desktop_version="$(tr -d '[:space:]' <internal/webui/VERSION)"
+	if [ -z "$desktop_version" ]; then
+		fail "internal/webui/VERSION is empty"
+	elif [ "$desktop_version" != "$version" ]; then
+		fail "TRUSS Desktop version $desktop_version (internal/webui/VERSION) does not match tag $tag"
+	fi
+fi
+
 # CHANGELOG.md: the tag's section must be the first released section, carry
 # the tag date, and list at least one entry.
 if [ ! -f CHANGELOG.md ]; then
@@ -93,6 +123,15 @@ else
 		if ! printf '%s\n' "$body" | grep -Eq '^[[:space:]]*[-*][[:space:]]+[^[:space:]]'; then
 			fail "CHANGELOG.md section for $version has no entries"
 		fi
+		# Only Keep a Changelog headings, so the release notes read the same every time.
+		while IFS= read -r line; do
+			case "$line" in
+			"### Added" | "### Changed" | "### Deprecated" | "### Removed" | "### Fixed" | "### Security") ;;
+			"### "*) fail "CHANGELOG.md section for $version has unknown heading \"$line\" (use Added, Changed, Deprecated, Removed, Fixed or Security)" ;;
+			esac
+		done <<EOF2
+$body
+EOF2
 	fi
 fi
 

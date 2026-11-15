@@ -1,0 +1,26 @@
+{
+  "work_id": "claude--step-concurrency",
+  "title": "Specify and plan step concurrency (spec 004)",
+  "tier": 2,
+  "branch": "claude/truss-cursor-to-claude-18fzh9",
+  "status": "done",
+  "step": "merged",
+  "steps_done": [
+    "speckit-specify",
+    "speckit-clarify",
+    "planner",
+    "speckit-plan",
+    "speckit-tasks",
+    "speckit-analyze",
+    "pr-a-merged"
+  ],
+  "requirements": [],
+  "specs": [],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [],
+  "pr": "https://github.com/afri-bit/truss/pull/3",
+  "created": "2026-11-01T09:30:00Z",
+  "updated": "2026-11-14T12:21:18Z"
+}

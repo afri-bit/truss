@@ -1,0 +1,34 @@
+{
+  "work_id": "claude--mvp-daemon-desktop",
+  "title": "MVP: jobs and schedules, daemon, registry, TRUSS Desktop (specs 005-007)",
+  "tier": 2,
+  "branch": "claude/cool-dijkstra-9ydyl3",
+  "status": "done",
+  "step": "merged",
+  "steps_done": [
+    "schema-and-engine",
+    "daemon-and-api",
+    "cli",
+    "desktop",
+    "docs-and-specs",
+    "constitution-2.0.0",
+    "verify"
+  ],
+  "requirements": [],
+  "specs": [
+    "specs/005-jobs-schedules-and-step-settings",
+    "specs/006-daemon-registry-and-scheduling",
+    "specs/007-truss-desktop"
+  ],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [
+    "Accept constitution 2.0.0 and ADRs 0003-0005?",
+    "Daemon and Desktop are verified on Linux only; macOS and Windows need CI",
+    "No independent /review was run on this branch"
+  ],
+  "next_actions": [],
+  "pr": "https://github.com/afri-bit/truss/pull/4",
+  "created": "2026-11-11T22:00:00Z",
+  "updated": "2026-11-14T12:21:18Z"
+}

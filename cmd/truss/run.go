@@ -2,60 +2,266 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"os"
 	"path/filepath"
+	"runtime"
+	"time"
 
+	"github.com/afri-bit/truss/internal/api"
 	"github.com/afri-bit/truss/internal/engine"
+	"github.com/afri-bit/truss/internal/executor"
+	"github.com/afri-bit/truss/internal/home"
 	"github.com/afri-bit/truss/internal/pipeline"
+	"github.com/afri-bit/truss/internal/runlog"
 )
 
-// Run resolves the pipeline path, executes it, and writes the result.
-// It returns the process exit code.
-func Run(ctx context.Context, args []string, cwd string, env []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 || args[0] != "run" || len(args) > 2 {
-		fmt.Fprintf(stderr, "error: usage: truss run [<path>]\n")
-		return 1
-	}
-	path := filepath.Join(cwd, "truss.yaml")
-	if len(args) == 2 {
-		path = args[1]
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(cwd, path)
-		}
-	}
+// runLocal runs a pipeline definition in this process, without the daemon.
+// It writes the run log to stdout and to .truss/run.log. With track set it
+// also reports the run to the daemon, which must be running (spec 010).
+func runLocal(ctx context.Context, pos []string, track bool, cwd string, env []string, stdout, stderr io.Writer) int {
+	path := definitionPath(cwd, pos)
 
 	def, err := pipeline.ParseFile(ctx, path)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: %s\n", err.Error())
 		return 1
 	}
-	run, err := engine.Run(ctx, def, cwd, env, stdout)
-	if err != nil {
+	if err := pipeline.Validate(def); err != nil {
 		fmt.Fprintf(stderr, "error: %s\n", err.Error())
 		return 1
 	}
-	if run.Status != pipeline.StatusSucceeded {
-		fmt.Fprintf(stderr, "error: %s\n", failureLine(run))
-		return 1
+
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+	var tr *tracker
+	if track {
+		tr, err = startTracking(ctx, def, env, stderr, cancelRun)
+		if err != nil {
+			fmt.Fprintf(stderr, "error: %s\n", err.Error())
+			return 1
+		}
 	}
-	return 0
+	code, status, reason := execute(ctx, runCtx, def, cwd, env, stdout, stderr, tr)
+	if tr != nil {
+		tr.finish(status, reason)
+	}
+	return code
 }
 
-func failureLine(run pipeline.PipelineRun) string {
-	if len(run.Steps) == 0 {
-		if run.Error != "" {
-			return run.Error
+// startTracking opens the run on the daemon of this invocation's TRUSS home.
+func startTracking(ctx context.Context, def pipeline.Pipeline, env []string, stderr io.Writer, cancelRun context.CancelFunc) (*tracker, error) {
+	plan, err := pipeline.Plan(def)
+	if err != nil {
+		return nil, err
+	}
+	h, err := home.Resolve(env)
+	if err != nil {
+		return nil, err
+	}
+	c, err := api.Dial(ctx, h)
+	if err != nil {
+		return nil, fmt.Errorf("--track: %w", err)
+	}
+	req := api.CreateRunRequest{Pipeline: plan.Name}
+	for _, s := range plan.Graph {
+		req.Steps = append(req.Steps, api.PlanStep{ID: s.ID, Needs: s.Needs})
+	}
+	tr, err := newTracker(ctx, c, req, stderr, cancelRun)
+	if err != nil {
+		return nil, fmt.Errorf("--track: %w", err)
+	}
+	fmt.Fprintf(stderr, "tracking as run %s (truss logs %s)\n", tr.id, tr.id)
+	return tr, nil
+}
+
+// execute runs the pipeline and returns the exit code and how the run ended
+// (an api run status and reason) for the tracker. ctx is the caller's;
+// runCtx also ends when the daemon cancels a tracked run.
+func execute(ctx, runCtx context.Context, def pipeline.Pipeline, cwd string, env []string, stdout, stderr io.Writer, tr *tracker) (int, string, string) {
+	// Steps get a project-local data folder, the counterpart of the daemon's
+	// per-pipeline one (specs/008-workspace-and-cache).
+	abs := cwd
+	if a, absErr := filepath.Abs(cwd); absErr == nil {
+		abs = a
+	}
+	dataDir := filepath.Join(abs, ".truss", "data")
+	cacheDir := filepath.Join(dataDir, "cache")
+	for _, d := range []struct {
+		path string
+		mode fs.FileMode
+	}{{filepath.Join(abs, ".truss"), 0o755}, {dataDir, 0o700}, {cacheDir, 0o700}} {
+		if err := realDir(d.path, d.mode); err != nil {
+			fmt.Fprintf(stderr, "error: prepare data folder: %s\n", err.Error())
+			return 1, api.RunFailed, err.Error()
 		}
-		return run.Name + " failed"
 	}
-	step := run.Steps[len(run.Steps)-1]
-	if step.Error != "" {
-		return fmt.Sprintf("%s failed at %s: %s", run.Name, step.ID, step.Error)
+	env = append(append([]string(nil), env...), "TRUSS_DATA_DIR="+dataDir, "TRUSS_CACHE_DIR="+cacheDir)
+
+	var extra io.Writer
+	if tr != nil {
+		extra = tr
 	}
-	code := 0
-	if step.ExitCode != nil {
-		code = *step.ExitCode
+	log, tmp, tmpPath, dest, err := openRunLog(cwd, stdout, extra)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %s\n", err.Error())
+		return 1, api.RunFailed, err.Error()
 	}
-	return fmt.Sprintf("%s failed at %s (exit %d)", run.Name, step.ID, code)
+	log.Setup(runlog.OSName(runtime.GOOS), runtime.GOARCH, executor.Shell(), abs)
+	var events engine.StepEvents = log
+	if tr != nil {
+		events = newTrackedEvents(log, tr, runCtx)
+	}
+	run, err := engine.Run(runCtx, def, cwd, env, events, engine.WithSecrets(secretLoader(env)))
+	if err != nil {
+		discardRunLog(tmp, tmpPath)
+		return interrupted(ctx, tr, err, stderr)
+	}
+	if err := ctx.Err(); err != nil {
+		// A cancel from the daemon that arrives after the run ended does not
+		// change its outcome. FR-017: an interrupted run never saves a run log.
+		discardRunLog(tmp, tmpPath)
+		return interrupted(ctx, tr, err, stderr)
+	}
+	if run.Status != pipeline.StatusSucceeded {
+		log.SummaryFailed(len(run.Steps), run.Failure())
+		if err := commitRunLog(tmp, tmpPath, dest); err != nil {
+			fmt.Fprintf(stderr, "error: %s\n", err.Error())
+		}
+		return 1, api.RunFailed, run.Failure()
+	}
+	log.SummarySucceeded(len(run.Steps))
+	if err := commitRunLog(tmp, tmpPath, dest); err != nil {
+		fmt.Fprintf(stderr, "error: %s\n", err.Error())
+		return 1, api.RunFailed, err.Error()
+	}
+	return 0, api.RunSucceeded, ""
+}
+
+// interrupted reports a run that ended early: the caller interrupted it, the
+// daemon cancelled it, or the engine refused it.
+func interrupted(ctx context.Context, tr *tracker, err error, stderr io.Writer) (int, string, string) {
+	switch {
+	case tr != nil && tr.daemonCancelled() && ctx.Err() == nil:
+		fmt.Fprintln(stderr, "error: cancelled from the daemon")
+		return 1, api.RunCancelled, "cancelled from the daemon"
+	case ctx.Err() != nil:
+		fmt.Fprintf(stderr, "error: %s\n", err.Error())
+		return 1, api.RunCancelled, "interrupted"
+	}
+	fmt.Fprintf(stderr, "error: %s\n", err.Error())
+	return 1, api.RunFailed, err.Error()
+}
+
+func openRunLog(cwd string, stdout, extra io.Writer) (*runlog.Log, *os.File, string, string, error) {
+	dir := filepath.Join(cwd, ".truss")
+	if err := realDir(dir, 0o755); err != nil {
+		return nil, nil, "", "", fmt.Errorf("prepare run log: %w", err)
+	}
+	dest := filepath.Join(dir, "run.log")
+	f, tmpPath, err := createTemp(dir, "run.log.", ".tmp")
+	if err != nil {
+		return nil, nil, "", "", fmt.Errorf("prepare run log: %w", err)
+	}
+	out := io.MultiWriter(stdout, f)
+	if extra != nil {
+		out = io.MultiWriter(stdout, f, extra)
+	}
+	return runlog.New(out, time.Now), f, tmpPath, dest, nil
+}
+
+// realDir makes sure path is a directory of its own, creating it with mode when
+// it is missing (its parent must exist). A symbolic link or Windows junction is
+// refused, as is anything that is not a directory: a checkout can carry a link
+// at .truss or .truss/data, and TRUSS must not write the run log, data or cache
+// into the folder it points to (specs/002-local-run-log FR-018).
+//
+// The project-local .truss folder keeps the 0755 (less umask) it always had;
+// tightening it is a behavior change left for a separate decision.
+func realDir(path string, mode fs.FileMode) error {
+	// Create first: Mkdir never follows a link, and finding the folder already
+	// there (another run may have just made it) is fine once it checks out.
+	err := os.Mkdir(path, mode) // #nosec G301 -- .truss keeps 0755; data and cache use 0700
+	if err == nil || !errors.Is(err, fs.ErrExist) {
+		return err
+	}
+	info, err := os.Lstat(path)
+	switch {
+	case err != nil:
+		return err
+	case info.Mode()&(fs.ModeSymlink|fs.ModeIrregular) != 0:
+		return fmt.Errorf("%s is a link or other reparse point; TRUSS does not write through links in .truss", path)
+	case !info.IsDir():
+		return fmt.Errorf("%s is not a directory", path)
+	}
+	return nil
+}
+
+// createTemp creates a new file prefix<random>suffix in dir. O_EXCL means it
+// never opens an existing file, so a symbolic link a checkout planted in .truss
+// is not followed. Unlike os.CreateTemp it keeps the usual 0666 mode less the
+// umask, so the saved run log has the permissions it always had.
+func createTemp(dir, prefix, suffix string) (*os.File, string, error) {
+	var lastErr error
+	for range 10 {
+		var b [8]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			return nil, "", err
+		}
+		path := filepath.Join(dir, prefix+hex.EncodeToString(b[:])+suffix)
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666) // #nosec G302 G304 -- new file under .truss; mode as os.Create
+		if err == nil {
+			return f, path, nil
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			return nil, "", err
+		}
+		lastErr = err
+	}
+	return nil, "", lastErr
+}
+
+func commitRunLog(tmp *os.File, tmpPath, dest string) error {
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close run log: %w", err)
+	}
+	if err := replaceFile(tmpPath, dest); err != nil {
+		return fmt.Errorf("replace run log: %w", err)
+	}
+	return nil
+}
+
+// replaceFile moves tmpPath to dest.
+// When the host cannot replace an existing dest, the previous file is restored
+// if the move fails.
+func replaceFile(tmpPath, dest string) error {
+	err := os.Rename(tmpPath, dest)
+	if err == nil {
+		return nil
+	}
+	// Lstat: a link at dest (even a dangling one) is moved aside, never followed.
+	if _, statErr := os.Lstat(dest); statErr != nil {
+		return err
+	}
+	backup := dest + ".bak"
+	_ = os.Remove(backup)
+	if renameErr := os.Rename(dest, backup); renameErr != nil {
+		return err
+	}
+	if renameErr := os.Rename(tmpPath, dest); renameErr != nil {
+		_ = os.Rename(backup, dest)
+		return renameErr
+	}
+	_ = os.Remove(backup)
+	return nil
+}
+
+func discardRunLog(tmp *os.File, tmpPath string) {
+	_ = tmp.Close()
+	_ = os.Remove(tmpPath)
 }

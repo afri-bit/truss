@@ -1,0 +1,20 @@
+{
+  "work_id": "claude--dazzling-wozniak-83puxa",
+  "title": "macOS resource figures for GET /metrics (spec 015 FR-009, ADR 0013)",
+  "tier": 2,
+  "branch": "claude/dazzling-wozniak-83puxa",
+  "status": "done",
+  "step": "merged",
+  "steps_done": [],
+  "requirements": [
+    "specs/015-resource-metrics/spec.md"
+  ],
+  "specs": [],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [],
+  "pr": "https://github.com/afri-bit/truss/pull/18",
+  "created": "2026-11-13T09:32:19Z",
+  "updated": "2026-11-14T12:08:17Z"
+}

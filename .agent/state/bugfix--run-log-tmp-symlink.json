@@ -1,0 +1,29 @@
+{
+  "work_id": "bugfix--run-log-tmp-symlink",
+  "title": "Never write the run log through a planted symbolic link",
+  "tier": 2,
+  "branch": "bugfix/run-log-tmp-symlink",
+  "status": "in_review",
+  "step": "pr-open",
+  "steps_done": [
+    "fix and tests",
+    "first review",
+    "delta reviews"
+  ],
+  "requirements": [
+    "FR-018"
+  ],
+  "specs": [
+    "specs/002-local-run-log",
+    "specs/008-workspace-and-cache"
+  ],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [
+    "Maintainer: accept refusing a linked .truss; check Windows CI runs the link tests"
+  ],
+  "pr": "https://github.com/afri-bit/truss/pull/23",
+  "created": "2026-11-14T12:39:42Z",
+  "updated": "2026-11-14T12:49:57Z"
+}

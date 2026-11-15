@@ -1,0 +1,11 @@
+{
+  "name": "truss-desktop-ui-tests",
+  "private": true,
+  "description": "Browser tests for TRUSS Desktop. Not part of the product; run by CI and by hand.",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 --test-timeout=120000"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "work_id": "task--workflow-constitution-2",
+  "title": "Align agent workflow docs with constitution 2.0",
+  "tier": 0,
+  "branch": "task/workflow-constitution-2",
+  "status": "in_review",
+  "step": "pr-open",
+  "steps_done": [],
+  "requirements": [],
+  "specs": [],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [
+    "Open the PR after the delta review; constitution amendment for optional work state is the maintainer's call"
+  ],
+  "pr": "https://github.com/afri-bit/truss/pull/22",
+  "created": "2026-11-14T12:21:18Z",
+  "updated": "2026-11-14T12:24:48Z"
+}

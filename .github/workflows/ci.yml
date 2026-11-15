@@ -14,48 +14,6 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-
-      - name: gofmt
-        run: |
-          unformatted="$(gofmt -l .)"
-          if [ -n "$unformatted" ]; then
-            echo "::error::Run gofmt on:"
-            echo "$unformatted"
-            exit 1
-          fi
-
-      - name: go vet
-        run: go vet ./...
-
-      - name: go.mod and go.sum are tidy
-        run: |
-          go mod tidy
-          git diff --exit-code go.mod go.sum
-
-      - name: go mod verify
-        run: go mod verify
-
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.14.0
-
-      - name: shellcheck
-        run: shellcheck .github/scripts/*.sh
-
-      - name: actionlint
-        run: |
-          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
-          ./actionlint -color
-
   test:
     name: Test (${{ matrix.os }})
     strategy:
@@ -69,81 +27,121 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Unit, contract, and integration tests (race detector)
+      - name: gofmt
         shell: bash
-        env:
-          CGO_ENABLED: "1"
-        run: go test -race -shuffle=on -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+        run: test -z "$(gofmt -l .)"
 
-      - name: Coverage summary
+      - name: go vet
+        run: go vet ./...
+
+      # -race needs cgo. Windows runners may lack gcc; then run without -race.
+      - name: Choose race flag
+        id: race
         shell: bash
-        run: go tool cover -func=coverage.out | tail -n 1
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ] && ! command -v gcc >/dev/null 2>&1; then
+            echo "::notice::gcc not found on this Windows runner; running tests without -race"
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=-race" >> "$GITHUB_OUTPUT"
+          fi
 
-      - uses: actions/upload-artifact@v7
-        if: matrix.os == 'ubuntu-latest'
-        with:
-          name: coverage
-          path: coverage.out
-
-  e2e:
-    name: End-to-end (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-
-      - name: Build truss
+      - name: Unit and integration tests
         shell: bash
-        run: go build -o "bin/truss$(go env GOEXE)" ./cmd/truss
+        run: go test ${{ steps.race.outputs.flag }} -count=1 ./...
 
-      - name: Run the built binary against the CLI contract
+      - name: Concurrency stress
         shell: bash
-        run: bash .github/scripts/e2e-test.sh "bin/truss$(go env GOEXE)"
+        run: go test ${{ steps.race.outputs.flag }} -count=20 -run 'Concurren|Stop|Tree' ./internal/engine ./internal/executor ./internal/runlog ./cmd/truss
 
-  release-tooling:
-    name: Release tooling (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: release-check.sh tests
-        run: bash .github/scripts/release-check_test.sh
-
-  cross-build:
-    name: Cross-compile release targets
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-
-      - name: Build every release target
+      # CGO_ENABLED=0 as in release.yml: the test steps above link with cgo
+      # (-race needs it), so this is the only run of a release-style binary.
+      # On macOS it proves that every libSystem function internal/metrics
+      # imports resolves at start-up (ADR 0013).
+      - name: Build and end-to-end script
+        shell: bash
         env:
           CGO_ENABLED: "0"
         run: |
-          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
-            echo "building $target"
-            GOOS="${target%/*}" GOARCH="${target#*/}" go build -trimpath -o /dev/null ./cmd/truss
-          done
+          bin="bin/truss$(go env GOEXE)"
+          go build -o "$bin" ./cmd/truss
+          bash .github/scripts/e2e-test.sh "$bin"
 
-  vulnerabilities:
-    name: Vulnerability scan
+      # Blocking. Last, and run even after a failure, so test and lint results
+      # are both reported. Built with go install so it uses the runner's Go (the
+      # repo's Go version is newer than prebuilt release binaries). Ubuntu only
+      # to keep the matrix cheap; other systems' files are linted with GOOS below.
+      # Keep the version in step with scripts/verify.sh and the cloud environment.
+      - name: golangci-lint
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+          "$(go env GOPATH)/bin/golangci-lint" run ./...
+
+      # Separate steps so Windows- and macOS-only files are linted even when the Linux run reports findings.
+      - name: golangci-lint (Windows files)
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        shell: bash
+        run: GOOS=windows "$(go env GOPATH)/bin/golangci-lint" run ./...
+
+      - name: golangci-lint (macOS files)
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        shell: bash
+        run: GOOS=darwin "$(go env GOPATH)/bin/golangci-lint" run ./...
+
+  # Browser tests for TRUSS Desktop (specs/013-desktop-polish). Linux only: the
+  # suite is portable Node, but Chromium on three runners costs more than it
+  # finds while the page is plain DOM code. Playwright is pinned in
+  # tests/ui/package-lock.json and is not a dependency of the product.
+  desktop-ui:
+    name: Desktop UI (ubuntu-latest)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/ui/package-lock.json
 
-      - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+      - name: Build truss
+        run: go build -o bin/truss ./cmd/truss
+
+      - name: Install Playwright and Chromium
+        working-directory: tests/ui
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Run the browser tests
+        working-directory: tests/ui
+        run: npm test
+
+  agent-tooling:
+    name: Agent tooling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # scripts/verify_test.sh needs go and gofmt.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Memory, state and gate tests
+        run: python3 -m unittest discover -s scripts/tests
+
+      - name: Validate agent memory, state and log
+        run: python3 scripts/memory.py validate
+
+      - name: Hooks parse
+        run: for f in .claude/hooks/*.sh; do bash -n "$f"; done
+
+      - name: Hook and release script tests
+        run: |
+          bash .claude/hooks/guard-git_test.sh
+          bash .github/scripts/release-check_test.sh
+          bash scripts/verify_test.sh

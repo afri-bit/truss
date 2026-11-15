@@ -11,7 +11,7 @@ Load a v1 YAML Pipeline Definition, validate it, run each Step's `run` string se
 
 ## Technical Context
 
-**Language/Version**: Go 1.22.5 (module `github.com/afri-bit/truss`)
+**Language/Version**: Go 1.27.3 (module `github.com/afri-bit/truss`)
 **Primary Dependencies**: Go standard library; `gopkg.in/yaml.v3` for YAML decoding only
 **Storage**: N/A (Pipeline Definitions are local files; Pipeline Runs are not persisted)
 **Testing**: `go test ./...`; contract tests for YAML v1, host execution, and `truss run`; test-first per constitution Principle III
@@ -20,6 +20,8 @@ Load a v1 YAML Pipeline Definition, validate it, run each Step's `run` string se
 **Performance Goals**: N/A (one local sequential run; no throughput target in this milestone)
 **Constraints**: Only Step `run` strings are executed. Exit Codes are preserved. Fail-fast. No environment dumps. No cancellation, timeout, or retry feature. `context.Context` is the first parameter of blocking calls and is not stored on structs.
 **Scale/Scope**: One Pipeline, one or more Steps, sequential host execution, human-readable CLI Result
+
+The Go toolchain moved from 1.22.5 to 1.27.3 on 2026-10-26. Go 1.22.5's standard library is affected by GO-2025-3956 (`os/exec` LookPath) and GO-2025-3750 (`os` and `syscall`), and the host executor and CLI call those packages. 1.27.3 is the current stable release and includes both fixes.
 
 ## Constitution Check
 

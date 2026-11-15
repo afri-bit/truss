@@ -33,3 +33,16 @@ Thumbs.db
 # Editor/IDE
 # .idea/
 # .vscode/
+
+bin/
+.truss/
+
+# Claude Code local settings and worktrees
+.claude/settings.local.json
+.claude/worktrees/
+
+# Python bytecode from the agent tooling scripts
+__pycache__/
+*.pyc
+
+node_modules/

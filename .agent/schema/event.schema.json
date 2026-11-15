@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/afri-bit/truss/.agent/schema/event.schema.json",
+  "title": "Event",
+  "description": "One line of .agent/log/YYYY-MM.jsonl (JSON Lines). Append-only; never edit a past line.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ts", "actor", "event", "work_id", "summary", "refs"],
+  "properties": {
+    "ts": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$" },
+    "actor": { "type": "string", "minLength": 1, "description": "Agent name or 'owner'." },
+    "event": { "enum": ["work_started", "step_done", "decision", "blocker", "handoff", "memory_added", "memory_updated", "pr_opened", "note"] },
+    "work_id": { "type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9.-]*$" },
+    "summary": { "type": "string", "minLength": 1 },
+    "refs": { "type": "array", "items": { "type": "string" } }
+  }
+}

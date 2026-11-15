@@ -1,0 +1,13 @@
+# Guardrail paths: agents must not change these without a human reading the diff.
+# Pair this file with a branch ruleset on develop that requires code owner review.
+*                                 @afri-bit
+/.claude/                         @afri-bit
+/.github/                         @afri-bit
+/scripts/                         @afri-bit
+/.agent/                          @afri-bit
+/.specify/                        @afri-bit
+/.golangci.yml                    @afri-bit
+/go.mod                           @afri-bit
+/go.sum                           @afri-bit
+/AGENTS.md                        @afri-bit
+/CLAUDE.md                        @afri-bit

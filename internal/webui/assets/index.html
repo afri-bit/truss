@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TRUSS Desktop</title>
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="preload" href="fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <script src="boot.js"></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar" aria-label="Main">
+      <a class="brand" href="#/" title="TRUSS Desktop">
+        <img src="logo.svg" alt="" width="22" height="22">
+        <span class="brand-name">TRUSS</span>
+        <span class="brand-sub">Desktop</span>
+      </a>
+      <nav id="nav" class="nav"></nav>
+      <div class="side-section" id="side-live"></div>
+      <div class="side-foot">
+        <div class="daemon" id="daemon"></div>
+        <button type="button" class="collapse" id="collapse" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar  [">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="2.25" width="12.5" height="11.5" rx="2"/><path d="M6 2.5v11"/><path class="chev" d="M10.5 6 8.75 8l1.75 2"/></svg>
+        </button>
+      </div>
+    </aside>
+    <div class="main">
+      <header class="topbar" id="topbar">
+        <div class="crumbs" id="crumbs"></div>
+        <div class="topbar-tools">
+          <button type="button" class="finder" id="finder-open" aria-haspopup="dialog" title="Jump to a pipeline or run  (/)">
+            <svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.25"/><path d="m10.25 10.25 3 3"/></svg>
+            <span>Jump to…</span><kbd>/</kbd>
+          </button>
+          <div class="conn" id="conn" role="status" aria-live="polite"></div>
+          <button type="button" class="icon-btn" id="theme-toggle" aria-label="Toggle theme" title="Toggle light and dark"></button>
+          <div class="menu-wrap">
+            <button type="button" class="icon-btn" id="settings-btn" aria-label="Settings menu" aria-haspopup="menu" aria-expanded="false" title="Settings">
+              <svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6"/><circle cx="10" cy="4.5" r="1.5"/><circle cx="6" cy="11.5" r="1.5"/></svg>
+            </button>
+            <div class="menu" id="settings-menu" role="menu" hidden></div>
+          </div>
+        </div>
+      </header>
+      <main id="view" tabindex="-1"></main>
+    </div>
+  </div>
+  <dialog id="picker" aria-labelledby="picker-title"></dialog>
+  <dialog id="finder" class="finder-dlg" aria-label="Jump to"></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

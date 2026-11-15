@@ -2,7 +2,7 @@
 
 ## Project
 
-TRUSS is a portable pipeline execution platform.
+TRUSS is a portable pipeline execution platform: a CLI, a local daemon with scheduling, and TRUSS Desktop.
 
 The project is developed using Spec-Driven Development. Specifications define intended behavior before implementation decisions are made.
 
@@ -10,29 +10,26 @@ The core engine, CLI, and daemon are implemented in Go. SDKs and external integr
 
 ## Development Workflow
 
-Follow the Spec Kit workflow for feature development.
+Behavior that users or integrations can depend on is written down in `specs/<feature>/spec.md`
+and ships with tests, in the same pull request as the code. The order is yours: spec first is
+the usual choice for a change to a public contract or to process execution; for other work the
+spec may be written alongside or right after the code.
 
-For behavioral changes or new capabilities:
+The full Spec Kit sequence (specify, clarify, plan, tasks, analyze, implement) is available
+through `/feature` and the `/speckit-*` skills (see `CLAUDE.md`). Use as much of it as the
+change needs.
 
-1. Define or update the feature specification.
-2. Clarify unresolved requirements when necessary.
-3. Create the technical plan.
-4. Break the plan into implementation tasks.
-5. Implement from the approved specification and plan.
-6. Verify that the implementation converges with the specification.
-
-Do not jump directly from an informal feature request to implementation when the feature does not yet have sufficient specification.
-
-Small mechanical changes such as formatting, typo fixes, dependency maintenance, or equivalent refactoring do not require a new feature specification unless they alter observable behavior.
+Small mechanical changes such as formatting, typo fixes, dependency maintenance, or equivalent refactoring need no specification unless they alter observable behavior.
 
 ## Sources of Truth
 
 Use the following project artifacts for their respective purposes:
 
+* `docs/MILESTONE.md` defines what the current release includes and what waits until later. Read it before choosing or expanding a feature.
 * `.specify/memory/constitution.md` defines project-wide engineering principles and constraints.
 * `specs/<feature>/spec.md` defines required feature behavior and intent.
-* `specs/<feature>/plan.md` defines the agreed technical approach.
-* `specs/<feature>/tasks.md` defines implementation work.
+* `specs/<feature>/plan.md` and `tasks.md`, when present, define the technical approach and the work.
+* `docs/architecture.md` maps the packages and their boundaries; `docs/decisions/` records why.
 * Source code represents the current implementation, not automatically the intended behavior.
 
 Do not duplicate feature requirements or architectural principles into this file.
@@ -44,11 +41,12 @@ If implementation and specification disagree, do not silently modify either side
 Before modifying code for a feature:
 
 1. Read this `AGENTS.md`.
-2. Read `.specify/memory/constitution.md`.
-3. Identify the relevant feature under `specs/`.
-4. Read its `spec.md`.
-5. When present, read its `plan.md` and `tasks.md`.
-6. Inspect the existing implementation relevant to the change.
+2. Read `docs/MILESTONE.md` and stay inside the current release.
+3. Read `.specify/memory/constitution.md`.
+4. Identify the relevant feature under `specs/`.
+5. Read its `spec.md`.
+6. When present, read its `plan.md` and `tasks.md`.
+7. Inspect the existing implementation relevant to the change.
 
 Do not assume repository structure, APIs, or behavior from general conventions when the repository already defines them.
 
@@ -58,13 +56,11 @@ Specifications describe what TRUSS must do and why.
 
 Do not introduce implementation details into `spec.md` unless they are externally observable requirements or explicit constraints.
 
-Technical decisions belong primarily in `plan.md`.
-
-Implementation tasks belong in `tasks.md`.
+Technical decisions belong in `plan.md` when a feature has one, and in `docs/decisions/` when they outlive the feature.
 
 Do not invent requirements that are not supported by the specification or explicit user direction.
 
-When a requirement is materially ambiguous and different interpretations would change behavior or architecture, surface the ambiguity rather than choosing arbitrarily.
+When a requirement is materially ambiguous, surface it: ask, or decide and record the decision where a reviewer will see it.
 
 During implementation, do not silently expand feature scope.
 
@@ -78,13 +74,15 @@ Do not restate, weaken, or silently diverge from those principles here. If this 
 
 Treat `.specify/` as Spec Kit infrastructure and project SDD configuration.
 
-Treat `.cursor/` as Cursor-specific agent integration and tooling.
+Treat `.claude/` as the Claude Code agent setup: agents, skills, rules, hooks, and permissions. `CLAUDE.md` says how Claude Code works in this repository. `docs/agents.md` describes the whole setup.
 
-Do not move project requirements into `.cursor/`.
+Treat `.agent/` as shared agent memory, work state, and event log. Do not store requirements there.
 
-Do not modify generated Spec Kit or Cursor integration files unless the task specifically concerns that tooling.
+Do not move project requirements into `.claude/` or `.agent/`.
 
-The product architecture must not depend on Cursor or Spec Kit being present at runtime.
+Do not modify generated Spec Kit files or the agent setup unless the task specifically concerns that tooling.
+
+The product architecture must not depend on Claude Code or Spec Kit being present at runtime.
 
 ## Completion
 

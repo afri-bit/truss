@@ -31,6 +31,15 @@ EOF
 
 - Something old.
 EOF
+	mkdir -p "$work/cmd/truss" "$work/internal/webui"
+	printf 'package main\n\n// Version is the product version.\nconst Version = "1.2.0"\n' >"$work/cmd/truss/version.go"
+	printf '1.2.0\n' >"$work/internal/webui/VERSION"
+}
+
+# set_versions VERSION: point the Go constant and the Desktop version file at VERSION.
+set_versions() {
+	sed -i.bak "s#^const Version = .*#const Version = \"$1\"#" "$work/cmd/truss/version.go"
+	printf '%s\n' "$1" >"$work/internal/webui/VERSION"
 }
 
 teardown() {
@@ -75,6 +84,7 @@ done
 setup
 sed -i.bak 's/^## \[1.2.0\]/## [1.2.0-rc.1]/' "$work/CHANGELOG.md"
 sed -i.bak 's#^// version: 1.2.0#// version: 1.2.0-rc.1#' "$work/go.mod"
+set_versions 1.2.0-rc.1
 check "pre-release tag" 0 "" v1.2.0-rc.1 2026-10-10
 teardown
 
@@ -96,6 +106,7 @@ teardown
 setup
 printf '// version: 2.0.0\nmodule github.com/afri-bit/truss/v2\n\ngo 1.22.5\n' >"$work/go.mod"
 sed -i.bak 's/^## \[1.2.0\]/## [2.0.0]/' "$work/CHANGELOG.md"
+set_versions 2.0.0
 check "v2 with /v2 module path" 0 "" v2.0.0 2026-10-10
 teardown
 
@@ -126,6 +137,71 @@ teardown
 setup
 sed -i.bak 's/^- Something new\.$//' "$work/CHANGELOG.md"
 check "changelog section empty" 1 "CHANGELOG.md section for 1.2.0 has no entries" v1.2.0 2026-10-10
+teardown
+
+setup
+set_versions 1.1.9
+check "Go constant differs" 1 "cmd/truss Version 1.1.9 does not match tag v1.2.0" v1.2.0 2026-10-10
+teardown
+
+setup
+rm "$work/cmd/truss/version.go"
+check "Go constant file missing" 1 "cmd/truss/version.go not found" v1.2.0 2026-10-10
+teardown
+
+setup
+printf '1.1.9\n' >"$work/internal/webui/VERSION"
+check "Desktop version differs" 1 "TRUSS Desktop version 1.1.9 (internal/webui/VERSION) does not match tag v1.2.0" v1.2.0 2026-10-10
+teardown
+
+setup
+rm "$work/internal/webui/VERSION"
+check "Desktop version file missing" 1 "internal/webui/VERSION not found" v1.2.0 2026-10-10
+teardown
+
+setup
+: >"$work/internal/webui/VERSION"
+check "Desktop version file empty" 1 "internal/webui/VERSION is empty" v1.2.0 2026-10-10
+teardown
+
+setup
+sed -i.bak 's/^### Added/### Stuff/' "$work/CHANGELOG.md"
+check "changelog unknown heading" 1 "unknown heading \"### Stuff\"" v1.2.0 2026-10-10
+teardown
+
+setup
+cat >"$work/CHANGELOG.md" <<'EOF'
+# Changelog
+
+## [Unreleased]
+
+## [1.2.0] - 2026-10-10
+
+### Added
+
+- One.
+
+### Changed
+
+- Two.
+
+### Deprecated
+
+- Three.
+
+### Removed
+
+- Four.
+
+### Fixed
+
+- Five.
+
+### Security
+
+- Six.
+EOF
+check "all Keep a Changelog headings" 0 "" v1.2.0 2026-10-10
 teardown
 
 setup

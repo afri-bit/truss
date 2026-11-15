@@ -1,23 +1,46 @@
-# TRUSS
+<h1 align="center">TRUSS</h1>
 
-**A portable pipeline execution platform. Define a pipeline once in YAML and run it the same way on your machine, in CI, and anywhere else.**
+<p align="center">
+  <img src="docs/images/logo.svg" alt="TRUSS logo" width="128" height="128">
+</p>
 
-[![CI](https://github.com/afri-bit/truss/actions/workflows/ci.yml/badge.svg)](https://github.com/afri-bit/truss/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/badge/go-1.22.5-00ADD8?logo=go)](go.mod)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<p align="center">
+  <strong>Pipelines that live on your machine.</strong><br>
+  Write one YAML file, run it by hand or on a schedule,<br>
+  and watch it from the terminal or from TRUSS Desktop.
+</p>
 
-> **Status:** early development. The engine runs pipelines on the host today. No version has been tagged yet, and the pipeline schema and CLI output may still change before the first release.
+<p align="center">
+  <a href="https://github.com/afri-bit/truss/actions/workflows/ci.yml"><img src="https://github.com/afri-bit/truss/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="go.mod"><img src="https://img.shields.io/badge/go-1.27.3-00ADD8?logo=go" alt="Go"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License: Apache 2.0"></a>
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="docs/pipeline-reference.md">Pipeline file</a> ·
+  <a href="docs/cli.md">Commands</a> ·
+  <a href="docs/daemon.md">Daemon</a> ·
+  <a href="docs/desktop.md">Desktop</a> ·
+  <a href="docs/architecture.md">Architecture</a>
+</p>
+
+> **Status:** early development. The first release, [v0.1.0](docs/MILESTONE.md), is not tagged yet. The pipeline file, the CLI and the daemon API may still change until then.
+
+<p align="center">
+  <img src="docs/images/desktop-dashboard.png" alt="TRUSS Desktop dashboard" width="900">
+</p>
 
 ## Contents
 
 - [Why TRUSS](#why-truss)
-- [Vision](#vision)
-- [Features](#features)
-- [Getting started](#getting-started)
-- [Usage](#usage)
-- [Pipeline definition](#pipeline-definition)
-- [Architecture](#architecture)
-- [Tech stack](#tech-stack)
+- [What you get](#what-you-get)
+- [Quick start](#quick-start)
+- [Three ways to use TRUSS](#three-ways-to-use-truss)
+- [A pipeline file](#a-pipeline-file)
+- [Commands](#commands)
+- [How it fits together](#how-it-fits-together)
+- [Documentation](#documentation)
 - [Roadmap](#roadmap)
 - [Development](#development)
 - [License](#license)
@@ -47,60 +70,28 @@ flowchart LR
     end
 ```
 
-## Vision
+## What you get
 
-TRUSS aims to be a lightweight execution layer for software pipelines. The place a pipeline runs may change; its definition and execution semantics should not.
+- **Local first.** `truss run` executes a pipeline right where you are. No server, no account, no push.
+- **Jobs and dependencies.** Group steps into jobs, let jobs wait for each other, run independent work in parallel.
+- **A daemon, like Docker's.** `truss daemon start` gives you a queue, a history and one API for every client.
+- **Cron that understands laptops.** Schedules live in the pipeline file. A job planned for 09:00 does not fire at 11:00 because you opened the lid late, unless you ask for a catch-up run.
+- **Register what you want watched.** Your files stay in your projects; the daemon only remembers where they are and re-reads them when they change.
+- **Concurrency you control.** Steps per run, runs per machine, and whether a pipeline may overlap itself.
+- **TRUSS Desktop.** A dashboard, pipeline controls, step graphs and live logs, built into the same binary.
+- **One small binary.** Go standard library plus a YAML parser. Linux, macOS and Windows.
 
-```mermaid
-flowchart LR
-    yaml[/"Pipeline YAML"/] --> engine["TRUSS engine"]
-    cli["CLI"] --> engine
-    daemon["Daemon"] -.-> engine
-    sdk["SDKs and APIs"] -.-> engine
-    ci["CI/CD platforms"] -.-> engine
-    engine --> host["Host"]
-    engine -.-> container["Container"]
-    engine -.-> remote["Remote workers"]
-
-    classDef planned stroke-dasharray: 5 5
-    class daemon,sdk,ci,container,remote planned
-```
-
-<sub>Solid: available today. Dashed: planned.</sub>
-
-### Design principles
-
-- **Local first.** If a pipeline can run on a developer machine, it should. Remote CI is not required to find out whether a pipeline works.
-- **Portable.** The pipeline model does not depend on any CI provider, container runtime, or orchestrator. Those integrate with TRUSS; they do not define its semantics.
-- **Engine first.** Parsing, validation, planning, execution, and results form the core. The CLI, daemon, SDKs, and dashboards build on top of it.
-- **Explicit over magic.** You can tell what will run, in what order, with what environment, what each step produced, and why something failed.
-- **Small, but clean.** The scope starts deliberately small, with clear boundaries, strong contracts, and tests from day one.
-
-## Features
-
-Available today:
-
-- YAML pipeline definitions (schema version `"1"`).
-- Validation before execution. An invalid definition never starts a command.
-- Sequential host execution through `/bin/sh -c` on Unix and `cmd /c` on Windows.
-- Each step runs in the invoker's working directory with the invoker's environment.
-- Output streamed live, step by step.
-- Fail-fast behavior. The first failed step stops the run and reports its real exit code.
-- Linux, macOS, and Windows support.
-
-## Getting started
+## Quick start
 
 ### Install
 
-With Go 1.22.5 or newer:
+With Go 1.27.3 or newer:
 
 ```bash
 go install github.com/afri-bit/truss/cmd/truss@latest
 ```
 
-Prebuilt binaries for Linux, macOS, and Windows (amd64 and arm64) will be published on [GitHub Releases](https://github.com/afri-bit/truss/releases) starting with the first tagged version.
-
-### Build from source
+Or build from source:
 
 ```bash
 git clone https://github.com/afri-bit/truss.git
@@ -108,7 +99,9 @@ cd truss
 go build -o bin/truss ./cmd/truss
 ```
 
-### Your first pipeline
+Prebuilt binaries will be published on [GitHub Releases](https://github.com/afri-bit/truss/releases) with the first tagged version.
+
+### 1. Run a pipeline by hand
 
 Create `truss.yaml`:
 
@@ -116,251 +109,223 @@ Create `truss.yaml`:
 version: "1"
 
 pipeline:
-  name: hello-world
+  name: hello
 
 steps:
-  - id: hello
+  - id: greet
     run: echo "Hello from TRUSS"
-  - id: where
-    run: echo "running in $PWD"
 ```
-
-Run it:
 
 ```console
 $ truss run
-[hello]
-Hello from TRUSS
-[where]
-running in /home/me/project
+2026-11-12 09:00:00 setup environment ready
+2026-11-12 09:00:00 setup os linux
+2026-11-12 09:00:00 setup arch amd64
+2026-11-12 09:00:00 setup shell /bin/sh
+2026-11-12 09:00:00 setup directory /home/me/project
+2026-11-12 09:00:00 step greet started
+2026-11-12 09:00:00 step greet | Hello from TRUSS
+2026-11-12 09:00:00 step greet finished duration 0.003s exit 0
+2026-11-12 09:00:00 summary succeeded steps 1 duration 0.005s
 ```
 
-## Usage
-
-```text
-truss run [<path>]
-```
-
-| Command | Behavior |
-|---|---|
-| `truss run` | Loads `truss.yaml` from the current directory. It does not search for other filenames. |
-| `truss run <path>` | Loads the given file. Any filename is valid. |
-| anything else | Prints `usage: truss run [<path>]` and exits 1 without running anything. |
-
-### Output
-
-Each step prints its id in brackets, followed by its stdout and stderr as the process writes them. A successful run prints nothing else.
-
-When a step fails, later steps are skipped and one line on standard error names the pipeline, the step, and the step's exit code:
+### 2. Let the daemon run it
 
 ```console
-$ truss run ci.yaml
-[first]
-first
-[second]
-error: fail-fast failed at second (exit 3)
+$ truss daemon start
+daemon started (pid 4242, 127.0.0.1:7878)
+
+$ truss register
+registered hello (/home/me/project/truss.yaml)
+
+$ truss trigger hello --follow
+...
+2026-11-12 09:01:10 summary succeeded steps 1 duration 0.005s
+
+$ truss runs
+RUN                     PIPELINE  STATUS     TRIGGER  CREATED              DURATION  NOTE
+20261112-090110-a3f9c1  hello     succeeded  manual   2026-11-12 09:01:10  0s
 ```
 
-An invalid definition is rejected before any step runs:
+The daemon does not start by itself after a reboot. To have your schedules keep working, run
+`truss daemon install` once; it starts the daemon at every login and needs no admin rights
+(`truss daemon uninstall` takes it back). Details in [the daemon docs](docs/daemon.md#starting-at-login).
 
-```console
-$ truss run broken.yaml
-error: missing or unsupported schema version
-```
+### 3. Put it on a schedule
 
-### Exit codes
-
-| Outcome | `truss` exit code |
-|---|---|
-| Every step succeeded | `0` |
-| A step failed, or the file is missing, unreadable, invalid YAML, or fails validation | `1` |
-
-The `truss` exit code is not the step's exit code. The step's exit code appears in the error line.
-
-## Pipeline definition
+Add a trigger to the file and save. The daemon picks the change up by itself.
 
 ```yaml
-version: "1"            # required, quoted string; only "1" is supported
+on:
+  schedule:
+    - cron: "0 9 * * 1-5"   # weekdays at 09:00
+```
+
+```console
+$ truss pipelines
+NAME   STATE  NEXT RUN             LAST RUN                       FILE
+hello  ready  2026-11-13 09:00:00  succeeded 2026-11-12 09:01:10  /home/me/project/truss.yaml
+```
+
+### 4. Open TRUSS Desktop
+
+```console
+$ truss desktop
+```
+
+## Three ways to use TRUSS
+
+| | You start | You use | Tracked by the daemon? |
+|---|---|---|---|
+| **1. Alone** | nothing | `truss run`, `truss validate` | No. The log is `.truss/run.log` in the project. Add `--track` (needs the daemon) to also record the run. |
+| **2. With the daemon** | `truss daemon start` | the CLI: `register`, `trigger`, `runs`, `logs`, `cancel`, ... | Yes: schedules, queue, history. |
+| **3. With the daemon and Desktop** | `truss daemon start`, then `truss desktop` | the same runs, seen and controlled in the browser | Yes, same state as path 2. |
+
+The daemon is the server, like Jenkins or Docker's engine. It is always started on its own
+and stays in the background. Desktop and the CLI are clients: without a daemon Desktop shows
+nothing, and neither client starts or stops it.
+
+Path 1 is deliberately separate. `truss run` executes in your shell with your environment, needs
+no server, and behaves the same in CI. If you want a run to appear in the history and in Desktop,
+either register the file and use `truss trigger` (the daemon runs it, with the daemon's environment),
+or keep running in your shell and add `--track`: `truss run --track` still uses your environment and
+only reports to the daemon, which shows it as a `local` run.
+
+Pipelines are written in files, with your editor. Desktop watches and controls them; it does not edit them.
+
+## A pipeline file
+
+```yaml
+version: "1"
 
 pipeline:
-  name: build-and-test  # required, non-empty
+  name: nightly
+  concurrency: 3            # steps at once
+  overlap: skip             # never run on top of itself
 
-steps:                  # required, at least one step
-  - id: build           # required, unique within the pipeline
-    run: go build ./... # required, one command string for the host shell
-  - id: test
-    run: go test ./...
+on:
+  schedule:
+    - cron: "30 1 * * *"
+      missed: run           # catch up once if the machine was off
+
+env:
+  STAGE: nightly
+
+jobs:
+  lint:
+    steps:
+      - id: vet
+        run: go vet ./...
+  test:
+    steps:
+      - id: unit
+        run: go test ./...
+        timeout: 10m
+  release:
+    needs: [lint, test]     # waits for both
+    steps:
+      - id: build
+        run: go build -o dist/app ./cmd/app
+      - id: publish
+        run: ./scripts/publish.sh
+        env:
+          CHANNEL: nightly
 ```
 
-| Field | Rules |
-|---|---|
-| `version` | Must be the string `"1"`. A bare number such as `1` is rejected. |
-| `pipeline.name` | Required and non-empty. |
-| `steps` | A list with at least one step. Steps run in the order they are listed. |
-| `steps[].id` | Required, non-empty, and unique. |
-| `steps[].run` | Required and non-empty. The host shell interprets it, including quotes, pipes, and variable expansion. |
+`lint` and `test` run side by side; `release` starts when both succeeded. The first failed step
+fails the run and stops the rest, unless you opt into retries, `continue-on-error` or `if`
+conditions. Every field is described in the
+[pipeline file reference](docs/pipeline-reference.md).
 
-Every step starts a new shell, so `cd` or `export` in one step does not carry over to the next. The full contract lives in [`specs/001-host-pipeline-engine/contracts/pipeline-v1.md`](specs/001-host-pipeline-engine/contracts/pipeline-v1.md).
+## Commands
 
-## Architecture
+| | Command | |
+|---|---|---|
+| **Run here** | `truss run [<path>] [--track]` | Run a file now; `--track` also reports it to the daemon |
+| | `truss validate [<path>]` | Check a file and show its steps |
+| **Secrets** | `truss secret set <name>` \| `list` \| `remove <name>` | Store credentials for `secrets:` in a file (value from stdin) |
+| **Daemon** | `truss daemon start` \| `stop` \| `status` | Manage the background service |
+| | `truss daemon install` \| `uninstall` | Start the daemon at login, or stop doing so |
+| | `truss desktop` | Open TRUSS Desktop |
+| **Pipelines** | `truss register [<path>] [--name <name>]` | Make a file known to the daemon |
+| | `truss unregister <name>` | Forget it; the file and history stay |
+| | `truss pipelines` | List registrations, next and last run |
+| | `truss pause <name>` \| `resume <name>` | Stop or restart its schedules |
+| **Runs** | `truss trigger <name> [--follow]` | Start a run now |
+| | `truss runs [<name>]` | List runs, newest first |
+| | `truss logs <run-id> [--follow]` | Show a run log |
+| | `truss cancel <run-id>` | End a queued or running run |
 
-TRUSS is layered so that execution behavior lives in the engine, never in the interface used to start it.
+Details and exit codes: [command line reference](docs/cli.md).
 
-```mermaid
-flowchart TB
-    subgraph interfaces["Interfaces"]
-        cli["CLI<br/>cmd/truss"]
-        sdk["SDKs / APIs"]
-    end
-    daemon["Daemon<br/>runs, state, events, workers"]
-    subgraph core["Core"]
-        pipeline["Pipeline<br/>internal/pipeline<br/>parse, validate, plan"]
-        engine["Engine<br/>internal/engine<br/>orchestrate, results"]
-    end
-    subgraph executors["Executors"]
-        host["Host<br/>internal/executor"]
-        container["Container"]
-        remote["Remote"]
-    end
-
-    cli --> pipeline
-    cli --> engine
-    sdk -.-> daemon
-    daemon -.-> engine
-    engine --> pipeline
-    engine --> host
-    engine -.-> container
-    engine -.-> remote
-
-    classDef planned stroke-dasharray: 5 5
-    class sdk,daemon,container,remote planned
-```
-
-<sub>Solid: implemented. Dashed: planned.</sub>
-
-### How a run works
-
-```mermaid
-sequenceDiagram
-    actor User
-    participant CLI as CLI (cmd/truss)
-    participant Pipeline as Pipeline (internal/pipeline)
-    participant Engine as Engine (internal/engine)
-    participant Host as Host executor (internal/executor)
-
-    User->>CLI: truss run [path]
-    CLI->>Pipeline: parse YAML
-    Pipeline-->>CLI: pipeline model or load error
-    CLI->>Engine: run pipeline
-    Engine->>Pipeline: validate and plan
-    Pipeline-->>Engine: execution plan or validation error
-    loop each step, in order
-        Engine->>Host: execute run string
-        Host-->>Engine: exit code, output, start error
-        Note over Engine: stop at the first failed step
-    end
-    Engine-->>CLI: pipeline run result
-    CLI-->>User: streamed log, error line, exit code
-```
-
-### Boundaries
-
-| Package | Responsibility |
-|---|---|
-| `cmd/truss` | Arguments, file resolution, terminal output, process exit codes. No execution logic. |
-| `internal/pipeline` | Pipeline model, YAML parsing, validation, and the execution plan. Never executes anything. |
-| `internal/engine` | Runs a plan step by step, applies fail-fast, and returns structured results. Independent of the CLI. |
-| `internal/executor` | Runs one command in the host shell and reports its exit code, output, and start errors. |
-
-Rules the code follows:
-
-- Parsing never executes a pipeline.
-- The engine does not depend on the CLI, and the CLI contains no engine logic.
-- Pipeline models stay independent of the execution backend.
-- Exit codes, failures, and cancellation propagate accurately across layers. Subprocess failures are never swallowed.
-- Secrets and the environment are not echoed into reports.
-
-### Repository layout
-
-```text
-truss/
-├── cmd/truss/              CLI entry point
-├── internal/
-│   ├── pipeline/           model, parse, validate, plan
-│   ├── engine/             orchestration and results
-│   └── executor/           host shell execution
-├── specs/                  feature specifications, plans, contracts, tasks
-├── docs/GLOSSARY.md        product vocabulary
-├── .specify/               Spec Kit configuration and project constitution
-├── .github/                CI and release workflows, test scripts
-├── AGENTS.md               workflow guide for coding agents
-└── CHANGELOG.md
-```
-
-## Tech stack
-
-| Area | Choice |
-|---|---|
-| Language | Go 1.22.5 for the engine, CLI, and future daemon |
-| Dependencies | Go standard library, plus `gopkg.in/yaml.v3` for YAML decoding only |
-| Process execution | `os/exec` with `/bin/sh -c` (Unix) or `cmd /c` (Windows) |
-| Testing | `go test` unit, contract, and integration tests with the race detector, plus end-to-end tests of the built binary |
-| Quality | `gofmt`, `go vet`, golangci-lint, shellcheck, actionlint, govulncheck |
-| CI/CD | GitHub Actions on Linux, macOS, and Windows; tag-driven releases |
-| Process | Specification-driven development with [Spec Kit](https://github.com/github/spec-kit) |
-
-SDKs and integrations may be written in other languages. Public contracts such as the pipeline schema and CLI behavior must not depend on Go-specific details.
-
-## Roadmap
-
-TRUSS grows from the engine outward. Each item below gets its own specification before it is built, so the scope and order may change.
-
-**Execution**
-
-- Dependency graphs between steps
-- Concurrent step execution
-- Cancellation
-- Container execution
-- Remote workers
-
-**Platform**
-
-- Execution events and log streaming
-- Daemon for managing runs, concurrency, and execution state
-- APIs and SDKs
-
-**Ecosystem**
-
-- CI/CD platform integrations
-- Visualization and dashboards
-
-Advanced caching, matrix builds, and cloud orchestration are out of scope for now.
-
-## Development
-
-TRUSS is built with specification-driven development. Behavior is specified before it is implemented, and every behavior change starts from a failing test.
+## How it fits together
 
 ```mermaid
 flowchart LR
-    spec["Specify<br/>spec.md"] --> clarify["Clarify"] --> plan["Plan<br/>plan.md"] --> tasks["Tasks<br/>tasks.md"] --> impl["Implement<br/>test first"] --> verify["Verify against spec"]
+    yaml[/"truss.yaml"/]
+    cli["truss CLI"]
+    desktop["TRUSS Desktop"]
+    subgraph daemon["truss daemon"]
+        registry["Registry"]
+        scheduler["Scheduler"]
+        runs["Run queue and history"]
+    end
+    engine["Engine"]
+    shell["Host shell"]
+
+    cli -- "truss run" --> engine
+    cli -- "HTTP, loopback" --> daemon
+    desktop -- "HTTP, loopback" --> daemon
+    yaml -.-> engine
+    yaml -. registered .-> registry
+    scheduler --> runs --> engine --> shell
 ```
 
-- [`.specify/memory/constitution.md`](.specify/memory/constitution.md) holds the engineering principles.
-- [`specs/`](specs/) holds one folder per feature: spec, plan, contracts, and tasks.
-- [`AGENTS.md`](AGENTS.md) explains the workflow for coding agents.
+`truss run` and the daemon drive the same engine, so a pipeline behaves the same either way.
+The engine knows nothing about the daemon, and the daemon knows nothing about its clients.
+The full map is in [docs/architecture.md](docs/architecture.md).
 
-### Checks
+## Documentation
+
+| Read this | When you want to |
+|---|---|
+| [Pipeline file reference](docs/pipeline-reference.md) | Know every field, cron syntax, and recipes |
+| [Command line reference](docs/cli.md) | Look up a command or an exit code |
+| [The daemon](docs/daemon.md) | Understand registration, schedules, missed runs, concurrency, the HTTP API |
+| [TRUSS Desktop](docs/desktop.md) | See what the UI offers |
+| [Architecture](docs/architecture.md) | Find your way around the code |
+| [Glossary](docs/GLOSSARY.md) | Check what a word means here |
+| [Milestone](docs/MILESTONE.md) | See what v0.1.0 includes and what waits |
+| [Decisions](docs/decisions/) | Learn why something is the way it is |
+| [Specifications](specs/) | Read the requirements behind each feature |
+
+## Roadmap
+
+After v0.1.0, roughly in this order. Scope and order may change.
+
+- **Desktop:** a packaged window with tray icon, notifications and start at login
+- **Pipelines:** matrix builds, artifacts
+- **Triggers:** file changes and webhooks
+- **Execution:** containers, then remote workers
+- **Ecosystem:** SDKs and CI-provider bridges, so the same file runs in CI
+
+## Development
 
 ```bash
 gofmt -l .                                   # must print nothing
 go vet ./...
-go test -race ./...                          # unit, contract, and integration tests
+go test -race ./...                          # unit, integration and CLI tests
 golangci-lint run ./...
 go build -o bin/truss ./cmd/truss
-bash .github/scripts/e2e-test.sh bin/truss   # end-to-end tests of the built binary
+bash .github/scripts/e2e-test.sh bin/truss   # the built binary, including a real daemon
 ```
 
-CI runs all of these on Linux, macOS, and Windows for every pull request and every push to `main`.
+- [`docs/architecture.md`](docs/architecture.md) maps the packages and their boundaries.
+- [`.specify/memory/constitution.md`](.specify/memory/constitution.md) holds the engineering principles: behavior is specified, tested, and safe to execute.
+- [`specs/`](specs/) holds one folder per feature; `spec.md` travels in the same pull request as the code.
+- [`AGENTS.md`](AGENTS.md), [`CLAUDE.md`](CLAUDE.md) and [`docs/agents.md`](docs/agents.md) describe how coding agents work here.
+
+TRUSS Desktop needs no build step: edit the files in `internal/webui/assets/`, rebuild the binary, reload the page.
 
 ### Releasing
 
@@ -368,10 +333,16 @@ Releases are cut by pushing a semantic version tag such as `v0.1.0` or `v0.2.0-r
 
 1. The `// version: X.Y.Z` line in `go.mod` equals the tag.
 2. The module path follows Go's major-version rule: no suffix for v0 and v1, `/vN` from v2 onward.
-3. `CHANGELOG.md` has `## [X.Y.Z] - YYYY-MM-DD` as its latest section, with entries and the tag's date.
+3. `const Version` in `cmd/truss/version.go` (what `truss version` prints) equals the tag.
+4. `internal/webui/VERSION`, the version of TRUSS Desktop, equals the tag. It is a file of its own, apart from the Go version.
+5. `CHANGELOG.md` has `## [X.Y.Z] - YYYY-MM-DD` as its latest section, with entries, the tag's date, and only the headings Added, Changed, Deprecated, Removed, Fixed and Security.
 
-It then runs the full CI suite, builds binaries for every platform, and publishes a GitHub Release. The release notes combine the changelog section with notes generated by GitHub. Pre-release tags are published as pre-releases.
+It then runs the full CI suite, builds Linux, macOS and Windows binaries (amd64 and arm64), and publishes a GitHub Release with checksums. The release notes are the changelog section followed by the notes GitHub generates (contributors and history). Pre-release tags are published as pre-releases. Prepare a release on a `release/<version>` branch.
+
+### Branches and commits
+
+Branches are named `<type>/<name>` with type `bugfix`, `feature`, `hotfix`, `release`, `task` or `chore`. Every commit is authored by `afri-bit`; a `Co-authored-by` trailer is allowed, and Claude may be named as co-author. The `Repository rules` workflow checks both on every push and pull request (see [ADR 0014](docs/decisions/0014-branch-prefixes-commit-identity-and-release-gate.md)).
 
 ## License
 
-TRUSS is released under the [MIT License](LICENSE).
+TRUSS is released under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE).
