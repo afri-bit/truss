@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -55,8 +56,8 @@ func Open(root string) (Project, error) {
 		return Project{}, fmt.Errorf("%w: there is no %s in %s (run TRUSS from the project folder)", ErrNoProject, FileName, root)
 	case err != nil:
 		return Project{}, fmt.Errorf("read %s: %w", FileName, err)
-	case info.Mode()&(fs.ModeSymlink|fs.ModeIrregular) != 0:
-		return Project{}, fmt.Errorf("%s in %s is a link; TRUSS does not follow links", FileName, root)
+	case !info.Mode().IsRegular():
+		return Project{}, fmt.Errorf("%s in %s is a link or not a regular file; TRUSS does not follow links", FileName, root)
 	}
 	data, err := readRegular(path)
 	if err != nil {
@@ -73,6 +74,12 @@ func Open(root string) (Project, error) {
 // readRegular opens path once, requires the open file to be a regular file and
 // reads it through that handle, up to MaxFileBytes.
 func readRegular(path string) ([]byte, error) {
+	// A named pipe blocks the open, so look before opening.
+	if info, err := os.Lstat(path); err != nil {
+		return nil, err
+	} else if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", filepath.Base(path))
+	}
 	f, err := os.Open(path) // #nosec G304 -- Open Lstat-checked this path
 	if err != nil {
 		return nil, err
@@ -257,7 +264,7 @@ func (p Project) Flows() ([]Flow, error) {
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 
 	var flows []Flow
-	seen := map[string]string{} // lower-cased stem -> file
+	var files []string
 	for _, e := range entries {
 		file := e.Name()
 		stem, ok := flowStem(file)
@@ -267,14 +274,28 @@ func (p Project) Flows() ([]Flow, error) {
 		if err := checkFlowStem(stem); err != nil {
 			return nil, fmt.Errorf("%s in .truss/flows: %w", file, err)
 		}
-		key := strings.ToLower(stem)
-		if other, dup := seen[key]; dup {
-			return nil, fmt.Errorf("%s and %s in .truss/flows have the same pipeline name; keep one", other, file)
-		}
-		seen[key] = file
+		files = append(files, file)
 		flows = append(flows, Flow{Name: stem, File: file, Path: filepath.Join(dir, file)})
 	}
+	if err := checkClashes(files); err != nil {
+		return nil, err
+	}
 	return flows, nil
+}
+
+// checkClashes is an error naming two files (in sorted order) that would be one
+// pipeline: the same stem up to case, as build.yaml and build.yml or Build.yaml.
+func checkClashes(files []string) error {
+	seen := map[string]string{} // lower-cased stem -> file
+	for _, file := range files {
+		stem, _ := flowStem(file)
+		key := strings.ToLower(stem)
+		if other, dup := seen[key]; dup {
+			return fmt.Errorf("%s and %s in .truss/flows have the same pipeline name; keep one", other, file)
+		}
+		seen[key] = file
+	}
+	return nil
 }
 
 // flowStem returns the stem of a .yaml or .yml file name (case-sensitive).
@@ -361,7 +382,7 @@ func StateFor(root, flow string) (State, error) {
 	switch {
 	case flow == "" || flow == "." || flow == "..":
 		return State{}, fmt.Errorf("the pipeline file name %q cannot name a state folder", flow)
-	case strings.ContainsAny(flow, "/\\<>:\"|?*\x00") || strings.ContainsFunc(flow, func(r rune) bool { return r < ' ' }):
+	case strings.ContainsAny(flow, "/\\<>:\"|?*$\x00") || strings.ContainsFunc(flow, func(r rune) bool { return r < ' ' }):
 		return State{}, errors.New("the pipeline file name has characters that cannot be used in a state folder name")
 	}
 	if err := checkStemSafe(flow); err != nil {
@@ -374,6 +395,18 @@ func StateFor(root, flow string) (State, error) {
 	return State{Truss: truss, StateDir: state, Dir: dir, Log: filepath.Join(dir, "run.log"), Data: data, Cache: filepath.Join(data, "cache")}, nil
 }
 
+// foldNames reports whether the host compares file names without case.
+func foldNames() bool { return runtime.GOOS == "windows" || runtime.GOOS == "darwin" }
+
+// NamesEqual compares two file names the way the host does: without case on
+// Windows and macOS, exactly elsewhere.
+func NamesEqual(a, b string) bool {
+	if foldNames() {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
+
 // RootOf returns the project root of a registered file: path must be
 // <root>/.truss/flows/<file> and <root>/truss.yaml must exist. None of the
 // project file, .truss, .truss/flows or the file may be a link.
@@ -384,7 +417,7 @@ func RootOf(path string) (string, bool) {
 	flows := filepath.Dir(path)
 	truss := filepath.Dir(flows)
 	root := filepath.Dir(truss)
-	if filepath.Base(flows) != flowsDir || filepath.Base(truss) != trussDir || root == truss {
+	if !NamesEqual(filepath.Base(flows), flowsDir) || !NamesEqual(filepath.Base(truss), trussDir) || root == truss {
 		return "", false
 	}
 	for _, d := range []string{truss, flows} {

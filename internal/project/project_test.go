@@ -233,7 +233,8 @@ func TestFlows_ClashesNameBothFiles(t *testing.T) {
 }
 
 func TestFlows_BadStemsAreErrors(t *testing.T) {
-	for _, f := range []string{"-lead.yaml", "has space.yaml", "CON.yaml", "con.yml", "Nul.yaml", "COM1.yaml", "lpt9.yaml", "aux.build.yaml"} {
+	// Only names legal on every host become files.
+	for _, f := range []string{"-lead.yaml", "has space.yaml"} {
 		t.Run(f, func(t *testing.T) {
 			root := newRoot(t, f)
 			p, _ := Open(root)
@@ -242,11 +243,36 @@ func TestFlows_BadStemsAreErrors(t *testing.T) {
 			}
 		})
 	}
-	// COM0 and COMMON are fine.
-	root := newRoot(t, "COM0.yaml", "common.yaml")
-	p, _ := Open(root)
-	if _, err := p.Flows(); err != nil {
-		t.Fatal(err)
+}
+
+// The Windows device-name rule is tested on the stem, with no file: on Windows
+// CON.yaml is a device and cannot be created.
+func TestCheckFlowStem_WindowsDeviceNames(t *testing.T) {
+	for _, stem := range []string{"CON", "con", "Nul", "COM1", "lpt9", "aux.build", "PRN", "com9.x"} {
+		if err := checkFlowStem(stem); err == nil {
+			t.Errorf("checkFlowStem(%q) succeeded", stem)
+		}
+		if err := checkStemSafe(stem); err == nil {
+			t.Errorf("checkStemSafe(%q) succeeded", stem)
+		}
+	}
+	for _, stem := range []string{"COM0", "common", "console", "build", "a.b"} {
+		if err := checkFlowStem(stem); err != nil {
+			t.Errorf("checkFlowStem(%q) = %v", stem, err)
+		}
+	}
+}
+
+// The clash rule is tested on names, so it runs on every file system.
+func TestCheckClashes(t *testing.T) {
+	for _, files := range [][]string{{"Build.yaml", "build.yaml"}, {"a.yaml", "a.yml"}} {
+		err := checkClashes(files)
+		if err == nil || !strings.Contains(err.Error(), files[0]) || !strings.Contains(err.Error(), files[1]) {
+			t.Errorf("checkClashes(%v) = %v, want both names", files, err)
+		}
+	}
+	if err := checkClashes([]string{"a.yaml", "b.yml", "ab.yaml"}); err != nil {
+		t.Errorf("no clash: %v", err)
 	}
 }
 
@@ -339,7 +365,7 @@ func TestStateFor(t *testing.T) {
 		s.Log != filepath.Join(want, "run.log") || s.Data != filepath.Join(want, "data") || s.Cache != filepath.Join(want, "data", "cache") {
 		t.Fatalf("state = %+v", s)
 	}
-	for _, bad := range []string{"", ".", "..", "a.", "a ", "con", "NUL", "a/b", `a\b`, "a:b", "a\x00b"} {
+	for _, bad := range []string{"", ".", "..", "a.", "a ", "con", "NUL", "a/b", `a\b`, "a:b", "a\x00b", "CONIN$", "a$"} {
 		if _, err := StateFor(root, bad); err == nil {
 			t.Errorf("StateFor(%q) succeeded", bad)
 		}
@@ -396,5 +422,56 @@ func TestRootOf_NeedsTrussYAMLAndNoLinks(t *testing.T) {
 	symlink(t, real, filepath.Join(root2, ".truss", "flows"))
 	if _, ok := RootOf(filepath.Join(root2, ".truss", "flows", "a.yaml")); ok {
 		t.Fatal("a linked flows folder marks a project")
+	}
+}
+
+func TestOpen_RefusesANonRegularFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "truss.yaml"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(root); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestOpen_AcceptsCRLF(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "truss.yaml"), strings.ReplaceAll(goodMeta, "\n", "\r\n"))
+	p, err := Open(root)
+	if err != nil || p.Name != "demo" || p.Description != "A demo" {
+		t.Fatalf("project = %+v, err = %v", p, err)
+	}
+}
+
+// caseInsensitive reports whether the file system of dir ignores case.
+func caseInsensitive(t *testing.T, dir string) bool {
+	t.Helper()
+	write(t, filepath.Join(dir, "probe-case.tmp"), "x")
+	_, err := os.Stat(filepath.Join(dir, "PROBE-CASE.tmp"))
+	return err == nil
+}
+
+func TestRootOf_NamesIgnoreCaseWhereTheHostDoes(t *testing.T) {
+	root := newRoot(t, "build.yaml")
+	if !caseInsensitive(t, root) {
+		t.Skip("the file system is case-sensitive; differently cased names are other files")
+	}
+	if !foldNames() {
+		t.Skip("names are case-sensitive on this OS")
+	}
+	cased := filepath.Join(root, ".TRUSS", "FLOWS", "build.yaml")
+	got, ok := RootOf(cased)
+	if !ok || got != root {
+		t.Fatalf("RootOf(%q) = %q, %v", cased, got, ok)
+	}
+}
+
+func TestNamesEqual(t *testing.T) {
+	if !NamesEqual("a", "a") || NamesEqual("a", "b") {
+		t.Fatal("plain comparison wrong")
+	}
+	if got, want := NamesEqual("Truss.YAML", "truss.yaml"), foldNames(); got != want {
+		t.Fatalf("NamesEqual folds case = %v, want %v on this OS", got, want)
 	}
 }

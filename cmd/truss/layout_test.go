@@ -198,14 +198,33 @@ func TestLayout_RunByPathWritesStateUnderTheWorkingDirectory(t *testing.T) {
 	}
 }
 
+// FR-008: a pipeline with no name takes the file stem. The stem names the
+// state folder and the pipeline a tracked run reports to the daemon.
 func TestLayout_RunWithoutNameInPipelineUsesTheStem(t *testing.T) {
-	dir := newProject(t, map[string]string{"build.yaml": "version: \"1\"\nsteps:\n  - id: a\n    run: " + echoHello() + "\n"})
+	body := "version: \"1\"\nsteps:\n  - id: a\n    run: " + echoHello() + "\n"
+	dir := newProject(t, map[string]string{"build.yaml": body})
 	code, out, errOut := invoke(t, dir, []string{"run", "build"})
 	if code != 0 {
 		t.Fatalf("exit = %d, stderr = %s", code, errOut)
 	}
 	if !strings.Contains(out, "summary succeeded") {
 		t.Fatalf("out = %s", out)
+	}
+	if got := stateLog(t, dir, "build"); got != out {
+		t.Fatalf("the state folder named after the stem holds a different log:\n%s", got)
+	}
+
+	s := newSession(t, true)
+	writeFile(t, filepath.Join(s.dir, "truss.yaml"), projectFile)
+	writeFile(t, filepath.Join(s.dir, ".truss", "flows", "build.yaml"), body)
+	if code, _, errOut := s.truss("run", "build", "--track"); code != 0 {
+		t.Fatalf("tracked run: exit = %d, stderr = %s", code, errOut)
+	}
+	if out := s.ok("runs", "build"); !strings.Contains(out, "build") || strings.Contains(out, "no runs yet") {
+		t.Fatalf("the tracked run is not under the stem: %q", out)
+	}
+	if out := s.ok("register", "build"); !strings.HasPrefix(out, "registered build ") {
+		t.Fatalf("registered under the stem: %q", out)
 	}
 }
 
@@ -371,5 +390,126 @@ func TestLayout_RegisterNameTakenByAnotherFileHintsAtName(t *testing.T) {
 	}
 	if out := s.ok("register", "b", "--name", "second"); !strings.Contains(out, "registered second ") {
 		t.Fatalf("out = %q", out)
+	}
+}
+
+// caseInsensitiveDir reports whether the file system of dir ignores case.
+func caseInsensitiveDir(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, "TRUSS.YAML"))
+	return err == nil
+}
+
+func TestLayout_RunDifferentlyCasedTrussYAMLSaysItIsMetadata(t *testing.T) {
+	dir := newProject(t, nil)
+	if !caseInsensitiveDir(dir) {
+		t.Skip("the file system is case-sensitive; TRUSS.yaml is another file there")
+	}
+	code, _, errOut := invoke(t, dir, []string{"run", "TRUSS.yaml"})
+	if code != 1 || !strings.Contains(errOut, "project metadata") {
+		t.Fatalf("exit = %d, stderr = %q", code, errOut)
+	}
+}
+
+// Any path that resolves to the project's truss.yaml gets the metadata message.
+func TestLayout_RunAnyPathToTrussYAMLSaysItIsMetadata(t *testing.T) {
+	dir := newProject(t, map[string]string{"build.yaml": validPipeline(echoHello())})
+	plantLink(t, dir, filepath.Join(dir, "alias"))
+	for _, arg := range []string{
+		filepath.Join(".truss", "..", "truss.yaml"),
+		filepath.Join("alias", "truss.yaml"),
+		filepath.Join(dir, "truss.yaml"),
+	} {
+		for _, cmd := range []string{"run", "validate"} {
+			code, out, errOut := invoke(t, dir, []string{cmd, arg})
+			if cmd == "validate" {
+				if code != 0 || !strings.Contains(out, "project demo") {
+					t.Errorf("validate %s: exit = %d, stdout = %q, stderr = %q", arg, code, out, errOut)
+				}
+				continue
+			}
+			if code != 1 || !strings.Contains(errOut, "project metadata") || strings.Contains(errOut, "unknown field") {
+				t.Errorf("run %s: exit = %d, stderr = %q", arg, code, errOut)
+			}
+		}
+	}
+}
+
+// A backslash is a path character; on Unix it is part of a file name, and the
+// file is not there.
+func TestLayout_BackslashArgumentIsAPathAndCreatesNoState(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip(`on Windows a backslash separates folders`)
+	}
+	dir := newProject(t, map[string]string{"build.yaml": validPipeline(echoHello())})
+	code, out, errOut := invoke(t, dir, []string{"run", `a\b.yaml`})
+	if code != 1 || out != "" || !strings.Contains(errOut, "no such file") {
+		t.Fatalf("exit = %d, stdout = %q, stderr = %q", code, out, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".truss", "state")); !os.IsNotExist(err) {
+		t.Fatalf("a state folder was created: %v", err)
+	}
+}
+
+func TestLayout_RegisterAllReportsEachFailureAndRegistersTheRest(t *testing.T) {
+	s := newSession(t, true)
+	flows := filepath.Join(s.dir, ".truss", "flows")
+	writeFile(t, filepath.Join(s.dir, "truss.yaml"), projectFile)
+	writeFile(t, filepath.Join(flows, "a-good.yaml"), validPipeline(echoHello()))
+	writeFile(t, filepath.Join(flows, "b-same-name.yaml"), validPipeline(echoHello())) // same pipeline name as a-good
+	writeFile(t, filepath.Join(flows, "c-broken.yaml"), "version: \"1\"\nsteps: []\n")
+
+	code, out, errOut := s.truss("register", "--all")
+	if code != 1 {
+		t.Fatalf("exit = %d, stdout = %q, stderr = %q", code, out, errOut)
+	}
+	if !strings.Contains(out, "registered hello-world ") {
+		t.Fatalf("the good flow is not registered: %q", out)
+	}
+	if strings.Contains(out, "pipelines (") {
+		t.Fatalf("a summary after a failure: %q", out)
+	}
+	for _, want := range []string{".truss/flows/b-same-name.yaml: ", ".truss/flows/c-broken.yaml: "} {
+		if !strings.Contains(errOut, want) {
+			t.Fatalf("stderr lacks %q:\n%s", want, errOut)
+		}
+	}
+	if strings.Contains(errOut, "register it under another name with --name") {
+		t.Fatalf("under --all the hint must not offer --name:\n%s", errOut)
+	}
+	if !strings.Contains(errOut, "register it alone with `truss register <flow> --name <other>`") {
+		t.Fatalf("stderr lacks the register-alone hint:\n%s", errOut)
+	}
+	if got := s.ok("pipelines"); !strings.Contains(got, "hello-world") {
+		t.Fatalf("pipelines: %q", got)
+	}
+}
+
+func TestLayout_RegisterAllPrintsASummary(t *testing.T) {
+	s := newSession(t, true)
+	flows := filepath.Join(s.dir, ".truss", "flows")
+	writeFile(t, filepath.Join(s.dir, "truss.yaml"), projectFile)
+	writeFile(t, filepath.Join(flows, "plain.yaml"), "version: \"1\"\nsteps:\n  - id: a\n    run: "+echoHello()+"\n")
+	writeFile(t, filepath.Join(flows, "timed.yaml"), "version: \"1\"\non:\n  schedule:\n    - cron: \"0 9 * * 1-5\"\nsteps:\n  - id: a\n    run: "+echoHello()+"\n")
+	out := s.ok("register", "--all")
+	if !strings.Contains(out, "registered plain (") || !strings.Contains(out, "registered timed (") {
+		t.Fatalf("per-flow lines changed: %q", out)
+	}
+	if !strings.HasSuffix(out, "registered 2 pipelines (1 with schedules)\n") {
+		t.Fatalf("summary missing: %q", out)
+	}
+}
+
+// Files saved with Windows line endings work: truss.yaml and a flow by name.
+func TestLayout_CRLFFilesAreAccepted(t *testing.T) {
+	crlf := func(s string) string { return strings.ReplaceAll(s, "\n", "\r\n") }
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "truss.yaml"), crlf(projectFile))
+	writeFile(t, filepath.Join(dir, ".truss", "flows", "build.yaml"), crlf(validPipeline(echoHello())))
+	code, out, errOut := invoke(t, dir, []string{"validate", "build"})
+	if code != 0 || !strings.Contains(out, "build.yaml is valid: pipeline hello-world") {
+		t.Fatalf("exit = %d, stdout = %q, stderr = %q", code, out, errOut)
+	}
+	if code, _, errOut := invoke(t, dir, []string{"validate"}); code != 0 {
+		t.Fatalf("validate: exit = %d, stderr = %q", code, errOut)
 	}
 }

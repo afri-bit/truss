@@ -71,14 +71,18 @@ func (in invocation) register(ctx context.Context) int {
 	if err != nil {
 		return in.fail(err)
 	}
-	code := 0
+	code, done, scheduled := 0, 0, 0
 	for _, file := range files {
 		p, err := c.Register(ctx, api.RegisterRequest{Path: file.path, Name: flags["name"]})
 		if err != nil {
 			msg := err.Error()
 			var status *api.StatusError
 			if errors.As(err, &status) && status.Code == http.StatusConflict {
-				msg += "; register it under another name with --name"
+				if all {
+					msg += "; register it alone with `truss register <flow> --name <other>`"
+				} else {
+					msg += "; register it under another name with --name"
+				}
 			}
 			if all {
 				msg = file.display + ": " + msg
@@ -88,11 +92,18 @@ func (in invocation) register(ctx context.Context) int {
 			continue
 		}
 		fmt.Fprintf(in.stdout, "registered %s (%s)\n", p.Name, p.Path)
+		done++
+		if len(p.Schedules) > 0 {
+			scheduled++
+		}
 		for _, s := range p.Schedules {
 			if s.Next != nil {
 				fmt.Fprintf(in.stdout, "schedule %s: next run %s\n", s.Cron, local(s.Next))
 			}
 		}
+	}
+	if all && code == 0 {
+		fmt.Fprintf(in.stdout, "registered %d pipelines (%d with schedules)\n", done, scheduled)
 	}
 	return code
 }

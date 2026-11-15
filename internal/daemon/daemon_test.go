@@ -643,6 +643,41 @@ func TestDaemon_RestoredQueuedRunSeesTheDataFolders(t *testing.T) {
 	}
 }
 
+// FR-017: a run restored after a restart runs in the project root, like a
+// run submitted to the running daemon.
+func TestDaemon_RestoredQueuedRunOfAFlowRunsInTheProjectRoot(t *testing.T) {
+	h := home.Dir(t.TempDir())
+	pwd := "pwd"
+	if runtime.GOOS == "windows" {
+		pwd = "cd"
+	}
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeDefinition(t, root, "truss.yaml", "version: \"1\"\nproject:\n  name: demo\n")
+	if err := os.MkdirAll(filepath.Join(root, ".truss", "flows"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := writeDefinition(t, filepath.Join(root, ".truss", "flows"), "where.yaml", "version: \"1\"\npipeline:\n  name: where\nsteps:\n  - id: here\n    run: "+pwd+"\n")
+	_, c := boot(t, h, nil)
+	if _, err := c.Register(context.Background(), api.RegisterRequest{Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	waitStopped(t, h)
+	queuedRecord(t, h, "20261111-090000-aaaaaa", "where")
+
+	_, c = boot(t, h, nil)
+	awaitRuns(t, c, "where", 1)
+	log, _, _, err := c.Log(context.Background(), "20261111-090000-aaaaaa", 0)
+	if err != nil || !strings.Contains(string(log), "step here | "+root+"\n") {
+		t.Fatalf("log = %q, %v; want the step to run in %s", log, err, root)
+	}
+}
+
 func TestDaemon_MetricsReportTheHostAndARunningStep(t *testing.T) {
 	h := home.Dir(t.TempDir())
 	_, c := boot(t, h, nil)

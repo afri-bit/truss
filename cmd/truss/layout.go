@@ -33,7 +33,19 @@ func isProjectFile(cwd, arg string) bool {
 	if !project.IsPath(arg) {
 		return false
 	}
-	return filepath.Clean(absPath(cwd, arg)) == filepath.Join(workingRoot(cwd), project.FileName)
+	abs := filepath.Clean(absPath(cwd, arg))
+	want := filepath.Join(workingRoot(cwd), project.FileName)
+	if abs == want {
+		return true
+	}
+	// The same file by another route: a link, or another case on a file system
+	// that ignores case.
+	if got, err := os.Stat(abs); err == nil { // #nosec G703 -- only compared with truss.yaml, never read
+		if proj, err := os.Stat(want); err == nil && os.SameFile(got, proj) {
+			return true
+		}
+	}
+	return filepath.Dir(abs) == filepath.Dir(want) && project.NamesEqual(filepath.Base(abs), project.FileName)
 }
 
 func absPath(cwd, arg string) string {

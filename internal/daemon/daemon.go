@@ -345,7 +345,7 @@ func resolver(reg *registry.Registry) runs.Resolver {
 			return pipeline.Pipeline{}, "", fmt.Errorf("%w: %q", registry.ErrNotFound, name)
 		}
 		def, _, err := readDefinition(e.Path)
-		return def, filepath.Dir(e.Path), err
+		return def, workingDir(e.Path), err
 	}
 }
 
