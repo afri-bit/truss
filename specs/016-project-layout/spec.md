@@ -1,6 +1,6 @@
 # Feature Specification: Project layout
 
-**Spec**: `016-project-layout` | **Created**: 2026-11-15 | **Status**: Implemented (Windows path cases and case-sensitive-volume behavior are verified by CI only)
+**Spec**: `016-project-layout` | **Created**: 2026-11-15 | **Status**: Implemented (Windows path cases are first proved by CI; case-sensitive macOS volumes by review only)
 
 **Input**: A folder can hold one `truss.yaml`, so a project cannot hold several pipelines by
 convention, and `.truss/` mixes generated state with anything worth committing. The maintainer
@@ -141,7 +141,10 @@ cache folder only, not `.truss/state/<flow>/data/cache`. Each is documented as f
   `register` by name, by path and with `--all`, including the summary line.
 - `internal/daemon` tests: a flow runs in the project root, and a flow without `truss.yaml` runs in
   its own folder. `.github/scripts/e2e-test.sh` runs the built binary through the project layout.
-- Not yet proved: Windows path cases and case-sensitive-volume behavior. CI on Ubuntu, macOS and
-  Windows is the first proof of those.
-- Reviews: an independent review ran on `16c474e`, and a delta review on `9574d33`. The pull request
-  states the reviewed commit and the final `HEAD`.
+- Not yet proved: Windows path cases (CI on Windows is the first proof). Behavior on a
+  case-sensitive macOS volume is proved by code review only: Linux compares names exactly, and the
+  macOS and Windows runners use case-insensitive volumes, where the test for it skips, so no CI job
+  would catch a regression there. A test on a case-sensitive APFS disk image is a follow-up.
+- Reviews: an independent review ran on `16c474e`, a delta review on `9574d33` and a final delta
+  review on `b6a8509` (reviewer, spec-reviewer, security-reviewer, portability-reviewer as the
+  changed paths required). The pull request states the reviewed commit and the final `HEAD`.
