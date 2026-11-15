@@ -715,3 +715,99 @@ func TestDaemon_MetricsReportTheHostAndARunningStep(t *testing.T) {
 		t.Errorf("host %+v daemon %+v", m.Host, m.Daemon)
 	}
 }
+
+// pwdLine runs the registered pipeline name once and returns the directory its
+// step printed.
+func pwdLine(t *testing.T, c *api.Client, name string) string {
+	t.Helper()
+	ctx := context.Background()
+	run, err := c.Trigger(ctx, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	awaitRuns(t, c, name, 1)
+	data, _, status, err := c.Log(ctx, run.ID, 0)
+	if err != nil || status != api.RunSucceeded {
+		t.Fatalf("log (%s, %v):\n%s", status, err, data)
+	}
+	for _, l := range strings.Split(string(data), "\n") {
+		if _, v, ok := strings.Cut(l, " step where | "); ok {
+			return strings.TrimSpace(v)
+		}
+	}
+	t.Fatalf("no output of the step:\n%s", data)
+	return ""
+}
+
+func pwdDefinition(name string) string {
+	where := "pwd"
+	if runtime.GOOS == "windows" {
+		where = "cd"
+	}
+	head := "version: \"1\"\n"
+	if name != "" {
+		head += "pipeline:\n  name: " + name + "\n"
+	}
+	return head + "steps:\n  - id: where\n    run: " + where + "\n"
+}
+
+// Spec 016 FR-017: a flow runs in the project root; any other file in its folder.
+func TestDaemon_FlowRunsInTheProjectRoot(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	root := filepath.Join(t.TempDir(), "myproject")
+	writeDefinition(t, mkdirs(t, root), "truss.yaml", "version: \"1\"\nproject:\n  name: myproject\n")
+	flow := writeDefinition(t, mkdirs(t, filepath.Join(root, ".truss", "flows")), "where.yaml", pwdDefinition("inroot"))
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: flow}); err != nil {
+		t.Fatal(err)
+	}
+	// The shell may print a resolved or short-named path: compare the last element.
+	if got := pwdLine(t, c, "inroot"); filepath.Base(got) != "myproject" {
+		t.Fatalf("step ran in %q, want the project root", got)
+	}
+
+	other := filepath.Join(t.TempDir(), "elsewhere")
+	file := writeDefinition(t, mkdirs(t, other), "where.yaml", pwdDefinition("plain"))
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: file}); err != nil {
+		t.Fatal(err)
+	}
+	if got := pwdLine(t, c, "plain"); filepath.Base(got) != "elsewhere" {
+		t.Fatalf("step ran in %q, want the file's folder", got)
+	}
+}
+
+func TestDaemon_FlowWithoutProjectFileRunsInItsFolder(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	root := filepath.Join(t.TempDir(), "noproject")
+	flows := mkdirs(t, filepath.Join(root, ".truss", "flows"))
+	flow := writeDefinition(t, flows, "where.yaml", pwdDefinition("noroot"))
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: flow}); err != nil {
+		t.Fatal(err)
+	}
+	if got := pwdLine(t, c, "noroot"); filepath.Base(got) != "flows" {
+		t.Fatalf("step ran in %q, want .truss/flows", got)
+	}
+}
+
+// Spec 016 FR-008: a pipeline without a name registers under its file stem.
+func TestDaemon_UnnamedPipelineUsesTheFileStem(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	path := writeDefinition(t, t.TempDir(), "stemmed.yaml", pwdDefinition(""))
+	p, err := c.Register(ctx, api.RegisterRequest{Path: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Name != "stemmed" || !p.Valid {
+		t.Fatalf("pipeline = %+v", p)
+	}
+}
+
+func mkdirs(t *testing.T, dir string) string {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}

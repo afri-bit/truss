@@ -105,9 +105,10 @@ type Schedule struct {
 // A definition has either Steps or Jobs, never both.
 type Pipeline struct {
 	Version string
-	Name    string
-	Steps   []Step
-	Jobs    []Job
+	// Name may be empty: callers default it to the file stem (spec 016).
+	Name  string
+	Steps []Step
+	Jobs  []Job
 	// Concurrency is the most steps that may run at once. 0 means the
 	// definition did not declare it, which is the same as 1.
 	Concurrency int

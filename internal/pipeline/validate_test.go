@@ -173,7 +173,6 @@ func TestValidate_ExistingMessagesAreUnchanged(t *testing.T) {
 	}{
 		{name: "missing version", yaml: "pipeline:\n  name: n\nsteps:\n  - id: a\n    run: echo a\n", want: "missing or unsupported schema version"},
 		{name: "unsupported version", yaml: "version: \"2\"\npipeline:\n  name: n\nsteps:\n  - id: a\n    run: echo a\n", want: `unsupported schema version "2"`},
-		{name: "missing name", yaml: "version: \"1\"\nsteps:\n  - id: a\n    run: echo a\n", want: "missing pipeline name"},
 		{name: "empty steps", yaml: "version: \"1\"\npipeline:\n  name: n\nsteps: []\n", want: "pipeline must contain one or more steps"},
 		{name: "duplicate id", yaml: "version: \"1\"\npipeline:\n  name: n\nsteps:\n  - id: a\n    run: echo a\n  - id: a\n    run: echo b\n", want: `duplicate step id "a"`},
 		{name: "empty run", yaml: "version: \"1\"\npipeline:\n  name: n\nsteps:\n  - id: a\n    run: \"\"\n", want: `missing or empty run for step "a"`},
@@ -198,7 +197,6 @@ func TestValidate_RejectsInvalidDefinitions(t *testing.T) {
 		yaml string
 		want string
 	}{
-		{name: "missing name", yaml: "version: \"1\"\nsteps:\n  - id: a\n    run: echo a\n", want: "name"},
 		{name: "empty steps", yaml: "version: \"1\"\npipeline:\n  name: n\nsteps: []\n", want: "steps"},
 		{name: "duplicate id", yaml: "version: \"1\"\npipeline:\n  name: n\nsteps:\n  - id: a\n    run: echo a\n  - id: a\n    run: echo b\n", want: "duplicate"},
 		{name: "empty id", yaml: "version: \"1\"\npipeline:\n  name: n\nsteps:\n  - id: \"\"\n    run: echo a\n", want: "id"},
@@ -335,9 +333,9 @@ func TestValidate_CheckOrder(t *testing.T) {
 			want: `unknown field "concurency" in pipeline`,
 		},
 		{
-			name: "name before concurrency",
+			name: "concurrency without a name",
 			doc:  "version: \"1\"\npipeline:\n  concurrency: 0\nsteps:\n  - id: a\n    run: echo a\n",
-			want: "missing pipeline name",
+			want: `pipeline concurrency must be a whole number of at least 1, got "0"`,
 		},
 		{
 			name: "concurrency before steps",
@@ -414,5 +412,16 @@ func TestValidate_AcceptsOnlyRecognisedFields(t *testing.T) {
 		"  - id: package\n    needs: [lint, test]\n    run: echo package\n"
 	if err := validateDoc(t, doc); err != nil {
 		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+// Spec 016 FR-008: pipeline.name is optional; callers default it to the file stem.
+func TestValidate_NameIsOptional(t *testing.T) {
+	p, err := Parse([]byte("version: \"1\"\nsteps:\n  - id: a\n    run: echo a\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(p); err != nil {
+		t.Fatalf("Validate() = %v, want no error for a pipeline without a name", err)
 	}
 }

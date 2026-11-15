@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"regexp"
@@ -22,11 +23,45 @@ func ParseFile(ctx context.Context, path string) (Pipeline, error) {
 	if err := ctx.Err(); err != nil {
 		return Pipeline{}, err
 	}
-	data, err := os.ReadFile(path)
+	data, err := readBounded(path)
 	if err != nil {
 		return Pipeline{}, fmt.Errorf("read pipeline definition: %w", err)
 	}
 	return Parse(data)
+}
+
+// MaxFileBytes is the largest pipeline file ParseFile reads.
+const MaxFileBytes = 1 << 20
+
+// readBounded reads a regular file of at most MaxFileBytes. It checks the
+// kind of file before opening (a pipe would block the open) and again on the
+// open handle, then reads through that handle with a limit.
+func readBounded(path string) ([]byte, error) {
+	if info, err := os.Stat(path); err != nil {
+		return nil, err
+	} else if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	f, err := os.Open(path) // #nosec G304 -- the caller chose this path
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	data, err := io.ReadAll(io.LimitReader(f, MaxFileBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > MaxFileBytes {
+		return nil, fmt.Errorf("%s is too large (the limit is %d bytes)", path, MaxFileBytes)
+	}
+	return data, nil
 }
 
 // Parse decodes a pipeline definition. Invalid YAML is an error.

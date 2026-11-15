@@ -196,7 +196,7 @@ func TestRun_InvalidModelDoesNotExecute(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		run = "echo x> \"" + marker + "\""
 	}
-	p := pipeline.Pipeline{Version: "1", Steps: []pipeline.Step{{ID: "a", Run: run}}}
+	p := pipeline.Pipeline{Version: "2", Name: "n", Steps: []pipeline.Step{{ID: "a", Run: run}}}
 	_, err := Run(context.Background(), p, dir, nil, nil)
 	if err == nil {
 		t.Fatal("expected validation error")
