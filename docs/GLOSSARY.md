@@ -15,6 +15,7 @@ A pipeline contains one or more steps and describes the work TRUSS should execut
 The declarative representation of a pipeline, initially defined in YAML.
 
 ```yaml
+# .truss/flows/build.yaml
 version: "1"
 
 pipeline:
@@ -217,7 +218,7 @@ A named value stored in the TRUSS home with `truss secret set` and handed to the
 The command-line interface for interacting with TRUSS.
 
 ```bash
-truss run pipeline.yaml
+truss run build
 ```
 
 The CLI delegates execution logic to the engine.
@@ -262,10 +263,21 @@ A scheduled time that passed while nothing was watching the clock: the machine w
 asleep, or the daemon was stopped. By default it is skipped and recorded; `missed: run` turns
 it into one catch-up run.
 
+### Project
+
+A folder with a Project File at its root. A project holds its pipelines as files in
+`.truss/flows/` and keeps the files a run generates in `.truss/state/`. A run finds the project
+in the working directory only.
+
+### Project File
+
+The `truss.yaml` at the root of a Project. It holds the project's name and description, and
+nothing that runs. A `truss.yaml` with steps is not a pipeline.
+
 ### Registration
 
 A name and the path of a pipeline file, stored by the daemon. The file stays where it is and
-stays the source of truth.
+stays the source of truth. A pipeline of a Project is registered under its pipeline name.
 
 ### Overlap
 
@@ -275,16 +287,18 @@ What happens when a run is requested while another run of the same pipeline is a
 ### Workdir
 
 `pipeline.workdir`: the directory steps start in, relative to where the run starts or absolute.
-A job's or step's `dir` replaces it.
+A run starts in the Project root for `truss run` and for a flow in `.truss/flows/`. A job's or
+step's `dir` replaces it.
 
 ### Data Folder
 
 A folder per pipeline that outlives runs and is never cleaned by TRUSS: `~/.truss/pipelines/<name>/`
-for the daemon, `.truss/data` for `truss run`. Steps find it in `TRUSS_DATA_DIR`.
+for the daemon, `.truss/state/<name>/data` for `truss run`. Steps find it in `TRUSS_DATA_DIR`.
 
 ### Cache Folder
 
-The `cache` folder inside the Data Folder, found in `TRUSS_CACHE_DIR`. A plain directory for
+The `cache` folder inside the Data Folder, found in `TRUSS_CACHE_DIR`. For `truss run` it is
+`.truss/state/<name>/data/cache`. A plain directory for
 steps to keep reusable files in. TRUSS does not save, restore or key it.
 
 ### TRUSS Home

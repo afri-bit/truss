@@ -29,8 +29,8 @@ not part of the daemon's history; to track a run, register the file and `truss t
 $ truss daemon start
 daemon started (pid 4242, 127.0.0.1:7878)
 
-$ truss register                       # registers ./truss.yaml
-registered nightly (/home/me/project/truss.yaml)
+$ truss register nightly               # registers .truss/flows/nightly.yaml
+registered nightly (/home/me/project/.truss/flows/nightly.yaml)
 schedule 0 9 * * 1-5: next run 2026-11-13 09:00:00
 
 $ truss trigger nightly --follow       # do not wait for 09:00
@@ -45,12 +45,24 @@ $ truss desktop                        # the same, with a UI
 ## Registering pipelines
 
 Your pipeline files live in your projects. The daemon cannot guess where, so you tell it:
-`truss register <path>`. A registration is only a name and a path.
+
+- `truss register <name>` registers a pipeline in the project you are in, from `.truss/flows/`.
+- `truss register <path>` registers any pipeline file.
+- `truss register --all` registers every pipeline in the project, each under its pipeline name.
+
+A registration is only a name and a path. The layout of a project is in
+[Project layout](pipeline-reference.md#project-layout).
 
 - The file stays where it is and stays the source of truth. The daemon reads it again before
   every run and notices edits within a second: change the cron line, save, done.
-- A run starts in the directory of the file, like `truss run` there, unless the file sets
-  `pipeline.workdir`.
+- A flow in a project (`.truss/flows/` under a folder with a `truss.yaml`) runs its steps in the
+  project root. Any other file runs in its own directory, as `truss run` does there. Either one
+  can be changed with `pipeline.workdir`.
+- A name that is already registered for another file is reported, with a hint to use `--name`
+  for a different name.
+- **Trust.** A repository is a weaker trust root than a file you picked yourself. `register --all`
+  takes every pipeline a project holds, including files someone else committed. Use `--all` only
+  in projects you trust.
 - A file that becomes invalid is shown as `invalid` with the reason. It does not run until fixed.
 - `truss unregister <name>` removes the registration. Nothing is deleted; old runs and the
   [data folder](#data-and-cache-folders) stay.
@@ -132,8 +144,8 @@ the same name again finds the old contents.
 To empty a cache run `truss cache clear <name>`. It needs no daemon and works for a name that
 is no longer registered. Do it while no run of that pipeline is active. To remove all of a
 pipeline's data, delete `~/.truss/pipelines/<name>` yourself; nothing else refers to it.
-`truss run` keeps its folders in `.truss/data` of the current directory; delete that folder
-to clear them.
+`truss run` keeps its folders in `.truss/state/<name>/data` of the project; delete that folder
+to clear them. Those folders are ignored by git (see [Project layout](pipeline-reference.md#state-folders)).
 
 ## Where state lives
 
@@ -152,6 +164,9 @@ directory is private to your user.
 | `pipelines/<name>/cache/` | Its cache folder, `TRUSS_CACHE_DIR`. |
 | `daemon.log` | The daemon's own log when started with `daemon start`. |
 
+Runs of `truss run` do not use this folder. They write into the project, in
+`.truss/state/<name>/`.
+
 The newest 200 runs are kept. A run that was *running* when the daemon died is closed as
 `failed` on the next start. Runs that were only *queued* are kept and start again.
 
@@ -165,8 +180,8 @@ The daemon runs your commands, so it is careful about who may ask.
   `truss daemon start` refuses a home it cannot make private). **On Windows the file only has
   the access rights it inherits from its folder**: keep the home inside your user profile (the
   default) and do not point `TRUSS_HOME` at a shared folder such as `C:\` or `C:\ProgramData`.
-- A registered file must be a regular file of at most 1 MiB. The daemon runs what the file says
-  as your user, so register only files that only you can change.
+- A registered file, a flow included, must be a regular file of at most 1 MiB. The daemon runs
+  what the file says as your user, so register only files that only you can change.
 - `truss desktop` opens your browser with the token in the address, which other users of the
   same machine can see in the process list while the browser starts. Treat a shared machine
   accordingly (a follow-up replaces this with a one-time ticket).

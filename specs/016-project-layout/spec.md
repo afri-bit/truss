@@ -37,7 +37,7 @@ User documentation: `docs/pipeline-reference.md`, `docs/cli.md`, `docs/daemon.md
 ### Project file
 
 - **FR-001** `truss.yaml` in the working directory marks a TRUSS project. Its fields are
-  `version` (`"1"`), `project.name` (required, same characters as a registry name) and
+  `version` (required, `"1"`, as in a pipeline file), `project.name` (required, same characters as a registry name) and
   `project.description` (optional). Any other field is an error that names the field and where it
   appears, never its value.
 - **FR-002** A `truss.yaml` with `steps` or `jobs` is rejected with a message that says pipelines
@@ -101,7 +101,8 @@ User documentation: `docs/pipeline-reference.md`, `docs/cli.md`, `docs/daemon.md
 
 Shared project defaults (`env`, default shell and timeout), looking for the project in parent
 folders, a project-name prefix for registry names, registering new flows automatically, and the
-Desktop file picker showing `.truss`. Each is documented as future work.
+Desktop file picker showing `.truss`. `truss cache clear` is unchanged: it empties the daemon's
+cache folder only, not `.truss/state/<flow>/data/cache`. Each is documented as future work.
 
 ## Success criteria
 

@@ -14,17 +14,17 @@ that starts with `error:`. An unknown command or wrong arguments print the usage
 
 | Command | What it does |
 |---|---|
-| `truss run [<path>]` | Runs a pipeline right here and waits for it. Default file: `truss.yaml`. |
-| `truss run [<path>] --track` | The same, and also reports the run to the daemon, which must be running. |
-| `truss validate [<path>]` | Checks a file and prints its schedules and steps. Runs nothing. |
+| `truss run [<name\|path>]` | Runs a pipeline right here and waits for it. With no argument, lists the pipelines in `.truss/flows/` and exits `1`. |
+| `truss run [<name\|path>] --track` | The same, and also reports the run to the daemon, which must be running. |
+| `truss validate [<name\|path>]` | Checks one pipeline and prints its schedules and steps. With no argument, checks `truss.yaml` and every pipeline. Runs nothing. |
 | `truss help`, `truss version` | Usage and version. |
 
-`truss run` does not talk to the daemon, so the run does not appear in `truss runs` or in Desktop (add `--track`, below). It prints the run log as it happens and keeps the last one in `.truss/run.log`.
+`truss run` does not talk to the daemon, so the run does not appear in `truss runs` or in Desktop (add `--track`, below). It prints the run log as it happens and keeps the last one in `.truss/state/<name>/run.log`.
 Interrupting it (Ctrl-C) ends every running step. Schedules in the file are ignored: `run`
-means now.
+means now. Steps start in the project root. The layout is in [Project layout](pipeline-reference.md#project-layout).
 
 ```console
-$ truss run
+$ truss run hello
 2026-11-12 09:00:00 setup environment ready
 ...
 2026-11-12 09:00:00 step hello started
@@ -32,6 +32,20 @@ $ truss run
 2026-11-12 09:00:00 step hello finished duration 0.004s exit 0
 2026-11-12 09:00:00 summary succeeded steps 1 duration 0.006s
 ```
+
+### Pipeline arguments
+
+`run`, `validate` and `register` take a pipeline as a name or a path:
+
+- An argument that contains `/` or `\`, or ends in `.yaml` or `.yml`, is a **path**, relative to
+  the working directory. `truss run ./ci/build.yaml` runs that file.
+- Any other argument is a **name**: the file name in `.truss/flows/` without its extension.
+  `truss run build` runs `.truss/flows/build.yaml`.
+- A name that is not found lists the available pipelines. TRUSS never tries the other reading.
+- `truss run` with no argument is an error. It lists the pipelines and exits `1`.
+- `truss run truss.yaml` is an error: `truss.yaml` is the project file, not a pipeline.
+- A command that needs a project and finds no `truss.yaml` in the working directory names the
+  folder it looked in. TRUSS never looks in parent folders.
 
 ## Secrets
 
@@ -104,7 +118,7 @@ RUN                     PIPELINE     STATUS     TRIGGER  CREATED              DU
 
 | Command | What it does |
 |---|---|
-| `truss register [<path>] [--name <name>]` | Tells the daemon about a file. The name defaults to `pipeline.name`. |
+| `truss register [<name\|path> \| --all] [--name <name>]` | Tells the daemon about a pipeline. The name defaults to `pipeline.name`, or the file name. `--all` registers every pipeline in the project, each under its pipeline name; `--name` is not allowed with `--all`. With no argument it is an error that lists the pipelines. |
 | `truss unregister <name>` | Forgets it. The file and the run history stay. |
 | `truss pipelines` | Lists registrations with state, next scheduled run and last run. |
 | `truss pause <name>` | Stops the pipeline's schedules. Manual runs still work. |
@@ -119,7 +133,7 @@ RUN                     PIPELINE     STATUS     TRIGGER  CREATED              DU
 | `truss runs [<name>]` | Lists the newest runs, optionally of one pipeline. |
 | `truss logs <run-id>` | Prints a run log. `--follow` keeps printing until the run ends. |
 | `truss cancel <run-id>` | Ends a queued or running run. |
-| `truss cache clear <name>` | Empties the pipeline's cache folder. Needs no daemon. |
+| `truss cache clear <name>` | Empties the pipeline's cache folder. Needs no daemon. For a daemon run, see [the daemon page](daemon.md#data-and-cache-folders). |
 
 `-f` is short for `--follow`. Interrupting a followed log stops the printing, not the run.
 

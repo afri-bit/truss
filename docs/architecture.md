@@ -20,6 +20,7 @@ flowchart TB
         metrics["internal/metrics"]
     end
     subgraph core["Core"]
+        project["internal/project<br/>project file, flows, state paths"]
         pipeline["internal/pipeline<br/>parse, validate, plan"]
         cron["internal/cron"]
         engine["internal/engine"]
@@ -31,6 +32,8 @@ flowchart TB
     cli --> api --> daemon
     ui --> daemon
     cli --> engine
+    cli --> project
+    daemon --> project
     daemon --> registry & scheduler & runs & metrics
     scheduler --> cron
     runs --> engine
@@ -59,6 +62,7 @@ two callers of the same engine, so a pipeline behaves the same in both.
 | `internal/secrets` | Keep named secret values in a private file; remove values from output streams. | Know pipelines or the engine. |
 | `internal/runlog` | Format and write the run log. | Execute steps. |
 | `internal/home` | Locate the TRUSS home directory and its per-pipeline data folders, and read and write its JSON files safely. | Hold state. |
+| `internal/project` | Find the project (a `truss.yaml` in the working directory), parse its metadata, list and resolve the pipelines in `.truss/flows/`, and give the state paths under `.truss/state/`. See [ADR 0015](decisions/0015-project-layout.md). | Run anything or print. Make `internal/pipeline` aware of the layout. |
 | `internal/registry` | Remember registered pipeline files by name. | Read pipeline content. |
 | `internal/scheduler` | Decide, for a given time, which schedules fire, catch up, or were missed. | Own a timer or start runs. |
 | `internal/runs` | Queue, execute and remember runs; enforce the parallel limit and overlap policy. | Know about HTTP or schedules. |

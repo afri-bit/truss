@@ -103,13 +103,22 @@ Prebuilt binaries will be published on [GitHub Releases](https://github.com/afri
 
 ### 1. Run a pipeline by hand
 
-Create `truss.yaml`:
+A project is a folder with a `truss.yaml` file that names it. Pipelines are files in
+`.truss/flows/`. Create the project file:
 
 ```yaml
+# truss.yaml
 version: "1"
 
-pipeline:
+project:
   name: hello
+```
+
+Then add a pipeline, `.truss/flows/hello.yaml`:
+
+```yaml
+# .truss/flows/hello.yaml
+version: "1"
 
 steps:
   - id: greet
@@ -117,7 +126,7 @@ steps:
 ```
 
 ```console
-$ truss run
+$ truss run hello
 2026-11-12 09:00:00 setup environment ready
 2026-11-12 09:00:00 setup os linux
 2026-11-12 09:00:00 setup arch amd64
@@ -135,8 +144,8 @@ $ truss run
 $ truss daemon start
 daemon started (pid 4242, 127.0.0.1:7878)
 
-$ truss register
-registered hello (/home/me/project/truss.yaml)
+$ truss register hello
+registered hello (/home/me/project/.truss/flows/hello.yaml)
 
 $ truss trigger hello --follow
 ...
@@ -153,18 +162,25 @@ The daemon does not start by itself after a reboot. To have your schedules keep 
 
 ### 3. Put it on a schedule
 
-Add a trigger to the file and save. The daemon picks the change up by itself.
+Add a trigger to the pipeline file and save. The daemon picks the change up by itself.
 
 ```yaml
+# .truss/flows/hello.yaml
+version: "1"
+
 on:
   schedule:
     - cron: "0 9 * * 1-5"   # weekdays at 09:00
+
+steps:
+  - id: greet
+    run: echo "Hello from TRUSS"
 ```
 
 ```console
 $ truss pipelines
 NAME   STATE  NEXT RUN             LAST RUN                       FILE
-hello  ready  2026-11-13 09:00:00  succeeded 2026-11-12 09:01:10  /home/me/project/truss.yaml
+hello  ready  2026-11-13 09:00:00  succeeded 2026-11-12 09:01:10  /home/me/project/.truss/flows/hello.yaml
 ```
 
 ### 4. Open TRUSS Desktop
@@ -177,7 +193,7 @@ $ truss desktop
 
 | | You start | You use | Tracked by the daemon? |
 |---|---|---|---|
-| **1. Alone** | nothing | `truss run`, `truss validate` | No. The log is `.truss/run.log` in the project. Add `--track` (needs the daemon) to also record the run. |
+| **1. Alone** | nothing | `truss run`, `truss validate` | No. The log is `.truss/state/<name>/run.log` in the project. Add `--track` (needs the daemon) to also record the run. |
 | **2. With the daemon** | `truss daemon start` | the CLI: `register`, `trigger`, `runs`, `logs`, `cancel`, ... | Yes: schedules, queue, history. |
 | **3. With the daemon and Desktop** | `truss daemon start`, then `truss desktop` | the same runs, seen and controlled in the browser | Yes, same state as path 2. |
 
@@ -195,11 +211,15 @@ Pipelines are written in files, with your editor. Desktop watches and controls t
 
 ## A pipeline file
 
+Each file in `.truss/flows/` is one pipeline. A project can hold as many as you need:
+`build.yaml`, `test.yaml`, `nightly.yml`. Run one by its file name without the extension:
+`truss run nightly`.
+
 ```yaml
+# .truss/flows/nightly.yaml
 version: "1"
 
 pipeline:
-  name: nightly
   concurrency: 3            # steps at once
   overlap: skip             # never run on top of itself
 
@@ -211,43 +231,39 @@ on:
 env:
   STAGE: nightly
 
-jobs:
-  lint:
-    steps:
-      - id: vet
-        run: go vet ./...
-  test:
-    steps:
-      - id: unit
-        run: go test ./...
-        timeout: 10m
-  release:
-    needs: [lint, test]     # waits for both
-    steps:
-      - id: build
-        run: go build -o dist/app ./cmd/app
-      - id: publish
-        run: ./scripts/publish.sh
-        env:
-          CHANNEL: nightly
+steps:
+  - id: vet
+    run: go vet ./...
+  - id: unit
+    run: go test ./...
+    timeout: 10m
+  - id: build
+    needs: [vet, unit]      # waits for both
+    run: go build -o dist/app ./cmd/app
+  - id: publish
+    needs: [build]
+    run: ./scripts/publish.sh
+    env:
+      CHANNEL: nightly
 ```
 
-`lint` and `test` run side by side; `release` starts when both succeeded. The first failed step
+`vet` and `unit` run side by side; `build` starts when both succeeded. The first failed step
 fails the run and stops the rest, unless you opt into retries, `continue-on-error` or `if`
-conditions. Every field is described in the
-[pipeline file reference](docs/pipeline-reference.md).
+conditions. A file has `steps` or `jobs`, never both. Every field is described in the
+[pipeline file reference](docs/pipeline-reference.md), and the layout of a project is in
+[Project layout](docs/pipeline-reference.md#project-layout).
 
 ## Commands
 
 | | Command | |
 |---|---|---|
-| **Run here** | `truss run [<path>] [--track]` | Run a file now; `--track` also reports it to the daemon |
-| | `truss validate [<path>]` | Check a file and show its steps |
+| **Run here** | `truss run [<name\|path>] [--track]` | Run a pipeline now; with no argument, list the pipelines. `--track` also reports it to the daemon |
+| | `truss validate [<name\|path>]` | Check a pipeline and show its steps; with no argument, check the project and every pipeline |
 | **Secrets** | `truss secret set <name>` \| `list` \| `remove <name>` | Store credentials for `secrets:` in a file (value from stdin) |
 | **Daemon** | `truss daemon start` \| `stop` \| `status` | Manage the background service |
 | | `truss daemon install` \| `uninstall` | Start the daemon at login, or stop doing so |
 | | `truss desktop` | Open TRUSS Desktop |
-| **Pipelines** | `truss register [<path>] [--name <name>]` | Make a file known to the daemon |
+| **Pipelines** | `truss register [<name\|path> \| --all] [--name <name>]` | Make a pipeline known to the daemon; `--all` takes every pipeline in the project |
 | | `truss unregister <name>` | Forget it; the file and history stay |
 | | `truss pipelines` | List registrations, next and last run |
 | | `truss pause <name>` \| `resume <name>` | Stop or restart its schedules |
@@ -262,7 +278,7 @@ Details and exit codes: [command line reference](docs/cli.md).
 
 ```mermaid
 flowchart LR
-    yaml[/"truss.yaml"/]
+    yaml[/"pipeline files in .truss/flows/"/]
     cli["truss CLI"]
     desktop["TRUSS Desktop"]
     subgraph daemon["truss daemon"]
