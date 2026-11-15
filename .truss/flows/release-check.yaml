@@ -1,0 +1,24 @@
+# Before a release: the version is declared in four places and the release check compares them.
+# Run it on the release branch. It checks that the declarations agree with each other and that
+# the check itself still passes its tests; it does not tag anything.
+version: "1"
+
+pipeline:
+  name: release-check
+
+jobs:
+  tests:
+    steps:
+      - id: release-script
+        run: bash .github/scripts/release-check_test.sh
+      - id: version-declarations
+        run: go test -count=1 -run 'Version' ./cmd/truss ./internal/webui
+  declared:
+    needs: [tests]
+    steps:
+      - id: versions
+        run: |
+          gomod="$(sed -n 's|^// version: ||p' go.mod)"
+          desktop="$(tr -d '[:space:]' < internal/webui/VERSION)"
+          echo "go.mod $gomod, Desktop $desktop"
+          test "$gomod" = "$desktop"

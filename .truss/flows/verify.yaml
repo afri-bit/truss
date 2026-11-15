@@ -1,0 +1,64 @@
+# The quality gate, as a TRUSS pipeline: `truss run verify`.
+# Same checks as scripts/verify.sh (which hooks and CI keep using). It needs a POSIX shell,
+# Go, python3 and jq, and golangci-lint v2.15.0 in the Go bin folder
+# (go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0).
+version: "1"
+
+pipeline:
+  name: verify
+  concurrency: 4          # independent jobs side by side
+  overlap: skip
+
+jobs:
+  format:
+    steps:
+      - id: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
+  vet:
+    steps:
+      - id: go-vet
+        run: go vet ./...
+
+  lint:
+    steps:
+      - id: linux
+        run: '"$(go env GOPATH)/bin/golangci-lint" run ./...'
+        timeout: 10m
+      - id: windows-files
+        run: 'GOOS=windows "$(go env GOPATH)/bin/golangci-lint" run ./...'
+        timeout: 10m
+      - id: macos-files
+        run: 'GOOS=darwin "$(go env GOPATH)/bin/golangci-lint" run ./...'
+        timeout: 10m
+
+  test:
+    steps:
+      - id: go-test
+        run: go test -race -count=1 ./...
+        timeout: 15m
+
+  tooling:
+    steps:
+      - id: memory
+        run: python3 scripts/memory.py validate
+      - id: python
+        run: python3 -m unittest discover -s scripts/tests
+      - id: shell
+        run: |
+          bash .claude/hooks/guard-git_test.sh &&
+          bash .github/scripts/branch-name-check_test.sh &&
+          bash .github/scripts/commit-identity-check_test.sh &&
+          bash .github/scripts/release-check_test.sh &&
+          bash scripts/verify_test.sh
+
+  e2e:
+    needs: [test]         # a built binary is only worth running once the tests pass
+    steps:
+      - id: build
+        run: go build -o .truss/state/verify/truss ./cmd/truss
+        env:
+          CGO_ENABLED: "0"
+      - id: run
+        run: bash .github/scripts/e2e-test.sh .truss/state/verify/truss
+        timeout: 10m

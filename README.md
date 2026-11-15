@@ -338,6 +338,11 @@ go build -o bin/truss ./cmd/truss
 bash .github/scripts/e2e-test.sh bin/truss   # the built binary, including a real daemon
 ```
 
+TRUSS checks itself with its own pipelines. `truss run verify` runs the same gate in parallel
+(about 20 seconds), `truss run release-check` checks the version declarations, and `nightly` repeats
+the concurrency tests every night (`truss register --all` puts all three under the daemon). They
+live in [`.truss/flows/`](.truss/flows/); `scripts/verify.sh` stays the gate that CI and the agent hooks use.
+
 - [`docs/architecture.md`](docs/architecture.md) maps the packages and their boundaries.
 - [`.specify/memory/constitution.md`](.specify/memory/constitution.md) holds the engineering principles: behavior is specified, tested, and safe to execute.
 - [`specs/`](specs/) holds one folder per feature; `spec.md` travels in the same pull request as the code.
