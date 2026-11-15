@@ -46,3 +46,21 @@ __pycache__/
 *.pyc
 
 node_modules/
+
+
+# # Graphify
+
+# # Bestimmte Graphify-Berichte erlauben und teilen
+# !graphify-out/graph_labels.json
+# !graphify-out/GRAPH_REPORT.md
+# !graphify-out/graph.json
+# !graphify-out/manifest.json
+
+# # Große und lokale Cache-Dateien von Graphify ignorieren
+# graphify-out/cache/
+# graphify-out/graph.html
+# graphify-out/graphify.db
+# graphify-out/graphify-cache/
+# graphify-out/20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
+
+graphify-out/

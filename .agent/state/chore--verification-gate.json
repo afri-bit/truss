@@ -3,18 +3,16 @@
   "title": "Blocking lint and a deterministic local quality gate",
   "tier": 0,
   "branch": "chore/verification-gate",
-  "status": "in_review",
-  "step": "pr-open",
+  "status": "done",
+  "step": "merged",
   "steps_done": [],
   "requirements": [],
   "specs": [],
   "owner_agent": "orchestrator",
   "blockers": [],
   "open_questions": [],
-  "next_actions": [
-    "Maintainer reviews PR 21; run scripts/verify_test.sh once on macOS"
-  ],
+  "next_actions": [],
   "pr": "https://github.com/afri-bit/truss/pull/21",
   "created": "2026-11-14T12:22:34Z",
-  "updated": "2026-11-14T12:22:34Z"
+  "updated": "2026-11-15T00:00:00Z"
 }

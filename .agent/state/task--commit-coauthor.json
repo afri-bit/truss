@@ -3,8 +3,8 @@
   "title": "Commit identity: maintainer email; Claude may co-author",
   "tier": 0,
   "branch": "task/commit-coauthor",
-  "status": "in_review",
-  "step": "pr-open",
+  "status": "done",
+  "step": "merged",
   "steps_done": [
     "review and delta reviews"
   ],
@@ -14,7 +14,7 @@
   "blockers": [],
   "open_questions": [],
   "next_actions": [],
-  "pr": null,
+  "pr": "https://github.com/afri-bit/truss/pull/24",
   "created": "2026-11-14T13:15:26Z",
-  "updated": "2026-11-14T13:19:47Z"
+  "updated": "2026-11-15T00:00:00Z"
 }
