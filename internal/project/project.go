@@ -325,7 +325,7 @@ func checkStemSafe(stem string) error {
 	base, _, _ := strings.Cut(stem, ".")
 	up := strings.ToUpper(strings.TrimRight(base, " "))
 	switch up {
-	case "CON", "PRN", "AUX", "NUL":
+	case "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$":
 		return errors.New("the name is a Windows device name")
 	}
 	if len(up) == 4 && (strings.HasPrefix(up, "COM") || strings.HasPrefix(up, "LPT")) && up[3] >= '1' && up[3] <= '9' {
@@ -382,7 +382,7 @@ func StateFor(root, flow string) (State, error) {
 	switch {
 	case flow == "" || flow == "." || flow == "..":
 		return State{}, fmt.Errorf("the pipeline file name %q cannot name a state folder", flow)
-	case strings.ContainsAny(flow, "/\\<>:\"|?*$\x00") || strings.ContainsFunc(flow, func(r rune) bool { return r < ' ' }):
+	case strings.ContainsAny(flow, "/\\<>:\"|?*\x00") || strings.ContainsFunc(flow, func(r rune) bool { return r < ' ' }):
 		return State{}, errors.New("the pipeline file name has characters that cannot be used in a state folder name")
 	}
 	if err := checkStemSafe(flow); err != nil {
@@ -395,7 +395,10 @@ func StateFor(root, flow string) (State, error) {
 	return State{Truss: truss, StateDir: state, Dir: dir, Log: filepath.Join(dir, "run.log"), Data: data, Cache: filepath.Join(data, "cache")}, nil
 }
 
-// foldNames reports whether the host compares file names without case.
+// foldNames reports whether the host compares file names without case. It
+// decides by operating system (windows, darwin), not by the volume, so a
+// case-sensitive volume is still treated as folding; the Unicode folding of
+// EqualFold is accepted because both only make a refusal more likely (fail closed).
 func foldNames() bool { return runtime.GOOS == "windows" || runtime.GOOS == "darwin" }
 
 // NamesEqual compares two file names the way the host does: without case on

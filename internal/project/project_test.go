@@ -365,13 +365,15 @@ func TestStateFor(t *testing.T) {
 		s.Log != filepath.Join(want, "run.log") || s.Data != filepath.Join(want, "data") || s.Cache != filepath.Join(want, "data", "cache") {
 		t.Fatalf("state = %+v", s)
 	}
-	for _, bad := range []string{"", ".", "..", "a.", "a ", "con", "NUL", "a/b", `a\b`, "a:b", "a\x00b", "CONIN$", "a$"} {
+	for _, bad := range []string{"", ".", "..", "a.", "a ", "con", "NUL", "a/b", `a\b`, "a:b", "a\x00b", "CONIN$", "conout$", "CONIN$.txt"} {
 		if _, err := StateFor(root, bad); err == nil {
 			t.Errorf("StateFor(%q) succeeded", bad)
 		}
 	}
-	if _, err := StateFor(root, "my pipeline"); err != nil {
-		t.Errorf("a space inside a stem is fine: %v", err)
+	for _, ok := range []string{"my pipeline", "deploy$prod", "a$"} {
+		if _, err := StateFor(root, ok); err != nil {
+			t.Errorf("StateFor(%q) = %v", ok, err)
+		}
 	}
 }
 

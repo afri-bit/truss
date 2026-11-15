@@ -673,7 +673,15 @@ func TestDaemon_RestoredQueuedRunOfAFlowRunsInTheProjectRoot(t *testing.T) {
 	_, c = boot(t, h, nil)
 	awaitRuns(t, c, "where", 1)
 	log, _, _, err := c.Log(context.Background(), "20261111-090000-aaaaaa", 0)
-	if err != nil || !strings.Contains(string(log), "step here | "+root+"\n") {
+	// Compare the last element only: a Windows 8.3 temp path prints differently.
+	// A run in <root>/.truss/flows would end in "flows" instead.
+	var printed string
+	for _, line := range strings.Split(string(log), "\n") {
+		if _, p, ok := strings.Cut(strings.TrimRight(line, "\r"), "step here | "); ok {
+			printed = p
+		}
+	}
+	if err != nil || printed == "" || filepath.Base(printed) != filepath.Base(root) {
 		t.Fatalf("log = %q, %v; want the step to run in %s", log, err, root)
 	}
 }

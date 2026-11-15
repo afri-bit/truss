@@ -410,12 +410,26 @@ func TestLayout_RunDifferentlyCasedTrussYAMLSaysItIsMetadata(t *testing.T) {
 	}
 }
 
+// On a case-sensitive file system TRUSS.yaml is a different file, so it is a
+// pipeline like any other.
+func TestLayout_RunDistinctTrussYAMLPipelineOnACaseSensitiveFileSystem(t *testing.T) {
+	dir := newProject(t, nil)
+	if caseInsensitiveDir(dir) {
+		t.Skip("the file system ignores case; TRUSS.yaml is the project file there")
+	}
+	writeFile(t, filepath.Join(dir, "TRUSS.yaml"), validPipeline(echoHello()))
+	code, out, errOut := invoke(t, dir, []string{"run", "TRUSS.yaml"})
+	if code != 0 || strings.Contains(errOut, "project metadata") || !strings.Contains(out, "hello") {
+		t.Fatalf("exit = %d, stdout = %q, stderr = %q", code, out, errOut)
+	}
+}
+
 // Any path that resolves to the project's truss.yaml gets the metadata message.
 func TestLayout_RunAnyPathToTrussYAMLSaysItIsMetadata(t *testing.T) {
 	dir := newProject(t, map[string]string{"build.yaml": validPipeline(echoHello())})
 	plantLink(t, dir, filepath.Join(dir, "alias"))
 	for _, arg := range []string{
-		filepath.Join(".truss", "..", "truss.yaml"),
+		".truss" + string(os.PathSeparator) + ".." + string(os.PathSeparator) + "truss.yaml",
 		filepath.Join("alias", "truss.yaml"),
 		filepath.Join(dir, "truss.yaml"),
 	} {
@@ -496,6 +510,16 @@ func TestLayout_RegisterAllPrintsASummary(t *testing.T) {
 	}
 	if !strings.HasSuffix(out, "registered 2 pipelines (1 with schedules)\n") {
 		t.Fatalf("summary missing: %q", out)
+	}
+}
+
+func TestLayout_RegisterAllSummaryIsSingularForOne(t *testing.T) {
+	s := newSession(t, true)
+	writeFile(t, filepath.Join(s.dir, "truss.yaml"), projectFile)
+	writeFile(t, filepath.Join(s.dir, ".truss", "flows", "plain.yaml"), "version: \"1\"\nsteps:\n  - id: a\n    run: "+echoHello()+"\n")
+	out := s.ok("register", "--all")
+	if !strings.HasSuffix(out, "registered 1 pipeline (0 with schedules)\n") {
+		t.Fatalf("summary: %q", out)
 	}
 }
 

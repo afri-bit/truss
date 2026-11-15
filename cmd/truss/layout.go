@@ -45,7 +45,7 @@ func isProjectFile(cwd, arg string) bool {
 			return true
 		}
 	}
-	return filepath.Dir(abs) == filepath.Dir(want) && project.NamesEqual(filepath.Base(abs), project.FileName)
+	return false
 }
 
 func absPath(cwd, arg string) string {

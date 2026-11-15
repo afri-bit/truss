@@ -103,7 +103,11 @@ func (in invocation) register(ctx context.Context) int {
 		}
 	}
 	if all && code == 0 {
-		fmt.Fprintf(in.stdout, "registered %d pipelines (%d with schedules)\n", done, scheduled)
+		noun := "pipelines"
+		if done == 1 {
+			noun = "pipeline"
+		}
+		fmt.Fprintf(in.stdout, "registered %d %s (%d with schedules)\n", done, noun, scheduled)
 	}
 	return code
 }
