@@ -257,7 +257,7 @@ conditions. A file has `steps` or `jobs`, never both. Every field is described i
 
 | | Command | |
 |---|---|---|
-| **Run here** | `truss run [<name\|path>] [--track]` | Run a pipeline now; with no argument, list the pipelines. `--track` also reports it to the daemon |
+| **Run here** | `truss run <name\|path> [--track]` | Run a pipeline now; with no argument it is an error that lists the pipelines. `--track` also reports it to the daemon |
 | | `truss validate [<name\|path>]` | Check a pipeline and show its steps; with no argument, check the project and every pipeline |
 | **Secrets** | `truss secret set <name>` \| `list` \| `remove <name>` | Store credentials for `secrets:` in a file (value from stdin) |
 | **Daemon** | `truss daemon start` \| `stop` \| `status` | Manage the background service |

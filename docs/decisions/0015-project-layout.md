@@ -67,5 +67,11 @@ unaware of the layout.
   `.gitignore` stops ignoring all of `.truss/`.
 - Follow-ups, documented but not built: shared project defaults (env, default shell, timeout);
   walk-up discovery; a project-name prefix for registry names; auto-sync of new flows to the daemon;
-  the TRUSS Desktop file picker showing `.truss`; a size cap and open-then-fstat in the daemon's
-  `readDefinition`.
+  the TRUSS Desktop file picker showing `.truss`.
+- Still open: the daemon's `readDefinition` uses `os.Stat`, then a second read. It needs an
+  open-then-fstat read with a limit, and a non-blocking open for named pipes. The 1 MiB cap already
+  applies in the daemon, and `pipeline.ParseFile` reads through the open handle with a limit.
+- Still open: registry paths compared across case and 8.3 short-name spellings.
+- Still open: a Windows junction test.
+- Still open: drive-relative arguments such as `C:foo.yaml`.
+- Still open: `register --all` and scheduled pipelines (what runs after a `git pull`).

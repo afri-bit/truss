@@ -9,8 +9,10 @@
 truss run [<path>]
 ```
 
+*Changed by [spec 016](../../016-project-layout/spec.md): Bare `truss run` is an error that lists the flows in `.truss/flows/` (exit 1). Use `truss run <name>` or `truss run <path>`.*
+
 - With `<path>`: load that path as given. Any filename is valid.
-- Without `<path>`: load `truss.yaml` from the invoker's working directory.
+- Without `<path>`: load `truss.yaml` from the invoker's working directory. *Changed by [spec 016](../../016-project-layout/spec.md): Bare `truss run` exits 1 and lists the flows in `.truss/flows/`.*
 - Any other invocation is a usage error, exits 1, and executes nothing.
 
 ## Process Exit Code

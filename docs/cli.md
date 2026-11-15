@@ -14,14 +14,14 @@ that starts with `error:`. An unknown command or wrong arguments print the usage
 
 | Command | What it does |
 |---|---|
-| `truss run [<name\|path>]` | Runs a pipeline right here and waits for it. With no argument, lists the pipelines in `.truss/flows/` and exits `1`. |
-| `truss run [<name\|path>] --track` | The same, and also reports the run to the daemon, which must be running. |
+| `truss run <name\|path>` | Runs a pipeline right here and waits for it. With no argument it is an error: it lists the pipelines in `.truss/flows/` and exits `1`. |
+| `truss run <name\|path> --track` | The same, and also reports the run to the daemon, which must be running. |
 | `truss validate [<name\|path>]` | Checks one pipeline and prints its schedules and steps. With no argument, checks `truss.yaml` and every pipeline. Runs nothing. |
 | `truss help`, `truss version` | Usage and version. |
 
 `truss run` does not talk to the daemon, so the run does not appear in `truss runs` or in Desktop (add `--track`, below). It prints the run log as it happens and keeps the last one in `.truss/state/<name>/run.log`.
 Interrupting it (Ctrl-C) ends every running step. Schedules in the file are ignored: `run`
-means now. Steps start in the project root. The layout is in [Project layout](pipeline-reference.md#project-layout).
+means now. Steps start in the working directory, which is the project root when you run TRUSS from the project folder. The layout is in [Project layout](pipeline-reference.md#project-layout).
 
 ```console
 $ truss run hello

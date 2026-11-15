@@ -69,4 +69,4 @@ When the command did not start:
 
 ## Saved copy
 
-The bytes above are the whole run log. `.truss/run.log` in the invoker's working directory contains those bytes and nothing else. The next finished run replaces the file.
+The bytes above are the whole run log. `.truss/run.log` in the invoker's working directory contains those bytes and nothing else. The next finished run replaces the file. *Changed by [spec 016](../../016-project-layout/spec.md): The file is `.truss/state/<flow>/run.log`.*

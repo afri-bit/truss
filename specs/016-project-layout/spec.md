@@ -7,8 +7,8 @@ convention, and `.truss/` mixes generated state with anything worth committing. 
 wants a project with many pipelines, like a workflow folder, and a root file that only says
 "this is a TRUSS project" (decisions 2026-11-15).
 
-Changes [spec 002](../002-local-run-log/spec.md) (run log path), [spec 008](../008-workspace-and-cache/spec.md)
-(data and cache path) and the default file of `run`, `validate` and `register`
+Changes [spec 001](../001-host-pipeline-engine/spec.md) (the default file of bare `run` and the required pipeline name), [spec 002](../002-local-run-log/spec.md) (run log path), [spec 008](../008-workspace-and-cache/spec.md)
+(data and cache path), [spec 010](../010-run-tracking-and-queue/spec.md) (run log path) and the default file of `run`, `validate` and `register`
 ([spec 005](../005-jobs-schedules-and-step-settings/spec.md), [spec 006](../006-daemon-registry-and-scheduling/spec.md)).
 Decisions: [ADR 0015](../../docs/decisions/0015-project-layout.md). Release scope: `docs/MILESTONE.md`.
 User documentation: `docs/pipeline-reference.md`, `docs/cli.md`, `docs/daemon.md`.
@@ -104,6 +104,9 @@ folders, a project-name prefix for registry names, registering new flows automat
 Desktop file picker showing `.truss`. `truss cache clear` is unchanged: it empties the daemon's
 cache folder only, not `.truss/state/<flow>/data/cache`. Each is documented as future work.
 
+- A pipeline run by path whose file stem equals a flow name shares `.truss/state/<stem>/` with that flow.
+- On a case-insensitive filesystem, stems that differ only by case share one state folder.
+
 ## Success criteria
 
 - **SC-001** In a project with two flows, `truss run <name>` runs the named one and writes
@@ -112,4 +115,4 @@ cache folder only, not `.truss/state/<flow>/data/cache`. Each is documented as f
 - **SC-003** A planted link at `.truss`, `.truss/flows`, `.truss/state` or `.truss/.gitignore` is
   refused and nothing is written through it.
 - **SC-004** `docs/pipeline-reference.md`, `docs/cli.md`, `docs/daemon.md`, the README and
-  `docs/architecture.md` describe the new layout, and every YAML example in them validates.
+  `docs/architecture.md` describe the new layout, and every complete file example in them validates (fragments are not complete files).

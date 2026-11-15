@@ -39,6 +39,9 @@ bin/
 # Generated run state (logs, data, cache). The project's own .truss/flows/ and
 # .truss/.gitignore are tracked. TRUSS also writes .truss/.gitignore itself.
 .truss/state/
+# Older builds wrote these. TRUSS ignores them and never deletes them.
+.truss/run.log
+.truss/data/
 
 # Claude Code local settings and worktrees
 .claude/settings.local.json
@@ -49,5 +52,6 @@ __pycache__/
 *.pyc
 
 node_modules/
+
 
 graphify-out/*

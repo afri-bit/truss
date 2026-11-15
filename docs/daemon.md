@@ -48,7 +48,7 @@ Your pipeline files live in your projects. The daemon cannot guess where, so you
 
 - `truss register <name>` registers a pipeline in the project you are in, from `.truss/flows/`.
 - `truss register <path>` registers any pipeline file.
-- `truss register --all` registers every pipeline in the project, each under its pipeline name.
+- `truss register --all` registers every pipeline in the project, each under its pipeline name. Their schedules start firing. The daemon re-reads a registered file on every run, so a later `git pull` changes what scheduled runs execute. The command prints `registered N pipelines (M with schedules)`.
 
 A registration is only a name and a path. The layout of a project is in
 [Project layout](pipeline-reference.md#project-layout).

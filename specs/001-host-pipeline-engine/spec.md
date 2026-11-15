@@ -11,7 +11,7 @@
 
 - Q: How is a Step `run` value executed? → A: One string, executed by the host shell
 - Q: What working directory and environment does a Step inherit? → A: The invoker's working directory and environment
-- Q: Which file does `truss run` load when no path is given? → A: `truss.yaml` in the invoker's working directory. An explicit path may use any filename.
+- Q: Which file does `truss run` load when no path is given? → A: `truss.yaml` in the invoker's working directory. An explicit path may use any filename. *Changed by [spec 016](../016-project-layout/spec.md): Bare `truss run` exits 1 and lists the flows in `.truss/flows/`. `truss.yaml` is project metadata, not a pipeline file.*
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -29,7 +29,7 @@ A developer writes a Pipeline Definition in YAML, runs it locally with the CLI, 
 2. **Given** a valid Pipeline Definition whose filename is not `truss.yaml`, **When** the developer runs `truss run` with that path, **Then** TRUSS loads that file.
 3. **Given** a valid Pipeline Definition with multiple Steps whose commands succeed, **When** the developer runs it, **Then** Steps execute one after another in definition order and the Result lists every Step Run in that same order.
 4. **Given** a valid Pipeline Definition, **When** the developer watches the run, **Then** each Step's output appears as the Step runs, preceded only by that Step's id.
-5. **Given** a valid Pipeline Definition at `truss.yaml` in the invoker's working directory, **When** the developer runs `truss run` with no path, **Then** TRUSS loads that file and runs it.
+5. **Given** a valid Pipeline Definition at `truss.yaml` in the invoker's working directory, **When** the developer runs `truss run` with no path, **Then** TRUSS loads that file and runs it. *Changed by [spec 016](../016-project-layout/spec.md): Bare `truss run` exits 1 and lists the flows in `.truss/flows/`.*
 
 ---
 
@@ -46,7 +46,7 @@ A developer points the CLI at a Pipeline Definition that is not valid. TRUSS rep
 1. **Given** a file that is not valid YAML, **When** the developer runs it, **Then** TRUSS reports a parse error and does not execute any command.
 2. **Given** YAML that is missing a required field, has no Steps, has duplicate Step IDs, has an empty or missing `run`, or has a missing or unsupported schema version, **When** the developer runs it, **Then** TRUSS reports a validation error naming the problem and does not execute any command.
 3. **Given** a path that does not resolve to a readable Pipeline Definition file, **When** the developer runs it, **Then** TRUSS reports a user-visible error and does not execute any command.
-4. **Given** the invoker's working directory has no readable `truss.yaml`, **When** the developer runs `truss run` with no path, **Then** TRUSS reports a user-visible error and does not execute any command.
+4. **Given** the invoker's working directory has no readable `truss.yaml`, **When** the developer runs `truss run` with no path, **Then** TRUSS reports a user-visible error and does not execute any command. *Changed by [spec 016](../016-project-layout/spec.md): Bare `truss run` exits 1 and lists the flows in `.truss/flows/`.*
 
 ---
 
@@ -72,7 +72,7 @@ A developer runs a Pipeline whose later Step would also do work. An earlier Step
 - The given path does not exist, is not a file, or cannot be read.
 - The file is empty or contains valid YAML that is not a Pipeline Definition.
 - Schema version is present but not `"1"`.
-- Pipeline name is missing or empty.
+- Pipeline name is missing or empty. *Changed by [spec 016](../016-project-layout/spec.md): `pipeline.name` is optional and defaults to the file stem (spec 016 FR-008).*
 - Steps is missing, empty, or not a list.
 - Two Steps share the same `id`.
 - A Step `id` is missing or empty.
@@ -81,18 +81,18 @@ A developer runs a Pipeline whose later Step would also do work. An earlier Step
 - A Step command writes output and then exits non-zero.
 - A Step command cannot be started on the host (for example, the program is not found).
 - A Step `run` string contains shell syntax (quotes, pipes, or environment expansion). The host shell interprets that syntax.
-- `truss run` is invoked with no path and `truss.yaml` is missing or unreadable in the invoker's working directory.
+- `truss run` is invoked with no path and `truss.yaml` is missing or unreadable in the invoker's working directory. *Changed by [spec 016](../016-project-layout/spec.md): Bare `truss run` exits 1 and lists the flows in `.truss/flows/`.*
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
 - **FR-001**: Users MUST be able to run a Pipeline by invoking `truss run <path>` with a local Pipeline Definition file. The path MUST be used as given, and the filename MAY be any name.
-- **FR-002**: When the user invokes `truss run` without a path, TRUSS MUST look for `truss.yaml` in the invoker's working directory and load it. If that file is missing or unreadable, TRUSS MUST report a user-visible error and MUST NOT execute any command. This default lookup applies only when no path is given.
+- **FR-002**: When the user invokes `truss run` without a path, TRUSS MUST look for `truss.yaml` in the invoker's working directory and load it. If that file is missing or unreadable, TRUSS MUST report a user-visible error and MUST NOT execute any command. This default lookup applies only when no path is given. *Changed by [spec 016](../016-project-layout/spec.md): Bare `truss run` is an error that lists the flows in `.truss/flows/` (exit 1). `truss.yaml` is never a pipeline file.*
 - **FR-003**: TRUSS MUST load the Pipeline Definition from the given local YAML file and parse it into a Pipeline Model. Parsing MUST NOT execute any Step command.
 - **FR-004**: If the file cannot be read or is not valid YAML, TRUSS MUST report a user-visible error and MUST NOT start a Pipeline Run.
-- **FR-005**: Before execution, TRUSS MUST validate the Pipeline Model and reject at least: missing required fields, empty or missing Steps, missing or empty Pipeline name, missing or empty Step `id`, duplicate Step IDs, missing or empty `run`, and missing or unsupported schema version.
-- **FR-006**: A valid v1 Pipeline Definition MUST include schema version `"1"`, a Pipeline name, and one or more Steps. Each Step MUST have a unique `id` and a `run` command. This milestone MUST NOT add optional definition fields (`env`, working directory, `depends_on`, image, cache, matrix, artifacts). Working directory and environment come from the invoker (FR-010).
+- **FR-005**: Before execution, TRUSS MUST validate the Pipeline Model and reject at least: missing required fields, empty or missing Steps, missing or empty Pipeline name, missing or empty Step `id`, duplicate Step IDs, missing or empty `run`, and missing or unsupported schema version. *Changed by [spec 016](../016-project-layout/spec.md): A missing `pipeline.name` is no longer rejected; it defaults to the file stem (spec 016 FR-008).*
+- **FR-006**: A valid v1 Pipeline Definition MUST include schema version `"1"`, a Pipeline name, and one or more Steps. Each Step MUST have a unique `id` and a `run` command. This milestone MUST NOT add optional definition fields (`env`, working directory, `depends_on`, image, cache, matrix, artifacts). Working directory and environment come from the invoker (FR-010). *Changed by [spec 016](../016-project-layout/spec.md): `pipeline.name` is optional and defaults to the file stem (spec 016 FR-008).*
 - **FR-007**: After successful validation, TRUSS MUST produce an Execution Plan that runs Steps sequentially in definition order. This milestone MUST NOT use concurrent execution or a dependency graph.
 - **FR-008**: The Host Executor MUST execute only the command explicitly specified on each Step. Implicit command execution is forbidden.
 - **FR-009**: Each Step `run` value MUST be a single string executed by the host shell. It MUST NOT be an argument list. This is a Public Contract. The host shell interprets the string, including quotes, pipes, and environment expansion.
@@ -144,7 +144,7 @@ A developer runs a Pipeline whose later Step would also do work. An earlier Step
 - Schema version `"1"` is the only supported version in this milestone.
 - Each Step `run` is one string executed by the host shell, matching `run: echo "Hello from TRUSS"`.
 - Each Step Run uses the working directory and environment of the process that invoked the CLI.
-- `truss run <path>` uses that path as given, including any filename. `truss run` with no path looks for `truss.yaml` in the invoker's working directory.
+- `truss run <path>` uses that path as given, including any filename. `truss run` with no path looks for `truss.yaml` in the invoker's working directory. *Changed by [spec 016](../016-project-layout/spec.md): Bare `truss run` exits 1 and lists the flows in `.truss/flows/`.*
 - Sequential execution means definition order, not an inferred dependency graph.
 - Status values in this milestone are `succeeded` and `failed` for completed runs. `pending`, `running`, `cancelled`, and `skipped` are not part of the reported Result contract yet.
 - Later Steps after a failure do not appear as succeeded Step Runs. They are omitted from executed Step Runs rather than reported as skipped.

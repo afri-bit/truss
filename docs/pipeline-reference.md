@@ -59,7 +59,7 @@ A `truss.yaml` with `steps` or `jobs` is rejected: those belong in a file in `.t
 - The file name without its extension is the name you use on the command line: `truss run build`
   runs `.truss/flows/build.yaml`.
 - Only regular files count. Folders, links, hidden files (names that start with `.`) and other
-  extensions are ignored. The extension is case-sensitive: `.YAML` is not accepted.
+  extensions are ignored. The extension is case-sensitive: `.YAML` is not accepted. Links, folders and cloud-sync placeholder files in `.truss/flows` are ignored, so a flow that disappears from the list is probably one of these.
 - Two files that differ only by letter case, or `build.yaml` next to `build.yml`, are an error.
   The error names both files.
 - A name must start with a letter or digit, then use only letters, digits, `.`, `_` and `-`. It
@@ -70,7 +70,7 @@ A `truss.yaml` with `steps` or `jobs` is rejected: those belong in a file in `.t
 - `.truss` and `.truss/flows` must be real folders, not links. A flows folder with more than 256
   entries is an error.
 
-A pipeline given by path (`truss run ./other/build.yaml`) follows the same size and link rules.
+A pipeline given by path (`truss run ./other/build.yaml`) has the same 1 MiB size limit. TRUSS follows a link for an explicit path argument.
 Its name is the file name without its extension.
 
 ### The project root
@@ -305,6 +305,8 @@ Jobs that do not need each other run side by side when `pipeline.concurrency` al
 
 ```yaml
 # .truss/flows/ci.yaml
+version: "1"
+
 pipeline:
   name: ci
   concurrency: 3

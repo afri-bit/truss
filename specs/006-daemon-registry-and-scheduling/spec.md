@@ -50,6 +50,7 @@ Written alongside the implementation (constitution 2.0.0, principle I).
 - **FR-008** `truss register [<path>] [--name <name>]` records an absolute path under a name
   (default: `pipeline.name`). The file MUST load and validate. Re-registering the same name and
   path succeeds; a different path under a taken name is an error.
+  *Changed by [spec 016](../016-project-layout/spec.md): The argument is a flow name, a path or `--all`. The default name is `pipeline.name`, or the file stem when that is not set (spec 016 FR-008, FR-012).*
 - **FR-009** `truss unregister <name>` removes the registration and its schedules. It deletes
   neither the file nor past runs.
 - **FR-010** The daemon reads a registered file again before every run and within a tick of a

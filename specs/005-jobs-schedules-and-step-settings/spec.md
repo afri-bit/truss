@@ -51,6 +51,7 @@ requirements behind it. Written alongside the implementation (constitution 2.0.0
 - **FR-014** `truss validate [<path>]` checks a definition without running it, prints one
   summary line, each schedule and each step with its needs, and exits 0; an invalid file prints
   the same `error:` line `truss run` would and exits 1.
+  *Changed by [spec 016](../016-project-layout/spec.md): `truss validate` with no argument checks `truss.yaml` and every flow. `validate <name|path>` checks one pipeline (spec 016 FR-011).*
 
 ## Compatibility
 
