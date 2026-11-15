@@ -1,0 +1,18 @@
+{
+  "work_id": "feature--016-project-layout",
+  "title": "Project layout: truss.yaml metadata and .truss/flows",
+  "tier": 2,
+  "branch": "feature/016-project-layout",
+  "status": "planned",
+  "step": "",
+  "steps_done": [],
+  "requirements": [],
+  "specs": [],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [],
+  "pr": null,
+  "created": "2026-11-15T22:07:03Z",
+  "updated": "2026-11-15T22:07:03Z"
+}
