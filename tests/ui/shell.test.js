@@ -191,6 +191,31 @@ test("Jump to finds a pipeline and opens it with Enter", async () => {
   }
 });
 
+test("Jump to offers the Flows page and groups pipelines under Flows", async () => {
+  const page = await b.newPage();
+  try {
+    await page.goto(d.authedUrl());
+    await page.locator("h1", { hasText: "Dashboard" }).waitFor();
+    await poll(async () => (await page.locator(".side-label").count()) > 0, "shell poll");
+    await page.locator("#view").focus();
+    await page.keyboard.press("/");
+    await page.locator("#finder[open]").waitFor();
+    await page.keyboard.type("flows");
+    await page.locator("#finder [role=option]", { hasText: "Flows" }).first().waitFor();
+    assert.equal(await page.locator("#finder [role=option]", { hasText: "Pipelines" }).count(), 0);
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("/");
+    await page.locator("#finder[open]").waitFor();
+    await page.keyboard.type("slow");
+    await page.locator("#finder [role=option]", { hasText: "slow" }).first().waitFor();
+    const text = await page.locator("#finder").textContent();
+    assert.ok(text.includes("Flows") && !text.includes("Pipelines"), `finder groups: ${text}`);
+    assert.deepEqual(page.problems, []);
+  } finally {
+    await page.context().close();
+  }
+});
+
 test("Forget token removes the token and shows the terminal hint", async () => {
   const page = await b.newPage();
   try {
@@ -244,15 +269,20 @@ test("the sidebar calls the pipeline list Flows", async () => {
     await page.locator("h1", { hasText: "Flows" }).waitFor();
     assert.equal(await nav.getByRole("link", { name: "Pipelines" }).count(), 0);
     assert.ok(page.url().endsWith("#/pipelines"), "the address of the page does not change");
+    const crumbs = await page.locator("#crumbs").textContent();
+    assert.ok(crumbs.includes("Flows") && !crumbs.includes("Pipelines"), `breadcrumbs: ${crumbs}`);
+    await page.evaluate(() => { location.hash = "#/pipelines/slow"; });
+    await page.locator("h1", { hasText: "slow" }).waitFor();
+    await page.locator("#crumbs").getByRole("link", { name: "Flows" }).waitFor();
     assert.deepEqual(page.problems, []);
   } finally {
     await page.context().close();
   }
 });
 
-test("the run page's memory line stays inside the resource chart", async () => {
+test("the run page's memory line stays inside the resource chart", async (t) => {
   const metrics = await d.call("GET", "/metrics");
-  if (!metrics.supported) return; // no figures on this system, so no chart
+  if (!metrics.supported) return t.skip("the daemon reports no resource figures on this system");
   const run = await d.call("POST", "/pipelines/slow/runs");
   await d.waitRun(run.id, (r) => r.steps.some((s) => s.id === "wait" && s.status === "running" && s.pid > 0));
   const page = await b.newPage();
@@ -260,8 +290,10 @@ test("the run page's memory line stays inside the resource chart", async () => {
     await page.goto(d.authedUrl());
     await page.evaluate((id) => { location.hash = "#/runs/" + id; }, run.id);
     // The chart appears once the page holds two samples.
-    const chart = page.locator("section", { hasText: "Resources" }).locator("svg.chart");
+    const resources = page.locator("section", { hasText: "Resources" });
+    const chart = resources.locator("svg.chart");
     await chart.waitFor({ timeout: 20000 });
+    await resources.getByText("mem, scaled", { exact: true }).waitFor();
     const lines = await chart.locator("path.line").evaluateAll((paths) => paths.map((p) => {
       const box = p.getBBox(), view = p.ownerSVGElement.viewBox.baseVal;
       return { top: box.y, bottom: box.y + box.height, height: view.height };
