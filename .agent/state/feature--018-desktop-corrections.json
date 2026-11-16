@@ -1,40 +1,46 @@
 {
   "work_id": "feature--018-desktop-corrections",
-  "title": "Desktop corrections: chart, Flows, Re-run",
+  "title": "Desktop corrections, flows follow files, readable run log",
   "tier": 2,
   "branch": "feature/018-desktop-corrections",
   "status": "in_review",
-  "step": "pushed; open the PR (gh missing: maintainer opens it from the compare URL)",
+  "step": "run-log headings and Desktop log cards done and reviewed; push, then the maintainer opens the PR (gh missing)",
   "steps_done": [
     "chart fix, Flows and Re-run, spec 018, docs; verify.sh pass; 30 UI tests pass",
     "review (reviewer, spec-reviewer) and delta review: approve at efb9803",
     "daemon follows a renamed flow and keeps history: spec 019, ADR 0017, tests, docs",
     "reviews of spec 019 (reviewer, spec, security, portability) answered: path dedupe, kept names, retry, log once, registered_pipeline, Desktop acts by registration",
-    "final delta reviews: spec converged, security approved, reviewer found one flaky test (fixed in 5638792); portability not re-run on the last commits"
+    "final delta reviews: spec converged, security approved, reviewer found one flaky test (fixed in 5638792); portability not re-run on the last commits",
+    "spec 020: run-log headings (runlog) and Desktop log cards; reviews (reviewer, spec, security, portability) answered; delta reviews approved at 4f46329; the last two small commits (2f42260 focus, c541620 docs) not independently reviewed"
   ],
   "requirements": [
     "specs/018-desktop-corrections/spec.md",
-    "specs/019-flows-follow-their-files/spec.md"
+    "specs/019-flows-follow-their-files/spec.md",
+    "specs/020-readable-run-log/spec.md"
   ],
   "specs": [
     "specs/018-desktop-corrections/spec.md",
-    "specs/019-flows-follow-their-files/spec.md"
+    "specs/019-flows-follow-their-files/spec.md",
+    "specs/020-readable-run-log/spec.md"
   ],
   "owner_agent": "main-session",
   "blockers": [],
   "open_questions": [
     "Is Flow a glossary term, or only Desktop's label for a registered pipeline? (docs/GLOSSARY.md)",
     "A flow showed stale content after a YAML edit; not reproduced here (current code re-reads on edit and on every run). Need the exact steps and file path.",
-    "Milestone: which release holds spec 019 (0.1.0 untagged vs 0.2.0-beta)? And is 0.2.0-beta a new number for the 0.1.0 content or a release after it?"
+    "v0.1.0 is tagged: does the maintainer accept that spec 020 changes its run-log (new first line)? ADR 0018 is Proposed.",
+    "Milestone: add a 0.2.0 section and move the rows of specs 019 and 020 there (they sit under released v0.1.0).",
+    "Log format for tools (Grafana, Loki, OpenTelemetry): structured events with text as one view; discussion held, nothing decided (stdout/stderr stream, UTC, experimental flag, history)."
   ],
   "next_actions": [
     "Retake docs/images/desktop-*.png (they show the old Pipelines sidebar name)",
     "Optionally fix the daemon's raw error when registering truss.yaml (CLI says project metadata)",
     "Nit: tests/ui/shell.test.js 'no Pipelines option' check in the Jump to test cannot fail (query is flows)",
     "Follow-up: look at registered files outside the daemon lock (dead network share); case-insensitive registered names; FILE_SHARE_DELETE on Windows",
-    "Follow-up: symlink and letter-case spellings of one path register twice; keep a kept name across a daemon restart"
+    "Follow-up: symlink and letter-case spellings of one path register twice; keep a kept name across a daemon restart",
+    "Follow-up: restrict step id characters (schema change + ADR); parse the Desktop log incrementally; colour in the terminal only if the saved text can stay equal"
   ],
   "pr": null,
   "created": "2026-11-16T15:58:40Z",
-  "updated": "2026-11-16T17:38:23Z"
+  "updated": "2026-11-16T22:22:16Z"
 }
