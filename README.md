@@ -251,6 +251,7 @@ conditions. Every field is described in the
 | | `truss unregister <name>` | Forget it; the file and history stay |
 | | `truss pipelines` | List registrations, next and last run |
 | | `truss pause <name>` \| `resume <name>` | Stop or restart its schedules |
+| | `truss cache clear <name>` | Empty a pipeline's cache folder (no daemon needed) |
 | **Runs** | `truss trigger <name> [--follow]` | Start a run now |
 | | `truss runs [<name>]` | List runs, newest first |
 | | `truss logs <run-id> [--follow]` | Show a run log |
