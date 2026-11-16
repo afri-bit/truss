@@ -773,7 +773,7 @@ views.runs = {
 
 // The run view keeps its log between refreshes so the text is not re-fetched.
 // open holds the cards the reader opened or closed by hand, by card key.
-const logState = { id: "", offset: 0, text: "", step: "", follow: true, timer: 0, done: false, query: "", decoder: null, open: {}, ids: [] };
+const logState = { id: "", offset: 0, text: "", step: "", follow: true, timer: 0, done: false, query: "", decoder: null, open: {}, ids: [], status: {}, focusSec: "" };
 
 // parseLog groups the run log into cards: the setup, one per step (however the
 // steps' lines interleave), and the summary. It reads only the line grammar of
@@ -781,7 +781,9 @@ const logState = { id: "", offset: 0, text: "", step: "", follow: true, timer: 0
 // same way. The headings themselves are skipped: the cards take their place.
 // ids are the run's step ids: a step id may hold a space, so a "step <id> ..."
 // line is matched against them, longest first, before it is read as one word.
-function parseLog(text, done, ids = []) {
+// status maps a step id to the state the API gives it, which wins where the
+// log cannot tell (a step that failed on its own while the run was cancelled).
+function parseLog(text, done, ids = [], status = {}) {
   const known = [...ids].sort((a, b) => b.length - a.length);
   const stepLine = (rest) => {
     if (!rest.startsWith("step ")) return null;
@@ -840,10 +842,13 @@ function parseLog(text, done, ids = []) {
   for (const c of steps.values()) {
     if (c.continued && c.state === "failed") c.state = "tolerated";
     // A step the interrupt cut off logs a failure of its own; the run's end says why.
-    if (c.stopped || (summary.state === "cancelled" && c.state === "failed")) c.state = "cancelled";
+    if (c.stopped || (summary.state === "cancelled" && c.state === "failed" && status[c.title] !== "failed")) c.state = "cancelled";
     if (c.state === "running" && done) c.state = "cancelled";
     if (c.attempts > 1 && !c.note) c.note = `attempt ${c.attempts}`;
   }
+  for (const c of order) c.rows.forEach((r, i) => { r.no = i + 1; });
+  // Lines the parser does not know land in the summary card; it always comes last.
+  if (placed.has(summary)) { order.splice(order.indexOf(summary), 1); order.push(summary); }
   const f = setup.facts;
   setup.note = [f.os, f.arch, f.shell].filter(Boolean).join(" · ");
   return order;
@@ -876,11 +881,11 @@ function logCard(c, rows, q) {
       h("span", { class: "sec-name" }, c.title),
       c.note && h("span", { class: "sec-note", title: c.note }, c.note),
       c.kind === "step" && h("span", { class: "sec-dur" }, c.dur || (c.state === "running" ? "running" : ""))),
-    h("div", { class: "sec-body" }, rows.map((r, i) => logRow(r, i + 1, q))));
+    h("div", { class: "sec-body" }, rows.map((r) => logRow(r, r.no, q))));
 }
 
 function setAllOpen(open) {
-  for (const c of parseLog(logState.text, logState.done, logState.ids)) logState.open[c.key] = open;
+  for (const c of parseLog(logState.text, logState.done, logState.ids, logState.status)) logState.open[c.key] = open;
   paintLog();
 }
 
@@ -890,7 +895,7 @@ function paintLog() {
   const q = logState.query.toLowerCase();
   const frag = document.createDocumentFragment();
   let count = 0;
-  for (const c of parseLog(logState.text, logState.done, logState.ids)) {
+  for (const c of parseLog(logState.text, logState.done, logState.ids, logState.status)) {
     if (logState.step && c.key !== "step:" + logState.step) continue;
     const rows = q ? c.rows.filter((r) => r.raw.toLowerCase().includes(q)) : c.rows;
     if (q && !rows.length) continue;
@@ -905,7 +910,8 @@ function paintLog() {
   }
   // Repainting replaces every card; keep keyboard focus on the header it was on.
   const focused = document.activeElement;
-  const was = focused && focused.tagName === "SUMMARY" && pre.contains(focused) ? focused.parentElement.dataset.sec : null;
+  const was = (focused && focused.tagName === "SUMMARY" && pre.contains(focused) ? focused.parentElement.dataset.sec : null) || logState.focusSec;
+  logState.focusSec = "";
   pre.replaceChildren(frag);
   if (was) [...pre.querySelectorAll("details")].find((d) => d.dataset.sec === was)?.querySelector("summary")?.focus({ preventScroll: true });
   const lines = document.getElementById("log-count");
@@ -965,6 +971,7 @@ views.run = {
     queueMicrotask(paintLog);
     const steps = run.steps || [];
     logState.ids = steps.map((st) => st.id);
+    logState.status = Object.fromEntries(steps.map((st) => [st.id, stepState(st)]));
     const doneN = steps.filter((st) => !["pending", "running", "queued"].includes(st.status)).length;
     const current = steps.filter((st) => st.status === "running").map((st) => st.id);
     const usage = res.run(run.id);
@@ -1557,6 +1564,9 @@ async function route(force) {
     const keptId = lastHash === location.hash && main.contains(active) && active.id ? active.id : "";
     const scroll = document.getElementById("log") ? document.getElementById("log").scrollTop : null;
     const pageScroll = lastHash === location.hash ? main.scrollTop : 0;
+    // The view is rebuilt and its log is painted a moment later: remember which card header had focus.
+    const inLog = main.contains(active) && active.tagName === "SUMMARY" && active.closest("#log");
+    if (inLog) logState.focusSec = active.parentElement.dataset.sec;
     paintCrumbs(view, arg, data);
     main.replaceChildren(...view.render(data).flat(Infinity).filter(Boolean));
     main.scrollTop = pageScroll;

@@ -200,6 +200,12 @@ test("run page: the cards follow the log grammar", async () => {
   // A step cut off by a cancel is cancelled, not failed.
   const cut = await cards([`${T(0)} step w started`, `${T(1)} step w finished duration 1.000s error terminated by signal: killed`, `${T(1)} summary cancelled steps 1 duration 1.100s`], ["w"]);
   assert.deepEqual(cut.map((c) => [c[0], c[1]]), [["step:w", "cancelled"], ["summary", "cancelled"]]);
+  // A step the API says failed stays failed, though the run was cancelled later.
+  const own = await page.evaluate((t) => parseLog(t, true, ["w"], { w: "failed" }).map((c) => [c.key, c.state]), [`${T(0)} step w started`, `${T(1)} step w finished duration 1.000s exit 2`, `${T(1)} summary cancelled steps 1 duration 1.100s`].join("\n") + "\n");
+  assert.deepEqual(own, [["step:w", "failed"], ["summary", "cancelled"]]);
+  // A line nobody knows does not put the summary before the steps, and row numbers keep their place.
+  const odd = await page.evaluate((t) => parseLog(t, true, ["w"]).map((c) => [c.key, c.rows.map((r) => r.no).join(",")]), [`${T(0)} something new`, `${T(0)} step w started`, `${T(1)} step w | a`, `${T(1)} step w | b`].join("\n") + "\n");
+  assert.deepEqual(odd, [["step:w", "1,2,3"], ["summary", "1"]]);
   // Half a line at the end of a log that is still arriving waits for its end.
   const partial = await page.evaluate(() => parseLog("2026-11-12 09:00:00 step a started\n2026-11-12 09:00:01 st", false, ["a"]).map((c) => c.key));
   assert.deepEqual(partial, ["step:a"]);
@@ -212,12 +218,39 @@ test("run page: keyboard focus stays on a card header while the log updates", as
   const head = page.locator('#log details[data-sec="step:wait"] > summary');
   await head.waitFor();
   await head.focus();
-  await page.evaluate(() => { logState.text += ""; paintLog(); });
-  assert.equal(await page.evaluate(() => document.activeElement.closest("details")?.dataset.sec), "step:wait");
+  // The page rebuilds itself on a timer; focus must survive that and the log's own repaint.
+  await page.evaluate(() => { window.__log = document.getElementById("log"); });
+  await page.waitForFunction(() => document.getElementById("log") !== window.__log, null, { timeout: 10000 });
+  await poll(async () => (await page.evaluate(() => document.activeElement.closest?.("details")?.dataset.sec)) === "step:wait", "focus back on the card header");
   await page.getByRole("button", { name: "Cancel run" }).click();
   await page.locator(".head .badge.s-cancelled").waitFor();
   const card = page.locator('#log details[data-sec="step:wait"]');
   await poll(async () => (await card.getAttribute("class")).includes("st-cancelled"), "the cut-off step is shown as cancelled");
+});
+
+test("run page: open all, close all, and picking a step opens its card", async () => {
+  await d.register("ok.yaml");
+  const run = await d.call("POST", "/pipelines/ok/runs");
+  await d.waitRun(run.id);
+  await page.evaluate((id) => { location.hash = "#/runs/" + id; }, run.id);
+  const cards = page.locator("#log details.sec");
+  await poll(async () => (await cards.count()) === 5, "all cards");
+  const opens = () => cards.evaluateAll((els) => els.map((e) => e.open));
+  await page.locator("#log-expand").click();
+  assert.deepEqual(await opens(), [true, true, true, true, true]);
+  await page.locator("#log-collapse").click();
+  assert.deepEqual(await opens(), [false, false, false, false, false]);
+  // A search keeps each line's number in its card.
+  await page.locator("#log-find").fill("testing");
+  await poll(async () => (await cards.count()) === 1, "one card");
+  assert.equal(await page.locator('#log details[data-sec="step:test"] .ln .no').first().textContent(), "2", "the output line is the second of its card (after started)");
+  await page.locator("#log-find").fill("");
+  // Picking a step shows only its card, open, though the reader had closed it.
+  await page.locator(".graph .node", { hasText: "lint" }).click();
+  const only = page.locator("#log details.sec");
+  await poll(async () => (await only.count()) === 1, "one card for the step");
+  assert.equal(await only.first().evaluate((e) => e.open), true);
+  assert.deepEqual(page.problems, []);
 });
 
 test("run page: live log while running, then cancel", async () => {
