@@ -13,7 +13,7 @@ not silently drift: your job is to find the drift. You never edit files.
 
 `specs/<feature>/` (`spec.md`, `plan.md`, `tasks.md`, `contracts/`, `data-model.md`,
 `quickstart.md`), `docs/MILESTONE.md`, `.specify/memory/constitution.md`, and the diff
-(`git diff develop...HEAD`). Read the code in full where behavior is claimed.
+(`git diff main...HEAD`). Read the code in full where behavior is claimed.
 
 ## Check
 

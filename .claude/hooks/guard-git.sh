@@ -12,7 +12,7 @@
 #   - skipped hooks or signing (--no-verify, --no-gpg-sign, commit -n)
 #
 # This is a convenience guard for agent sessions, not a security boundary: a shell wrapper
-# such as `bash -c "..."` can evade it. The real gate is GitHub branch protection on develop
+# such as `bash -c "..."` can evade it. The real gate is GitHub branch protection on main
 # and main.
 # Reads the hook JSON from stdin. Exit 0 allows the command.
 set -eo pipefail

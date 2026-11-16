@@ -2,7 +2,7 @@
 
 This file is the release scope for TRUSS. Feature specifications say how one capability behaves. This file says which capabilities belong in the current release and which wait.
 
-Agents and contributors read it before choosing or expanding a feature. `develop` is the integration branch. New work uses the branch names in `.specify/memory/constitution.md`.
+Agents and contributors read it before choosing or expanding a feature. `main` is the default and integration branch. New work uses the branch names in `.specify/memory/constitution.md`.
 
 ## v0.1.0: the MVP
 
@@ -42,12 +42,11 @@ What is left before the tag. Items marked "you" cannot be done from code.
 - Daemon and Desktop are verified on Linux only. macOS and Windows build; their first proof is CI.
 - TRUSS Desktop browser tests run on Linux in CI only.
 - Start at login is automated by `truss daemon install` ([spec 011](../specs/011-daemon-start-at-login/spec.md)) but verified by generation and fakes only; its first real run on each OS is a maintainer try-out.
-- [ ] The pull requests for the project layout, the repository's own pipelines and the docs site are merged into `develop`.
+- [ ] The pull requests for the project layout, the repository's own pipelines and the docs site are merged into `main`.
 - [ ] CI is green on Linux, macOS and Windows for them. The daemon, Desktop and the project layout have only run on Linux and macOS locally; Windows and the Desktop browser tests (Linux only, by design) get their first proof here.
 - [ ] You: try `truss daemon install` for real on each OS you support. It is verified by generation and fakes only ([spec 011](../specs/011-daemon-start-at-login/spec.md)).
 - [ ] You: Settings > Pages > Source: "GitHub Actions", so the docs site deploys from `main`.
 - [ ] `release/0.1.0` is merged into `main` through a pull request, then the tag is pushed (see "Releasing" in the README).
-- [ ] `main` is merged back into `develop`.
 
 ### Not in v0.1.0
 

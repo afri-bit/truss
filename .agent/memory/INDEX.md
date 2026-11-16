@@ -15,5 +15,5 @@
 | [MEM-0007](MEM-0007-specs-record-behavior-they-do-not-gate-code.md) | semantic | Specs record behavior, they do not gate code | owner-preferences, workflow, spec-kit | 2026-11-12 | active | high |
 | [MEM-0008](MEM-0008-check-adr-numbers-and-lint-toolchain-before.md) | procedural | Check ADR numbers and lint toolchain before opening a PR | adr, lint, process | 2026-11-14 | superseded | high |
 | [MEM-0009](MEM-0009-commits-are-authored-by-afri-bit-co-authored-by.md) | semantic | Commits are authored by afri-bit; Co-authored-by allowed | git, owner-preferences | 2026-11-14 | superseded | high |
-| [MEM-0010](MEM-0010-check-adr-numbers-on-develop-run-lint-with.md) | procedural | Check ADR numbers on develop; run lint with scripts/verify.sh | adr, lint, process | 2026-11-14 | active | high |
+| [MEM-0010](MEM-0010-check-adr-numbers-on-develop-run-lint-with.md) | procedural | Check ADR numbers on main; run lint with scripts/verify.sh | adr, lint, process | 2026-11-14 | active | high |
 | [MEM-0011](MEM-0011-commits-author-afri-bit-with-the-maintainer-s.md) | semantic | Commits: author afri-bit with the maintainer's email; Claude may co-author | git, owner-preferences | 2026-11-14 | active | high |

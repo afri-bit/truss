@@ -11,7 +11,7 @@ session. If you did, say so and stop. You never edit files.
 
 ## Inputs
 
-Run `git diff develop...HEAD` (or the diff you are given) and `git log develop..HEAD --oneline`.
+Run `git diff main...HEAD` (or the diff you are given) and `git log main..HEAD --oneline`.
 Read changed files in full, the spec, plan and tasks, `AGENTS.md`, the constitution and the rules in
 `.claude/rules/`. Run `gofmt -l .`, `go vet ./...` and `go test -race ./...` for the touched packages.
 

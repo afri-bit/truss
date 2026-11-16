@@ -1,8 +1,8 @@
 ---
 id: MEM-0010
 type: procedural
-title: Check ADR numbers on develop; run lint with scripts/verify.sh
-summary: Parallel branches can take the same ADR number; check origin/develop first. Lint runs locally through scripts/verify.sh with golangci-lint v2.15.0 built with Go 1.27.3.
+title: Check ADR numbers on main; run lint with scripts/verify.sh
+summary: Parallel branches can take the same ADR number; check origin/main first. Lint runs locally through scripts/verify.sh with golangci-lint v2.15.0 built with Go 1.27.3.
 topics: [adr, lint, process]
 created: 2026-11-14T12:16:48Z
 updated: 2026-11-14T12:16:48Z
@@ -16,7 +16,7 @@ related: [ADR-0007]
 
 ## What
 
-Before numbering an ADR or spec, fetch and list `docs/decisions` and `specs` on `origin/develop`.
+Before numbering an ADR or spec, fetch and list `docs/decisions` and `specs` on `origin/main` (`develop` was retired on 2026-11-16).
 Lint is a blocking CI check and runs locally with `bash scripts/verify.sh`. In a cloud session the
 `truss` environment's setup script installs golangci-lint v2.15.0 built with Go 1.27.3; elsewhere run
 `GOTOOLCHAIN=go1.27.3 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0`.

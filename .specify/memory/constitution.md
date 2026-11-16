@@ -1,5 +1,18 @@
 <!--
-Sync Impact Report (2.1.1)
+Sync Impact Report (2.1.2)
+- Version change: 2.1.1 → 2.1.2 (PATCH: clarification)
+- Modified sections: Agentic Operation (supervised mode, autonomy limits, enforcement). Pull
+  requests target `main`, now the default branch; `develop` is retired. No principle changes.
+  Requested by the maintainer on 2026-11-16.
+- Templates requiring updates: CLAUDE.md, .claude/rules/git-workflow.md, the reviewer,
+  security-reviewer, spec-reviewer and lead agents, the feature, review, pr-description and
+  release-readiness skills, session-context.sh, docs/agents.md, docs/MILESTONE.md, README.md
+  (release steps), CODEOWNERS and repo-rules.yml comments ✅ updated
+- Not changed: the disabled unattended placeholders (agent.yml, agent_gate.py) still name
+  `develop`; fix them when unattended mode is amended in. guard-git.sh and branch-name-check.sh
+  still accept `develop` as a protected name, which is harmless.
+
+Previous report (2.1.1)
 - Version change: 2.1.0 → 2.1.1 (PATCH: clarification)
 - Modified sections: Commit identity (the afri-bit email to configure is afribit.tech@gmail.com;
   Claude may be named as co-author, a case of the existing "tool that helped"). Requested by the
@@ -242,7 +255,7 @@ they MUST NOT contradict it.
 
 - **Supervised (current).** A person starts every agent session and reviews every pull request.
   Agents plan, delegate, implement, review each other's work, and open pull requests against
-  `develop`. This is the only mode in force.
+  `main`. This is the only mode in force.
 - **Unattended (placeholder).** An agent starts from an issue without a person present. The
   workflows and the gate for it (`.github/workflows/agent.yml`, `agent-gate.yml`,
   `scripts/agent_gate.py`) exist but are disabled. Enabling this mode requires a constitution
@@ -303,18 +316,18 @@ Agents communicate through written artifacts, never through assumed shared conte
   memory, consultation, status). Spec Kit artifacts are produced only by the Spec Kit skills.
 - **Hooks and permissions** (`.claude/hooks/`, `.claude/settings.json`) enforce the autonomy limits
   mechanically. They are a safety net for agent sessions, not a security boundary; branch
-  protection and required checks on `develop` and `main` are the real gate.
+  protection and required checks on `main` are the real gate.
 
 ### Autonomy limits
 
 - Agents MAY read, edit, test, format, create branches, commit, push their own feature branch,
-  open pull requests against `develop`, write ADRs and docs, and update memory and work state.
+  open pull requests against `main`, write ADRs and docs, and update memory and work state.
 - Agents MUST ask the maintainer before: starting a feature outside `docs/MILESTONE.md`, adding a
   third-party module, making an incompatible change to a released public contract, amending this
   constitution, or anything involving cost, credentials, or releases. A grant from the maintainer
   for the session (principle VI) answers these in advance.
 - Agents MUST NOT merge, tag or publish a release, force-push, rewrite pushed history, push to
-  `develop` or `main`, read or write secret files, skip hooks, or weaken, skip, or delete a test
+  `main`, read or write secret files, skip hooks, or weaken, skip, or delete a test
   or check to get green.
 
 ### Memory
@@ -374,4 +387,4 @@ implementation (Quality Gates), and any change to public contracts.
 Use `AGENTS.md` for agent workflow only; do not treat it as a second
 constitution.
 
-**Version**: 2.1.1 | **Ratified**: 2026-09-16 | **Last Amended**: 2026-11-14
+**Version**: 2.1.2 | **Ratified**: 2026-09-16 | **Last Amended**: 2026-11-16
