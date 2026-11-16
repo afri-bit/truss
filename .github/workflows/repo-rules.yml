@@ -1,7 +1,7 @@
 name: Repository rules
 
 # Hard rules from the constitution (Branching) and .claude/rules/git-workflow.md.
-# Make both jobs required checks in the branch ruleset for develop and main.
+# Make both jobs required checks in the branch ruleset for main.
 
 on:
   push:

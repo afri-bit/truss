@@ -21,6 +21,6 @@ Read-only. Tagging and publishing are the maintainer's (constitution, Autonomy l
 3. `go.mod` version equals the target; `CHANGELOG.md` has a `## [X.Y.Z] - YYYY-MM-DD` section as its
    latest, with entries (see `.github/scripts/release-check.sh`; run
    `bash .github/scripts/release-check_test.sh`).
-4. `/verify` (gofmt, vet, lint, race tests, e2e). CI status of `develop`: `gh run list --branch develop`.
+4. `/verify` (gofmt, vet, lint, race tests, e2e). CI status of `main`: `gh run list --branch main`.
 5. No open work in `python3 scripts/memory.py state list --open` that blocks the release.
 6. Report ready or not ready with the blocking items first. Never create a tag, release or push.

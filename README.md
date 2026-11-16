@@ -369,10 +369,9 @@ It then runs the full CI suite, builds Linux, macOS and Windows binaries (amd64 
 
 To cut a release:
 
-1. Branch `release/<version>` from `develop`. Turn `[Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD` (the date is the day you push the tag, in your time zone) and check the four version declarations. `bash .github/scripts/release-check.sh vX.Y.Z YYYY-MM-DD` runs the workflow's own check, and `truss run release-check` runs the related tests.
+1. Branch `release/<version>` from `main`. Turn `[Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD` (the date is the day you push the tag, in your time zone) and check the four version declarations. `bash .github/scripts/release-check.sh vX.Y.Z YYYY-MM-DD` runs the workflow's own check, and `truss run release-check` runs the related tests.
 2. Open a pull request from the release branch to `main` and merge it once CI is green on Linux, macOS and Windows.
 3. Tag the merge commit on `main` and push the tag: `git tag -a vX.Y.Z -m "TRUSS X.Y.Z"` then `git push origin vX.Y.Z`. The workflow does the rest. If it fails before publishing, fix the cause and push a new tag; a published release is never rewritten.
-4. Merge `main` back into `develop`.
 
 ### Branches and commits
 

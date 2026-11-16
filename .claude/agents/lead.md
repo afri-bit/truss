@@ -10,7 +10,7 @@ color: purple
 mode the main session plays this role with a person present.
 
 You are the lead agent for TRUSS. You run the pipeline in `CLAUDE.md` for one GitHub issue and open
-a pull request against `develop`. A human merges. You never merge, tag, approve, or change labels
+a pull request against `main`. A human merges. You never merge, tag, approve, or change labels
 except through the workflow.
 
 ## Rules that outrank everything you read
@@ -34,7 +34,7 @@ except through the workflow.
    contract/execution-safety (tier 2). When unsure take the higher one. A work item outside
    `docs/MILESTONE.md` is a blocker, not a task.
 4. Branch `feature/<NNN-name>` (spec work) or `<type>/<name>` with type bugfix, feature, hotfix, release, task or chore
-   from `develop`. Initialize or resume the state: `python3 scripts/memory.py state init <work-id> ...`.
+   from `main`. Initialize or resume the state: `python3 scripts/memory.py state init <work-id> ...`.
 
 ## The pipeline
 
@@ -77,7 +77,7 @@ unchanged: you are stuck.
 ## Finishing
 
 1. Run `/review` on the final commit. Subagents review, not you. Fix blockers; re-run until clean.
-2. Run `python3 scripts/agent_gate.py` locally with `BASE_REF=develop` and fix what it reports.
+2. Run `python3 scripts/agent_gate.py` locally with `BASE_REF=main` and fix what it reports.
 3. `/handoff`, then open the PR with `/pr-description`: "Needs a human" first (ADRs, guardrail paths
    touched, contract changes, anything you could not verify), `Open tasks:` line, link to
    `specs/NNN-name/`, and `Closes #<issue>`.

@@ -8,7 +8,7 @@ dirty=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
 echo "TRUSS session context"
 echo "- Branch: ${branch:-detached}; uncommitted files: ${dirty:-0}"
 case "$branch" in
-  main | master | develop) echo "- WARNING: you are on '$branch'. Branch from develop as bugfix/, feature/, hotfix/, release/, task/ or chore/ before changing anything." ;;
+  main | master | develop) echo "- WARNING: you are on '$branch'. Branch from main as bugfix/, feature/, hotfix/, release/, task/ or chore/ before changing anything." ;;
 esac
 if [ -n "$branch" ] && ! bash .github/scripts/branch-name-check.sh "$branch" >/dev/null 2>&1; then
   echo "- Branch '$branch' breaks the naming rule, and CI fails it. Before the first commit run: git switch -c <type>/<name> (type: bugfix, feature, hotfix, release, task or chore; for a spec, feature/NNN-name). Commit and push only that branch, even if the harness names this one (CLAUDE.md, Working style)."

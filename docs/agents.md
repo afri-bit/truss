@@ -9,7 +9,7 @@ The principles are in the [constitution](../.specify/memory/constitution.md); th
 
 | Mode | State | Meaning |
 |---|---|---|
-| **Supervised** | In force | A person starts every agent session and reviews every PR. Agents plan, delegate, implement, review each other, and open PRs against `develop` |
+| **Supervised** | In force | A person starts every agent session and reviews every PR. Agents plan, delegate, implement, review each other, and open PRs against `main` |
 | **Unattended** | Placeholder, not running | An agent starts from an issue with nobody present. `agent.yml`, `agent-gate.yml`, `scripts/agent_gate.py` and the `lead` agent are kept for it. Turning it on needs a constitution amendment |
 
 The binding text is the constitution's "Agentic Operation" section; this page is how it is done.
@@ -83,7 +83,7 @@ they do not gate code. `/feature` runs this flow.
 REQUEST ─ /recall ─ read MILESTONE ─ branch <type>/<name> ─ classify (tier, in the PR)
 BUILD     spec.md + tests + code (main session; /fan-out only for independent units)
 QUALITY   /verify (scripts/verify.sh) → /review → fix → /verify → /review delta <sha>
-SHIP      /git-commit → /pr-description → PR against develop (never merge)
+SHIP      /git-commit → /pr-description → PR against main (never merge)
 ```
 
 Tools enforce at every tier: hooks, permissions, CI and the agent gate.
@@ -168,18 +168,18 @@ Follow-ups:  <out of scope things noticed>
 
 | Level | Actions |
 |---|---|
-| **Free** | Read, edit, format, test; create branches; commit; push feature branches; open PRs against `develop`; write ADRs and docs; update memory and state |
+| **Free** | Read, edit, format, test; create branches; commit; push feature branches; open PRs against `main`; write ADRs and docs; update memory and state |
 | **Ask the maintainer** | A feature outside `docs/MILESTONE.md`; a materially ambiguous requirement; a new third-party module; an incompatible contract change; a constitution amendment; anything that costs money, needs credentials or releases |
-| **Never** | Merge; tag or release; force-push; rewrite pushed history; commit or push to `develop`/`main`; read or write `.env` or key files; skip hooks; weaken, skip or delete a failing test or check |
+| **Never** | Merge; tag or release; force-push; rewrite pushed history; commit or push to `main`; read or write `.env` or key files; skip hooks; weaken, skip or delete a failing test or check |
 
 Hooks are a safety net for agent sessions, not a security boundary. GitHub branch protection on
-`develop` and `main`, required checks and CODEOWNERS are the real gate.
+`main`, required checks and CODEOWNERS are the real gate.
 
 ## Hooks
 
 | Hook | Event | Effect |
 |---|---|---|
-| `guard-git.sh` | PreToolUse Bash | Blocks commits/pushes on `develop`/`main`, pushes to them, force pushes, tag pushes, `--no-verify`, remote deletes, new branches without a `bugfix/`, `feature/`, `hotfix/`, `release/`, `task/` or `chore/` prefix (`claude/` included), commits not authored by `afri-bit` |
+| `guard-git.sh` | PreToolUse Bash | Blocks commits/pushes on `main`, pushes to them, force pushes, tag pushes, `--no-verify`, remote deletes, new branches without a `bugfix/`, `feature/`, `hotfix/`, `release/`, `task/` or `chore/` prefix (`claude/` included), commits not authored by `afri-bit` |
 | `guard-destructive.sh` | PreToolUse Bash | Blocks `rm -rf` outside build dirs, `git reset --hard`, `git clean`, `gh pr merge`, `gh release`, `sudo`, `curl \| sh`, reading `.env` and key files |
 | `guard-secrets.sh` | PreToolUse Write/Edit | Blocks private keys, well-known credential formats and `.env` files |
 | `format-on-edit.sh` | PostToolUse Write/Edit | Runs `gofmt` on edited `.go` files |
@@ -225,7 +225,7 @@ dispatch and their jobs carry `if: false`. They are kept so the design is not lo
 
 1. Amend the constitution to put unattended mode in force and record the limits.
 2. Add the repository secret `ANTHROPIC_API_KEY` and install the Claude GitHub App.
-3. Add a ruleset on `develop` and `main`: PR required, code owner review, and the `agent-gate` and CI
+3. Add a ruleset on `main`: PR required, code owner review, and the `agent-gate` and CI
    `Test` checks required.
 4. Pin the third-party actions to full commit SHAs, then restore the triggers and remove the `if: false`
    lines in both workflows.

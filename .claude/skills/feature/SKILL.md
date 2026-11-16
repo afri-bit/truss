@@ -25,7 +25,7 @@ dependency, spend, credentials, or a decision the constitution reserves to a hum
 
 ## 0. Start
 
-- Branch from `develop` as `<type>/<name>` (`bugfix/`, `feature/`, `hotfix/`, `release/`, `task/`,
+- Branch from `main` as `<type>/<name>` (`bugfix/`, `feature/`, `hotfix/`, `release/`, `task/`,
   `chore/`). For a spec, `feature/NNN-name`. On a harness branch (`claude/...`), switch first.
 - `/recall` the topic. Read `docs/MILESTONE.md`; if the request is outside the current release, stop
   and report it.
@@ -60,7 +60,7 @@ dependency, spend, credentials, or a decision the constitution reserves to a hum
 
 ## 3. Ship
 
-`/git-commit`, push the branch, `/pr-description`, open the PR against `develop`. The PR states the
+`/git-commit`, push the branch, `/pr-description`, open the PR against `main`. The PR states the
 tier, links the spec, lists "Needs a human" first, pastes the verify table, and gives `Reviewed` and
 `HEAD`. `/handoff` updates the work state (`pr=<url>`); `/remember` a lasting lesson.
 Never merge, tag or release. Report the PR link and what needs the maintainer.

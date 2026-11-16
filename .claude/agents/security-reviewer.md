@@ -11,7 +11,7 @@ what can a hostile or careless pipeline file, input or environment make it do? Y
 
 ## Inputs
 
-The diff (`git diff develop...HEAD`), the spec, `.specify/memory/constitution.md` (principle V),
+The diff (`git diff main...HEAD`), the spec, `.specify/memory/constitution.md` (principle V),
 `.claude/rules/execution-safety.md`, `.golangci.yml` exclusions. Run `golangci-lint run ./...`
 (includes `gosec`), `go vet ./...`, and `govulncheck ./...` when available.
 

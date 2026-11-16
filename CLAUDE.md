@@ -59,13 +59,13 @@ tier-2 change; none of them gates code. Use as much as the change needs.
 Agents work unattended inside these limits. The list with enforcement is in `docs/agents.md`.
 
 - **Do without asking:** read, edit, test, format, create branches, commit, push feature branches,
-  open pull requests against `develop`, write ADRs and docs, update memory and work state.
+  open pull requests against `main`, write ADRs and docs, update memory and work state.
 - **Stop and ask the maintainer:** a feature outside `docs/MILESTONE.md`, a new third-party
   dependency, an incompatible change to a released public contract, a constitution amendment,
   anything that costs money or touches credentials or releases. If the maintainer granted wider
   autonomy for the session, use it and record the grant in the PR.
 - **Never:** merge, tag or publish a release, force-push, rewrite pushed history, commit or push to
-  `develop` or `main`, read or write `.env` files, skip hooks, weaken a check.
+  `main`, read or write `.env` files, skip hooks, weaken a check.
 
 ### Working style
 

@@ -14,9 +14,9 @@ $ARGUMENTS
 
 # PR description
 
-1. Gather context: `git log develop..HEAD --oneline`, `git diff develop...HEAD --stat`, and the spec,
-   plan, `tasks.md` and issue if known. If there is no diff against `develop`, say so and stop. The
-   base branch is `develop`.
+1. Gather context: `git log main..HEAD --oneline`, `git diff main...HEAD --stat`, and the spec,
+   plan, `tasks.md` and issue if known. If there is no diff against `main`, say so and stop. The
+   base branch is `main`.
 2. Check `.github/pull_request_template.md` and mirror its headings.
 3. Delegate to `docs-writer` (haiku) to draft it, or write it yourself for a very small change.
 4. Keep it short. Use this structure; omit "Needs a human" only when there is nothing for the maintainer:

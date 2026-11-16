@@ -1,13 +1,14 @@
 # Git workflow
 
-- One issue, one branch, one pull request. `develop` is the integration branch; `main` is
-  releases. Never commit or push to either one.
+- One issue, one branch, one pull request. `main` is the default and only long-lived branch
+  (the maintainer retired `develop`, 2026-11-16). Never commit or push to it directly.
 - **Hard rule:** a branch is named `<type>/<name>` with `<type>` exactly one of `bugfix`, `feature`,
   `hotfix`, `release`, `task`, `chore` (constitution, Branching). Never `claude/`, `feat/`, `fix/`,
   `docs/` or anything else. Lowercase, hyphenated, short. For a spec, `<name>` is the `specs/`
   folder name (`feature/003-step-dependencies`). Enforced by `guard-git.sh` and by CI
   (`.github/workflows/repo-rules.yml`, `.github/scripts/branch-name-check.sh`).
-- Branch from `develop`. Open the PR against `develop`.
+- Branch from `main` (`git switch -c <type>/<name> main`). Open the PR against `main`. Never
+  branch from or target `develop`, even if a remote branch of that name still exists.
 - **Hard rule:** every commit is authored by `afri-bit` (`git config user.name afri-bit`,
   `git config user.email afribit.tech@gmail.com`). A `Co-authored-by` trailer is allowed for a person
   or a tool that helped, never required; Claude is named as `Co-authored-by: Claude <noreply@anthropic.com>`.
@@ -22,4 +23,4 @@
   not the steps before it. Never merge, tag, or publish a release.
 - Never skip hooks (`--no-verify`), force-push, rewrite pushed history or delete remote branches.
 - Review is independent: the session that wrote the code never reviews it (`/review`).
-- If the PR for your branch is already merged, start a new branch from the latest `develop`.
+- If the PR for your branch is already merged, start a new branch from the latest `main`.

@@ -19,7 +19,7 @@ subagents. Do not review the diff yourself.
 
 ## Full review (default)
 
-1. Scope: `git diff develop...HEAD --name-only` and `git log develop..HEAD --oneline`. If there is
+1. Scope: `git diff main...HEAD --name-only` and `git log main..HEAD --oneline`. If there is
    no diff, say so and stop. Note the commit under review: `git rev-parse --short HEAD`. Commit
    or stash first, so the commit is what the reviewers read.
 2. Always spawn `reviewer` (diff, spec/plan path if any, focus from the input, the commit).
@@ -40,7 +40,7 @@ subagents. Do not review the diff yourself.
 Use it after fixing findings, or after any code change once a full review has run, so the review
 covers the code that is merged. It is cheap: reviewers read only what changed since `<sha>`.
 
-1. Changes: `git log --no-merges --oneline <sha>..HEAD` and `git diff <sha> HEAD`. If `develop` was
+1. Changes: `git log --no-merges --oneline <sha>..HEAD` and `git diff <sha> HEAD`. If `main` was
    merged in since `<sha>`, leave out what that merge brought in (it was reviewed in its own PR) and
    keep only this branch's commits and any conflict resolution (`git show --remerge-diff <merge>`).
 2. If only docs or `.agent/` changed, say so: no re-review needed. Otherwise spawn the reviewers whose
