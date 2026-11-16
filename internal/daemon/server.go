@@ -194,6 +194,13 @@ func (d *Daemon) registerPipeline(w http.ResponseWriter, r *http.Request) error 
 	if err != nil {
 		return &invalidError{err}
 	}
+	// Without --name, a file that is registered is that registration, whatever
+	// name it carries or shows: no clash over a name, no second registration.
+	if req.Name == "" {
+		if held, ok := d.registry.ByPath(path); ok {
+			return writeJSON(w, http.StatusCreated, d.view(held))
+		}
+	}
 	name := req.Name
 	if name == "" {
 		name = def.Name

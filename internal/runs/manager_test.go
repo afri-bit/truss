@@ -727,3 +727,31 @@ func TestManager_AStepWaitingToRetryHasNoLiveProcess(t *testing.T) {
 		t.Fatalf("an ended run is still measured: %+v", live)
 	}
 }
+
+func TestListForAndSummaryForTakeSeveralNames(t *testing.T) {
+	m := open(t, Options{})
+	for _, name := range []string{"alpha", "beta", "other", "beta"} {
+		if _, err := m.Record(name, api.TriggerSchedule, time.Time{}, api.RunSkipped, name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list := m.ListFor([]string{"alpha", "beta"}, 0)
+	if len(list) != 3 || list[0].Reason != "beta" || list[1].Reason != "beta" || list[2].Reason != "alpha" {
+		t.Fatalf("runs of alpha and beta = %+v, want the three of them, newest first", list)
+	}
+	if got := m.ListFor([]string{"beta"}, 1); len(got) != 1 || got[0].ID != list[0].ID {
+		t.Fatalf("limit over one name = %+v", got)
+	}
+	if got := m.ListFor(nil, 0); len(got) != 4 {
+		t.Fatalf("no names lists every run, got %d", len(got))
+	}
+	if got := m.ListFor([]string{"missing"}, 0); len(got) != 0 {
+		t.Fatalf("unknown name = %+v", got)
+	}
+	if active, last := m.SummaryFor([]string{"alpha", "beta"}); active != 0 || last == nil || last.ID != list[0].ID {
+		t.Fatalf("summary = %d %+v, want the newest run of either name", active, last)
+	}
+	if active, last := m.SummaryFor([]string{"missing"}); active != 0 || last != nil {
+		t.Fatalf("summary of an unknown name = %d %+v", active, last)
+	}
+}

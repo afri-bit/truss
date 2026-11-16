@@ -90,21 +90,20 @@ func (r *Registry) add(name, path string, now time.Time, chosen bool) (Entry, er
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if !chosen {
+		// A file registered again without a chosen name is the registration it
+		// already has, whatever name that carries now (even one that another
+		// registration holds). Only --name makes another registration of the
+		// same file.
+		if old, ok := r.byPath(path); ok {
+			return old, nil
+		}
+	}
 	if old, ok := r.entries[name]; ok {
 		if old.Path == path {
 			return old, nil
 		}
 		return Entry{}, fmt.Errorf("%w: %q is %s", ErrExists, name, old.Path)
-	}
-	if !chosen {
-		// A file registered again without a chosen name is the registration it
-		// already has, whatever name that carries now. Only --name makes
-		// another registration of the same file.
-		for _, old := range r.sorted() {
-			if old.Path == path {
-				return old, nil
-			}
-		}
 	}
 	e := Entry{Name: name, Path: path, RegisteredAt: now, Chosen: chosen}
 	r.entries[name] = e
@@ -113,6 +112,22 @@ func (r *Registry) add(name, path string, now time.Time, chosen bool) (Entry, er
 		return Entry{}, err
 	}
 	return e, nil
+}
+
+// ByPath returns the first registration of the file at path, in name order.
+func (r *Registry) ByPath(path string) (Entry, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.byPath(path)
+}
+
+func (r *Registry) byPath(path string) (Entry, bool) {
+	for _, e := range r.sorted() {
+		if e.Path == path {
+			return e, true
+		}
+	}
+	return Entry{}, false
 }
 
 // Remove forgets the pipeline registered under name.

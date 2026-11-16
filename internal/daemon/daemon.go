@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -68,9 +69,9 @@ type definition struct {
 	def     pipeline.Pipeline
 	plan    pipeline.ExecutionPlan
 	err     error
-	// retry is set when the file exists but did not load: it is read again at
-	// every check, so a read that failed for a passing reason (a file another
-	// program held at that moment) heals without another edit.
+	// retry is set when the file exists but could not be read: it is read again
+	// at every check, so a read that failed for a passing reason heals without
+	// another edit.
 	retry bool
 	// named is pipeline.name from the last reading that got that far. It
 	// survives a file that stops loading, so the name shown does not jump back.
@@ -321,7 +322,11 @@ func (d *Daemon) load(e registry.Entry, since time.Time, force bool) *definition
 		} else {
 			cur.modTime, cur.size = info.ModTime(), info.Size()
 			cur.def, cur.plan, cur.err = readDefinition(e.Path)
-			cur.retry = cur.err != nil
+			// A read that failed is tried again (a file another program held for a
+			// moment). A file that fails on its content fails the same way until it
+			// changes, so it is not parsed again.
+			var readErr *fs.PathError
+			cur.retry = errors.As(cur.err, &readErr)
 			if cur.def.Name != "" {
 				cur.named = cur.def.Name
 			}

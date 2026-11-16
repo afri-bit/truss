@@ -18,13 +18,16 @@ import (
 // name stays, so one name never points at two pipelines. A name chosen at
 // registration is never replaced. A file that stops loading keeps the name it
 // was last read with, so the name does not move while someone fixes the file.
-func (d *Daemon) shownNames(entries []registry.Entry) map[string]string {
+func (d *Daemon) shownNames(entries []registry.Entry, fresh bool) map[string]string {
 	claims := make(map[string]int, len(entries))
 	want := make(map[string]string, len(entries))
 	for _, e := range entries {
 		claims[e.Name]++
 		// A file that stopped loading keeps the name it was last read with.
 		cur := d.check(e)
+		if fresh {
+			cur = d.load(e, d.opts.Now(), false)
+		}
 		if !e.Chosen && cur.named != "" && cur.named != e.Name && registry.CheckName(cur.named) == nil {
 			want[e.Name] = cur.named
 			claims[cur.named]++
@@ -45,19 +48,26 @@ func (d *Daemon) names() map[string]string {
 	entries := d.registry.List()
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.shownNames(entries)
+	return d.shownNames(entries, false)
 }
 
 // lookup finds a registration by its registered name or by the name shown for
-// it. A registered name always wins: no other registration shows it.
+// it. A registered name always wins: no other registration shows it. A name that
+// answers to nothing is looked up once more with a fresh look at every file, so
+// a name that a file took a moment ago is found.
 func (d *Daemon) lookup(name string) (registry.Entry, bool) {
 	if e, ok := d.registry.Get(name); ok {
 		return e, true
 	}
-	shown := d.names()
-	for _, e := range d.registry.List() {
-		if shown[e.Name] == name {
-			return e, true
+	entries := d.registry.List()
+	for _, fresh := range []bool{false, true} {
+		d.mu.Lock()
+		shown := d.shownNames(entries, fresh)
+		d.mu.Unlock()
+		for _, e := range entries {
+			if shown[e.Name] == name {
+				return e, true
+			}
 		}
 	}
 	return registry.Entry{}, false
