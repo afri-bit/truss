@@ -1,0 +1,17 @@
+# Every night: the tests that catch races in step ending, repeated many times, as CI does for
+# the concurrency code. A laptop that was asleep at 01:30 catches up once when it wakes.
+version: "1"
+
+pipeline:
+  name: nightly
+  overlap: skip
+
+on:
+  schedule:
+    - cron: "30 1 * * *"
+      missed: run
+
+steps:
+  - id: stress
+    run: go test -race -count=20 -run 'Concurren|Stop|Tree' ./internal/engine ./internal/executor ./internal/runlog ./cmd/truss
+    timeout: 30m

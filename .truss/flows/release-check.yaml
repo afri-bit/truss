@@ -1,0 +1,25 @@
+# Before a release: the version is declared in four places (go.mod, cmd/truss, Desktop and the
+# changelog). This checks the first three agree and that the release check's own tests pass. It does
+# not check the changelog section: that, and the tag, are for .github/scripts/release-check.sh
+# when the tag is pushed. Nothing here tags anything.
+version: "1"
+
+pipeline:
+  name: release-check
+
+jobs:
+  tests:
+    steps:
+      - id: release-script
+        run: bash .github/scripts/release-check_test.sh
+      - id: version-declarations
+        run: go test -count=1 -run 'Version' ./cmd/truss ./internal/webui
+  declared:
+    needs: [tests]
+    steps:
+      - id: versions
+        run: |
+          gomod="$(sed -n 's|^// version: ||p' go.mod)"
+          desktop="$(tr -d '[:space:]' < internal/webui/VERSION)"
+          echo "go.mod $gomod, Desktop $desktop"
+          test "$gomod" = "$desktop"
