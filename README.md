@@ -25,7 +25,7 @@
   <a href="docs/architecture.md">Architecture</a>
 </p>
 
-> **Status:** early development. The first release, [v0.1.0](docs/MILESTONE.md), is not tagged yet. The pipeline file, the CLI and the daemon API may still change until then.
+> **Status:** [v0.1.0](docs/MILESTONE.md) is the first release. The pipeline file, the CLI and the daemon API may still change before 1.0.
 
 <p align="center">
   <img src="docs/images/desktop-dashboard.png" alt="TRUSS Desktop dashboard" width="900">
@@ -99,7 +99,7 @@ cd truss
 go build -o bin/truss ./cmd/truss
 ```
 
-Prebuilt binaries will be published on [GitHub Releases](https://github.com/afri-bit/truss/releases) with the first tagged version.
+Or download a prebuilt binary for Linux, macOS or Windows (amd64 and arm64) from [GitHub Releases](https://github.com/afri-bit/truss/releases/latest). Each release lists SHA-256 checksums.
 
 ### 1. Run a pipeline by hand
 
@@ -365,7 +365,14 @@ Releases are cut by pushing a semantic version tag such as `v0.1.0` or `v0.2.0-r
 4. `internal/webui/VERSION`, the version of TRUSS Desktop, equals the tag. It is a file of its own, apart from the Go version.
 5. `CHANGELOG.md` has `## [X.Y.Z] - YYYY-MM-DD` as its latest section, with entries, the tag's date, and only the headings Added, Changed, Deprecated, Removed, Fixed and Security.
 
-It then runs the full CI suite, builds Linux, macOS and Windows binaries (amd64 and arm64), and publishes a GitHub Release with checksums. The release notes are the changelog section followed by the notes GitHub generates (contributors and history). Pre-release tags are published as pre-releases. Prepare a release on a `release/<version>` branch.
+It then runs the full CI suite, builds Linux, macOS and Windows binaries (amd64 and arm64), and publishes a GitHub Release with checksums. The release notes are the changelog section followed by the notes GitHub generates (contributors and history). Pre-release tags are published as pre-releases.
+
+To cut a release:
+
+1. Branch `release/<version>` from `develop`. Turn `[Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD` (the date is the day you push the tag, in your time zone) and check the four version declarations. `bash .github/scripts/release-check.sh vX.Y.Z YYYY-MM-DD` runs the workflow's own check, and `truss run release-check` runs the related tests.
+2. Open a pull request from the release branch to `main` and merge it once CI is green on Linux, macOS and Windows.
+3. Tag the merge commit on `main` and push the tag: `git tag -a vX.Y.Z -m "TRUSS X.Y.Z"` then `git push origin vX.Y.Z`. The workflow does the rest. If it fails before publishing, fix the cause and push a new tag; a published release is never rewritten.
+4. Merge `main` back into `develop`.
 
 ### Branches and commits
 

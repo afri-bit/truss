@@ -20,8 +20,8 @@ cd truss
 go build -o bin/truss ./cmd/truss
 ```
 
-Prebuilt binaries will be published on [GitHub Releases](https://github.com/afri-bit/truss/releases)
-with the first tagged version.
+Or download a prebuilt binary for Linux, macOS or Windows (amd64 and arm64) from
+[GitHub Releases](https://github.com/afri-bit/truss/releases/latest). Each release lists SHA-256 checksums.
 
 ## Make a project
 

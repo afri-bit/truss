@@ -11,8 +11,8 @@ machine: write a pipeline file, run it by hand, or hand it to the daemon and let
 schedule, and watch all of it from the terminal or from TRUSS Desktop.
 
 Do not tag v0.1.0 until every item in this section has a specification and an implementation
-that matches it. `go.mod` already says `// version: 0.1.0`. The changelog stays under
-`[Unreleased]` until the tag.
+that matches it, and the checklist below is done. `go.mod`, `cmd/truss` and Desktop already say
+`0.1.0`, and the changelog has its `## [0.1.0]` section; its date must be the day the tag is pushed.
 
 ### In this release
 
@@ -35,13 +35,19 @@ that matches it. `go.mod` already says `// version: 0.1.0`. The changelog stays 
 **Operating systems.** Linux, macOS and Windows. A `run` string is a command for that host's
 shell; v0.1.0 does not promise that one file runs unchanged on every shell.
 
-### Before the tag
+### Release checklist
 
-These are known gaps inside the release scope:
+What is left before the tag. Items marked "you" cannot be done from code.
 
 - Daemon and Desktop are verified on Linux only. macOS and Windows build; their first proof is CI.
 - TRUSS Desktop browser tests run on Linux in CI only.
 - Start at login is automated by `truss daemon install` ([spec 011](../specs/011-daemon-start-at-login/spec.md)) but verified by generation and fakes only; its first real run on each OS is a maintainer try-out.
+- [ ] The pull requests for the project layout, the repository's own pipelines and the docs site are merged into `develop`.
+- [ ] CI is green on Linux, macOS and Windows for them. The daemon, Desktop and the project layout have only run on Linux and macOS locally; Windows and the Desktop browser tests (Linux only, by design) get their first proof here.
+- [ ] You: try `truss daemon install` for real on each OS you support. It is verified by generation and fakes only ([spec 011](../specs/011-daemon-start-at-login/spec.md)).
+- [ ] You: Settings > Pages > Source: "GitHub Actions", so the docs site deploys from `main`.
+- [ ] `release/0.1.0` is merged into `main` through a pull request, then the tag is pushed (see "Releasing" in the README).
+- [ ] `main` is merged back into `develop`.
 
 ### Not in v0.1.0
 
