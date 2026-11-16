@@ -4,12 +4,13 @@
   "tier": 2,
   "branch": "feature/018-desktop-corrections",
   "status": "in_review",
-  "step": "delta review fixes applied (retry only read errors, path-first register, fresh lookup miss, tests); verify, push, PR",
+  "step": "pushed; open the PR (gh missing: maintainer opens it from the compare URL)",
   "steps_done": [
     "chart fix, Flows and Re-run, spec 018, docs; verify.sh pass; 30 UI tests pass",
     "review (reviewer, spec-reviewer) and delta review: approve at efb9803",
     "daemon follows a renamed flow and keeps history: spec 019, ADR 0017, tests, docs",
-    "reviews of spec 019 (reviewer, spec, security, portability) answered: path dedupe, kept names, retry, log once, registered_pipeline, Desktop acts by registration"
+    "reviews of spec 019 (reviewer, spec, security, portability) answered: path dedupe, kept names, retry, log once, registered_pipeline, Desktop acts by registration",
+    "final delta reviews: spec converged, security approved, reviewer found one flaky test (fixed in 5638792); portability not re-run on the last commits"
   ],
   "requirements": [
     "specs/018-desktop-corrections/spec.md",
@@ -35,5 +36,5 @@
   ],
   "pr": null,
   "created": "2026-11-16T15:58:40Z",
-  "updated": "2026-11-16T17:28:45Z"
+  "updated": "2026-11-16T17:38:23Z"
 }
