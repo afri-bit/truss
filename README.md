@@ -42,7 +42,7 @@
 - [How it fits together](#how-it-fits-together)
 - [Documentation](#documentation)
 - [Roadmap](#roadmap)
-- [Development](#development)
+- [Contributing](#contributing)
 - [License](#license)
 
 ## Why TRUSS
@@ -332,50 +332,9 @@ After v0.1.0, roughly in this order. Scope and order may change.
 - **Execution:** containers, then remote workers
 - **Ecosystem:** SDKs and CI-provider bridges, so the same file runs in CI
 
-## Development
+## Contributing
 
-```bash
-gofmt -l .                                   # must print nothing
-go vet ./...
-go test -race ./...                          # unit, integration and CLI tests
-golangci-lint run ./...
-go build -o bin/truss ./cmd/truss
-bash .github/scripts/e2e-test.sh bin/truss   # the built binary, including a real daemon
-```
-
-TRUSS checks itself with its own pipelines. `truss run verify` runs the same checks in parallel
-(about 20 seconds), `truss run release-check` checks the version declarations, and `nightly` repeats
-the concurrency tests every night (`truss register --all` puts all three under the daemon). They
-live in [`.truss/flows/`](.truss/flows/); `scripts/verify.sh` stays the gate that CI and the agent hooks use.
-
-- [`docs/architecture.md`](docs/architecture.md) maps the packages and their boundaries.
-- [`.specify/memory/constitution.md`](.specify/memory/constitution.md) holds the engineering principles: behavior is specified, tested, and safe to execute.
-- [`specs/`](specs/) holds one folder per feature; `spec.md` travels in the same pull request as the code.
-- [`AGENTS.md`](AGENTS.md), [`CLAUDE.md`](CLAUDE.md) and [`docs/agents.md`](docs/agents.md) describe how coding agents work here.
-
-TRUSS Desktop needs no build step: edit the files in `internal/webui/assets/`, rebuild the binary, reload the page.
-
-### Releasing
-
-Releases are cut by pushing a semantic version tag such as `v0.1.0` or `v0.2.0-rc.1`. The release workflow refuses to publish unless:
-
-1. The `// version: X.Y.Z` line in `go.mod` equals the tag.
-2. The module path follows Go's major-version rule: no suffix for v0 and v1, `/vN` from v2 onward.
-3. `const Version` in `cmd/truss/version.go` (what `truss version` prints) equals the tag.
-4. `internal/webui/VERSION`, the version of TRUSS Desktop, equals the tag. It is a file of its own, apart from the Go version.
-5. `CHANGELOG.md` has `## [X.Y.Z] - YYYY-MM-DD` as its latest section, with entries, the tag's date, and only the headings Added, Changed, Deprecated, Removed, Fixed and Security.
-
-It then runs the full CI suite, builds Linux, macOS and Windows binaries (amd64 and arm64), and publishes a GitHub Release with checksums. The release notes are the changelog section followed by the notes GitHub generates (contributors and history). Pre-release tags are published as pre-releases.
-
-To cut a release:
-
-1. Branch `release/<version>` from `main`. Turn `[Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD` (the date is the day you push the tag, in your time zone) and check the four version declarations. `bash .github/scripts/release-check.sh vX.Y.Z YYYY-MM-DD` runs the workflow's own check, and `truss run release-check` runs the related tests.
-2. Open a pull request from the release branch to `main` and merge it once CI is green on Linux, macOS and Windows.
-3. Tag the merge commit on `main` and push the tag: `git tag -a vX.Y.Z -m "TRUSS X.Y.Z"` then `git push origin vX.Y.Z`. The workflow does the rest. If it fails before publishing, fix the cause and push a new tag; a published release is never rewritten.
-
-### Branches and commits
-
-Branches are named `<type>/<name>` with type `bugfix`, `feature`, `hotfix`, `release`, `task` or `chore`. Every commit is authored by `afri-bit`; a `Co-authored-by` trailer is allowed, and Claude may be named as co-author. The `Repository rules` workflow checks both on every push and pull request (see [ADR 0014](docs/decisions/0014-branch-prefixes-commit-identity-and-release-gate.md)).
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) has the rules: build and checks, specs and tests, branches and commits, pull requests and releases.
 
 ## License
 

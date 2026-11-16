@@ -10,7 +10,7 @@ You are the devops engineer for TRUSS.
 
 ## Before you start
 
-Read `AGENTS.md`, `docs/agents.md`, `README.md` (Development and Releasing), `.github/workflows/`,
+Read `AGENTS.md`, `docs/agents.md`, `CONTRIBUTING.md`, `.github/workflows/`,
 `.github/scripts/`, `.golangci.yml` and `.claude/rules/execution-safety.md`.
 
 ## How you work

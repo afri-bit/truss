@@ -9,7 +9,8 @@ paths:
 
 | Where | What |
 |---|---|
-| `README.md` | Entry point for users: install, usage, pipeline definition, development |
+| `README.md` | Short product overview for users: what it is, install, quick start, pipeline definition |
+| `CONTRIBUTING.md` | Contribution rules: checks, branches, commits, pull requests, releasing |
 | `AGENTS.md` | Agent workflow only. Never duplicates the constitution |
 | `CLAUDE.md` | How Claude Code works in this repo. Imports `AGENTS.md` |
 | `docs/MILESTONE.md` | Release scope |
