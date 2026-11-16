@@ -234,3 +234,28 @@ test("a token link turns demo mode off in the same tab", async () => {
     await page.context().close();
   }
 });
+test("the run page's memory line stays inside the resource chart", async () => {
+  const metrics = await d.call("GET", "/metrics");
+  if (!metrics.supported) return; // no figures on this system, so no chart
+  const run = await d.call("POST", "/pipelines/slow/runs");
+  await d.waitRun(run.id, (r) => r.steps.some((s) => s.id === "wait" && s.status === "running" && s.pid > 0));
+  const page = await b.newPage();
+  try {
+    await page.goto(d.authedUrl());
+    await page.evaluate((id) => { location.hash = "#/runs/" + id; }, run.id);
+    // The chart appears once the page holds two samples.
+    const chart = page.locator("section", { hasText: "Resources" }).locator("svg.chart");
+    await chart.waitFor({ timeout: 20000 });
+    const lines = await chart.locator("path.line").evaluateAll((paths) => paths.map((p) => {
+      const box = p.getBBox(), view = p.ownerSVGElement.viewBox.baseVal;
+      return { top: box.y, bottom: box.y + box.height, height: view.height };
+    }));
+    assert.equal(lines.length, 2, "one CPU line and one memory line");
+    for (const l of lines) assert.ok(l.top >= 0 && l.bottom <= l.height, `a line leaves the chart: ${JSON.stringify(l)}`);
+    assert.deepEqual(page.problems, []);
+  } finally {
+    await d.call("POST", `/runs/${run.id}/cancel`);
+    await d.waitRun(run.id);
+    await page.context().close();
+  }
+});

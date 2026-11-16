@@ -522,7 +522,8 @@ function lineChart(series, opts = {}) {
   const max = opts.max || Math.max(1, ...series.flatMap((x) => x.values)) * 1.15;
   const n = Math.max(...series.map((x) => x.values.length));
   const X = (i) => L + (i / Math.max(1, n - 1)) * (W - L - R);
-  const Y = (v) => T + (1 - v / max) * (H - T - B);
+  // A value outside 0..max stays on the plot edge instead of drawing over the page.
+  const Y = (v) => T + (1 - Math.min(max, Math.max(0, v)) / max) * (H - T - B);
   const svg = s("svg", { class: "chart", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", role: "img", "aria-label": opts.label || "chart" });
   for (let k = 0; k <= 4; k++) {
     const v = (max / 4) * k, y = Y(v);
@@ -941,12 +942,14 @@ function runResources(run) {
   const u = res.run(run.id), ser = res.runs.get(run.id) || { cpu: [], mem: [] };
   const live = (run.steps || []).filter((st) => st.status === "running");
   const memMax = Math.max(64, ...ser.mem) * 1.2;
+  // Both lines share one axis, so memory is scaled into the axis range that CPU sets.
+  const cpuMax = Math.max(10, ...ser.cpu) * 1.2;
   return h("div", { style: "display:grid;gap:14px" },
     h("div", { class: "metric-head" }, h("span", { class: "big" }, u.cpu.toFixed(1)), h("span", { class: "unit" }, "% CPU"),
       h("span", { class: "big", style: "margin-left:18px" }, u.mem.toFixed(0)), h("span", { class: "unit" }, "MiB RSS"),
-      h("span", { class: "legend" }, h("span", null, h("i"), "cpu %"), h("span", null, h("i", { class: "s2" }), "mem, % of chart"))),
+      h("span", { class: "legend" }, h("span", null, h("i"), "cpu %"), h("span", { title: "Memory is drawn relative to its own peak, so only its shape is comparable to CPU" }, h("i", { class: "s2" }), "mem, scaled"))),
     ser.cpu.length > 1
-      ? lineChart([{ values: ser.cpu, area: true }, { values: ser.mem.map((m) => (m / memMax) * 100), cls: "s2" }], { height: 130, max: Math.max(10, ...ser.cpu) * 1.2, fmt: (v) => v.toFixed(0) + "%", ticks: ticksFor((ser.cpu.length - 1) * (res.m.interval_seconds || 2)), label: "Run CPU and memory" })
+      ? lineChart([{ values: ser.cpu, area: true }, { values: ser.mem.map((m) => (m / memMax) * cpuMax), cls: "s2" }], { height: 130, max: cpuMax, fmt: (v) => v.toFixed(0) + "%", ticks: ticksFor((ser.cpu.length - 1) * (res.m.interval_seconds || 2)), label: "Run CPU and memory" })
       : h("div", { class: "empty", style: "padding:18px" }, "Collecting samples…"),
     h("table", null,
       h("thead", null, h("tr", null, h("th", null, "PID"), h("th", null, "Step"), h("th", { class: "num" }, "Procs"), h("th", { class: "num" }, "CPU"), h("th", { class: "num" }, "RSS"), h("th", { class: "num" }, "Thr"))),
