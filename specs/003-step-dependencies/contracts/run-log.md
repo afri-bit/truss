@@ -1,6 +1,7 @@
 # Contract: Run log
 
 **Status**: Extends `specs/002-local-run-log/contracts/run-log.md`  
+**Changed by [spec 020](../../020-readable-run-log/spec.md)**: a `==== Step <id> ====` heading line comes before each step's `started` line.  
 **Compatibility**: Line format, setup, timestamps, durations, summary, failure line, and `.truss/run.log` are unchanged. *Changed by [spec 016](../../016-project-layout/spec.md): The file is `.truss/state/<flow>/run.log`.* The only change is step order: started Steps appear in execution order. When no Step has a non-empty `needs`, that order is still definition order. The log does not gain a `needs` field. No version has been tagged.
 
 ## Step order

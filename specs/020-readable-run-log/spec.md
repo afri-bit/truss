@@ -72,12 +72,15 @@ GitHub Actions group the log by step and say what each part is.
 
 ## Compatibility
 
-Additive, so no contract of a release is broken. The line shape `<timestamp> <text>`, the setup
-lines, the step lines, the summary, the error line, the saved file's place, the API and the exit
-codes stay as they were. New: the heading lines. A consumer that treats every line it does not know
-as noise keeps working; one that counted lines or expected the first line to be
-`setup environment ready` must skip the heading. The repository's own checks that did so were
-updated.
+This changes a **released** contract: v0.1.0 is tagged, and its run-log contract
+([002](../002-local-run-log/contracts/run-log.md)) says the setup lines come first, that no other
+setup line is written and that those bytes are the whole log. The line shape
+`<timestamp> <text>`, every setup, step, summary and error line, the saved file's place, the API and
+the exit codes stay as they were. New: the heading lines, the first of which now opens the log. A
+consumer that treats every line it does not know as noise keeps working; one that counted lines or
+expected the first line to be `setup environment ready` must skip the heading. The repository's own
+checks that did so were updated. Under CLAUDE.md this needs the maintainer's explicit acceptance,
+listed in the PR's "Needs a human" (ADR 0018 stays Proposed until then).
 
 ## Verification
 

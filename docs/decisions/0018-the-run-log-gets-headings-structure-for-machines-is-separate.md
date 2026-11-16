@@ -26,7 +26,8 @@ view of it.
 
 ## Consequences
 
-- Additive: scripts that search for known lines keep working; a script that counts lines or
+- It changes the log of the released v0.1.0 (a new first line and two more), so it needs the maintainer's explicit acceptance.
+- Additive in grammar: scripts that search for known lines keep working; a script that counts lines or
   expects `setup environment ready` first must skip the heading. The repository's own tests
   were updated.
 - Docs and the README samples show the headings.
