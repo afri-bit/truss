@@ -27,7 +27,7 @@ theme toggle, settings menu) and the content.
 | **Flows** | Every registered pipeline file as a card: state, schedule, next and last run, shape of its step graph. | Register a file (type its path or press **Browse…**), filter, run it now, pause or resume its schedules, unregister it. |
 | **Flow** | Its step graph colored by the last run, success rate, configuration, run history. The page follows edits to the file, a new name included; *Registered as* shows the name it was registered under when that differs. | The same actions. |
 | **Runs** | Every run the daemon started or skipped, and every run tracked from a shell, newest first. | Filter by status or text, open one. |
-| **Run** | Progress, the running steps, elapsed time, the step graph with the running step highlighted, step results, the live log, resources and configuration. | Cancel the run, run it again, click a step to see only its log lines, find in the log, wrap, follow. |
+| **Run** | Progress, the running steps, elapsed time, the step graph with the running step highlighted, step results, the live log as one card per step ([below](#the-run-page)), resources and configuration. | Cancel the run, re-run it, click a step to see only its card, find in the log, open or close every card, wrap, follow. |
 | **Monitor** | Health checks, CPU and memory, cores, the daemon's process and every live step. | Open the run behind a process. |
 | **Settings** | Theme, density, sidebar, motion, refresh interval, log options, daemon facts. | Change them (kept in this browser), forget the access token. |
 
@@ -47,6 +47,19 @@ Runs started with `truss run --track` appear next to the daemon's own, with a **
 in the Trigger column and on the run's page. They show their steps and log live, like any run.
 Cancel works (the CLI notices within a second and stops); **Re-run** is not offered, because
 nothing registered stands behind a local run.
+
+### The run page
+
+The log is the same text `truss run` prints, shown as cards: **Setup** (which machine the steps
+ran on: OS, architecture, shell, directory), one card per step, and the **Summary**. A step's
+card names the step, its state and how long it took, and holds its output with line numbers
+counted from 1 in that card. Steps that run at the same time each keep their own card, so their
+lines are not mixed. A step that succeeded is closed; a step that is running, failed or stopped
+is open, and so is the summary. Click a card to open or close it; the choice stays while the log
+keeps arriving. The two buttons in the log's bar open or close every card. Finding text shows
+only the cards with a match, opened. Logs from before the `====` headings (see
+[the run log](cli.md#reading-the-run-log)) group the same way, because the cards are built from the
+step lines, not from the headings.
 
 The pages refresh on their own about every second and a half (change it in Settings).
 

@@ -25,13 +25,24 @@ means now. Steps start in the working directory, which is the project root when 
 
 ```console
 $ truss run hello
+2026-11-12 09:00:00 ==== Setup: the environment the steps run in ====
 2026-11-12 09:00:00 setup environment ready
 ...
+2026-11-12 09:00:00 ==== Step hello ====
 2026-11-12 09:00:00 step hello started
 2026-11-12 09:00:00 step hello | Hello from TRUSS
 2026-11-12 09:00:00 step hello finished duration 0.004s exit 0
+2026-11-12 09:00:00 ==== Summary ====
 2026-11-12 09:00:00 summary succeeded steps 1 duration 0.006s
 ```
+
+### Reading the run log
+
+A line that starts with `====` after the time is a heading. It opens the setup (the
+machine the steps run on), a step, or the summary. Everything a step prints is labelled
+`step <id> |`, so what TRUSS says and what your commands print cannot be mixed up, even when
+steps run at the same time. Desktop shows the same text as one card per step
+([Desktop](desktop.md#the-run-page)). A step that is retried gets a heading for each attempt.
 
 ### Pipeline arguments
 
@@ -100,7 +111,7 @@ Desktop with the trigger `local`, its steps, and its log:
 ```console
 $ truss run --track
 tracking as run 20261112-090000-a1b2c3 (truss logs 20261112-090000-a1b2c3)
-2026-11-12 09:00:00 setup environment ready
+2026-11-12 09:00:00 ==== Setup: the environment the steps run in ====
 ...
 $ truss runs
 RUN                     PIPELINE     STATUS     TRIGGER  CREATED              DURATION  NOTE

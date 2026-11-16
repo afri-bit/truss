@@ -358,9 +358,11 @@ Any failed attempt is run again, and `timeout` applies to each attempt. The step
 last attempt. In the run log every attempt has its own lines:
 
 ```text
+==== Step fetch ====
 step fetch started
 step fetch finished duration 0.210s exit 22
 step fetch retry 2 of 3 in 10.000s
+==== Step fetch ====
 step fetch started
 step fetch finished duration 0.180s exit 0
 ```

@@ -127,16 +127,22 @@ steps:
 
 ```console
 $ truss run hello
+2026-11-12 09:00:00 ==== Setup: the environment the steps run in ====
 2026-11-12 09:00:00 setup environment ready
 2026-11-12 09:00:00 setup os linux
 2026-11-12 09:00:00 setup arch amd64
 2026-11-12 09:00:00 setup shell /bin/sh
 2026-11-12 09:00:00 setup directory /home/me/project
+2026-11-12 09:00:00 ==== Step greet ====
 2026-11-12 09:00:00 step greet started
 2026-11-12 09:00:00 step greet | Hello from TRUSS
 2026-11-12 09:00:00 step greet finished duration 0.003s exit 0
+2026-11-12 09:00:00 ==== Summary ====
 2026-11-12 09:00:00 summary succeeded steps 1 duration 0.005s
 ```
+
+Lines that start with `====` are headings: they open the setup, each step and the summary. What
+a step prints always carries `step <id> |`, so TRUSS's own lines never look like your command's.
 
 ### 2. Let the daemon run it
 
