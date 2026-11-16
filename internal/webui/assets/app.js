@@ -146,6 +146,8 @@ const ICONS = {
   clock: '<circle cx="8" cy="8" r="6.25"/><path d="M8 4.5V8l2.25 1.5"/>',
   wrap: '<path d="M2.5 4h11M2.5 8h9a2 2 0 0 1 0 4H8.5"/><path d="M10 10.5 8.5 12l1.5 1.5M2.5 12H5"/>',
   follow: '<path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/>',
+  expand: '<path d="M4.5 6 8 2.5 11.5 6M4.5 10 8 13.5 11.5 10"/>',
+  collapse: '<path d="M4.5 2.5 8 6l3.5-3.5M4.5 13.5 8 10l3.5 3.5"/>',
   terminal: '<rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5"/><path d="m4.5 6 2 2-2 2M8.5 10.5h3"/>',
   x: '<path d="M4 4l8 8M12 4l-8 8"/>',
   key: '<circle cx="5.25" cy="10.75" r="2.75"/><path d="M7.25 8.75 13.25 2.75M11 5l1.75 1.75"/>',
@@ -770,33 +772,114 @@ views.runs = {
 };
 
 // The run view keeps its log between refreshes so the text is not re-fetched.
-const logState = { id: "", offset: 0, text: "", step: "", follow: true, timer: 0, done: false, query: "", decoder: null };
+// open holds the cards the reader opened or closed by hand, by card key.
+const logState = { id: "", offset: 0, text: "", step: "", follow: true, timer: 0, done: false, query: "", decoder: null, open: {} };
+
+// parseLog groups the run log into cards: the setup, one per step (however the
+// steps' lines interleave), and the summary. It reads only the line grammar of
+// specs 002 to 004, so a log written before the section headings groups the
+// same way. The headings themselves are skipped: the cards take their place.
+function parseLog(text, done) {
+  const setup = { key: "setup", kind: "setup", title: "Setup", state: "succeeded", rows: [], facts: {} };
+  const summary = { key: "summary", kind: "summary", title: "Summary", state: "", rows: [], note: "" };
+  const steps = new Map();
+  const step = (id) => {
+    if (!steps.has(id)) steps.set(id, { key: "step:" + id, kind: "step", title: id, state: "pending", rows: [], dur: "", note: "", attempts: 0, stopped: false, continued: false });
+    return steps.get(id);
+  };
+  const order = [];
+  const place = (c) => { if (!order.includes(c)) order.push(c); return c; };
+  for (const line of text.split("\n")) {
+    if (!line) continue;
+    const ts = line.slice(11, 20), rest = line.slice(20);
+    if (/^==== .* ====$/.test(rest)) continue;
+    let m;
+    if ((m = /^setup (\S+)(?: (.*))?$/.exec(rest))) {
+      place(setup).rows.push({ ts, raw: rest, label: m[1], text: m[2] || "" });
+      setup.facts[m[1]] = m[2] || "";
+    } else if ((m = /^step (\S+) \|(?: (.*))?$/.exec(rest))) {
+      place(step(m[1])).rows.push({ ts, raw: rest, text: m[2] || "" });
+    } else if ((m = /^step (\S+) (.+)$/.exec(rest))) {
+      const c = place(step(m[1])), what = m[2];
+      let cls = "meta";
+      if (what === "started") { c.state = "running"; c.attempts++; c.dur = ""; }
+      else if ((m = /^finished duration (\S+) exit (-?\d+)$/.exec(what))) { c.state = m[2] === "0" ? "succeeded" : "failed"; c.dur = m[1]; cls = m[2] === "0" ? "good" : "fail"; }
+      else if ((m = /^finished duration (\S+) error /.exec(what))) { c.state = "failed"; c.dur = m[1]; cls = "fail"; }
+      else if (what.startsWith("skipped because ")) { c.state = "skipped"; c.note = what.slice(8); }
+      else if (what.startsWith("stopped because ")) { c.stopped = true; c.note = what; cls = "fail"; }
+      else if (what.startsWith("failed but the run continues")) { c.continued = true; }
+      c.rows.push({ ts, raw: rest, text: what, cls });
+    } else {
+      const c = place(summary);
+      let cls = "meta";
+      if ((m = /^summary (succeeded|failed|cancelled) steps (\d+) duration (\S+)$/.exec(rest))) {
+        c.state = m[1];
+        c.note = `${m[1]} · ${m[2]} step${m[2] === "1" ? "" : "s"} · ${m[3]}`;
+        cls = m[1] === "succeeded" ? "good" : "fail";
+      } else if (/^error /.test(rest)) cls = "fail";
+      c.rows.push({ ts, raw: rest, text: rest, cls });
+    }
+  }
+  for (const c of steps.values()) {
+    if (c.continued && c.state === "failed") c.state = "tolerated";
+    if (c.stopped) c.state = "cancelled";
+    if (c.state === "running" && done) c.state = "cancelled";
+    if (c.attempts > 1 && !c.note) c.note = `attempt ${c.attempts}`;
+  }
+  const f = setup.facts;
+  setup.note = [f.os, f.arch, f.shell].filter(Boolean).join(" · ");
+  return order;
+}
+
+// A card is open unless it is a step that went well or the setup. Searching or
+// picking a step opens what it shows. What the reader opened or closed by hand
+// is kept, so a repaint does not undo it.
+function cardOpen(c, q) {
+  if (q || logState.step) return true;
+  const mine = logState.open[c.key];
+  if (mine !== undefined) return mine;
+  if (c.kind === "setup") return false;
+  return !(c.kind === "step" && (c.state === "succeeded" || c.state === "skipped"));
+}
+
+function logRow(row, no, q) {
+  return h("span", { class: "ln" },
+    h("span", { class: "no", "aria-hidden": "true" }, no),
+    h("span", { class: "ts" }, row.ts),
+    row.label != null
+      ? [h("span", { class: "key" }, row.label), highlight(row.text, q)]
+      : row.cls ? h("span", { class: row.cls }, highlight(row.text, q)) : highlight(row.text, q));
+}
+
+function logCard(c, rows, q) {
+  return h("details", { class: "sec st-" + (c.state || "pending"), "data-sec": c.key, open: cardOpen(c, q) },
+    h("summary", { onclick: (e) => { logState.open[c.key] = !e.currentTarget.parentElement.open; } },
+      statusGlyph(c.state || "pending", 14),
+      h("span", { class: "sec-name" }, c.title),
+      c.note && h("span", { class: "sec-note", title: c.note }, c.note),
+      c.kind === "step" && h("span", { class: "sec-dur" }, c.dur || (c.state === "running" ? "running" : ""))),
+    h("div", { class: "sec-body" }, rows.map((r, i) => logRow(r, i + 1, q))));
+}
+
+function setAllOpen(open) {
+  for (const c of parseLog(logState.text, logState.done)) logState.open[c.key] = open;
+  paintLog();
+}
 
 function paintLog() {
   const pre = document.getElementById("log");
   if (!pre) return;
-  const marker = logState.step ? ` step ${logState.step} ` : "";
   const q = logState.query.toLowerCase();
   const frag = document.createDocumentFragment();
-  let count = 0, no = 0;
-  for (const line of logState.text.split("\n")) {
-    if (line) no++;
-    if (!line || (marker && !(line.slice(19) + " ").startsWith(marker))) continue;
-    if (q && !line.toLowerCase().includes(q)) continue;
-    const rest = line.slice(20);
-    let cls = "";
-    if (/^(setup|summary succeeded)/.test(rest)) cls = "meta";
-    if (/^summary succeeded|finished duration \S+ exit 0$/.test(rest)) cls = "good";
-    if (/^(error|summary (failed|cancelled))|finished duration \S+ (exit [1-9-]|error)| stopped because /.test(rest)) cls = "fail";
-    else if (!cls && !rest.includes(" | ")) cls = "meta";
-    const body = [];
-    const bar = rest.indexOf(" | ");
-    if (!cls && bar > 0) body.push(h("span", { class: "stepname" }, rest.slice(0, bar)), " │ ", highlight(rest.slice(bar + 3), q));
-    else body.push(cls ? h("span", { class: cls }, highlight(rest, q)) : highlight(rest, q));
-    frag.append(h("span", { class: "ln" }, h("span", { class: "no", "aria-hidden": "true" }, no), h("span", { class: "ts" }, line.slice(11, 20)), body));
-    count++;
+  let count = 0;
+  for (const c of parseLog(logState.text, logState.done)) {
+    if (logState.step && c.key !== "step:" + logState.step) continue;
+    const rows = q ? c.rows.filter((r) => r.raw.toLowerCase().includes(q)) : c.rows;
+    if (q && !rows.length) continue;
+    frag.append(logCard(c, rows, q));
+    count += rows.length;
   }
-  if (!count) {
+  if (!frag.childNodes.length) {
     const what = logState.step ? `step ${logState.step}` : "this run";
     frag.append(h("span", { class: "placeholder" }, logState.query ? `No line matches “${logState.query}”.` : logState.done ? `No log lines for ${what}.` : `Waiting for log lines from ${what}…`));
   } else if (!logState.done) {
@@ -848,11 +931,11 @@ views.run = {
   render({ run, pipeline }) {
     if (logState.id !== run.id) {
       clearTimeout(logState.timer);
-      Object.assign(logState, { id: run.id, offset: 0, text: "", step: "", follow: true, done: false, query: "", decoder: new TextDecoder("utf-8") });
+      Object.assign(logState, { id: run.id, offset: 0, text: "", step: "", follow: true, done: false, query: "", open: {}, decoder: new TextDecoder("utf-8") });
       pumpLog(run.id);
     }
     const select = (id) => { logState.step = logState.step === id ? "" : id; route(true); };
-    const pre = h("pre", { id: "log", tabindex: "0", "aria-label": "Run log", onscroll: (e) => {
+    const pre = h("div", { id: "log", tabindex: "0", "aria-label": "Run log", onscroll: (e) => {
       const el = e.currentTarget;
       const follow = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       if (follow !== logState.follow) { logState.follow = follow; document.getElementById("follow")?.setAttribute("aria-pressed", String(follow)); }
@@ -914,6 +997,8 @@ views.run = {
             h("span", { id: "log-count", class: "mono" }),
             h("span", { class: "spacer" }),
             h("input", { type: "search", id: "log-find", placeholder: "Find in log", "aria-label": "Find in log", value: logState.query, oninput: (e) => { logState.query = e.target.value; paintLog(); } }),
+            h("button", { type: "button", id: "log-expand", title: "Open every card", "aria-label": "Open every card", onclick: () => setAllOpen(true) }, icon("expand", "sm")),
+            h("button", { type: "button", id: "log-collapse", title: "Close every card", "aria-label": "Close every card", onclick: () => setAllOpen(false) }, icon("collapse", "sm")),
             h("button", { type: "button", "aria-pressed": String(settings.logWrap), title: "Wrap long lines", onclick: () => setSetting("logWrap", !settings.logWrap) }, icon("wrap", "sm")),
             h("button", { type: "button", id: "follow", "aria-pressed": String(logState.follow), title: "Follow the end of the log", onclick: () => { logState.follow = true; paintLog(); route(true); } }, icon("follow", "sm")),
             active ? h("span", { class: "live" }, "live") : h("span", { class: "done" }, "complete")),

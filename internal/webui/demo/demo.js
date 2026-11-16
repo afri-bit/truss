@@ -178,8 +178,10 @@ window.TrussDemo = (function () {
     if (run.skipped || now < run.start) return "";
     const lines = [];
     const at = (ms, text) => { if (ms <= now) lines.push([ms, text]); };
+    at(run.start, "==== Setup: the environment the steps run in ====");
     at(run.start, "setup environment ready");
     at(run.start, "setup os linux");
+    at(run.start, "setup arch amd64");
     at(run.start, "setup shell /bin/sh");
     at(run.start, `setup directory ${HOME}/projects/${def.dir}`);
     const cancelAt = world.cancelled.get(run.id);
@@ -188,6 +190,7 @@ window.TrussDemo = (function () {
       const begin = run.start + e.start, end = run.start + e.end;
       if (cancelAt != null && cancelAt <= begin) continue;
       if (e.state === "skipped") { at(begin, `step ${s.id} ${e.reason}`); continue; }
+      at(begin, `==== Step ${s.id} ====`);
       at(begin, `step ${s.id} started`);
       const stop = cancelAt != null ? Math.min(cancelAt, end) : end;
       s.lines.forEach((text, i) => { const ms = begin + ((i + 1) / (s.lines.length + 1)) * (end - begin); if (ms < stop) at(ms, `step ${s.id} | ${text}`); });
@@ -199,6 +202,7 @@ window.TrussDemo = (function () {
     const v = runView(run, now);
     if (v.finished_at) {
       const fin = Date.parse(v.finished_at), total = ((fin - run.start) / 1000).toFixed(3);
+      at(fin, "==== Summary ====");
       at(fin, `summary ${v.status} steps ${def.steps.length} duration ${total}s`);
       if (v.status === "failed") at(fin, `error ${v.reason}`);
     }
