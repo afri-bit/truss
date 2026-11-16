@@ -11,7 +11,9 @@ Dates below are when a release was made. 0.1.0 is the first release.
 
 ### Added
 
-- TRUSS Desktop: the Flows page can show the flows as cards (as before) or as a list, one row per flow with its state, schedule, next and last run, duration, step graph and actions. A switch beside the filter changes the view, and the choice is kept in the browser. No API change (specs/021-flows-view-toggle).
+- TRUSS Desktop: toggle between cards and a list on the Flows page
+
+  The Flows page can show the flows as cards (as before) or as a list, one row per flow with its state, schedule, next and last run, duration, step graph and actions. A switch beside the filter changes the view, and the choice is kept in the browser. No API change (specs/021-flows-view-toggle).
 
 ### Changed
 
