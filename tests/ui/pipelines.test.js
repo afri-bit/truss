@@ -16,6 +16,7 @@ test("register through the file picker, then run, pause, resume and unregister",
   await page.evaluate(() => { location.hash = "#/pipelines"; });
   await page.locator("h1", { hasText: "Flows" }).waitFor();
   await page.getByText("No pipelines registered yet").waitFor();
+  assert.equal(await page.locator("#flows-view-cards").count(), 0, "nothing to switch with no flow registered");
 
   // The picker opens at the user's home and lists names only.
   await page.locator("#browse").click();
