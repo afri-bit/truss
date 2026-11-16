@@ -1,7 +1,7 @@
 # Contract: Run log, headings
 
 **Status**: Extends `specs/002-local-run-log/contracts/run-log.md`, `specs/003-step-dependencies/contracts/run-log.md` and `specs/004-step-concurrency/contracts/run-log.md`  
-**Compatibility**: Additive to the line grammar, but it changes the released v0.1.0 log: the first line is now a heading instead of `setup environment ready`, and two more heading lines appear. Every other line is unchanged. Needs the maintainer's explicit acceptance (see the spec and ADR 0018).
+**Compatibility**: Additive to the line grammar, but it changes the released v0.1.0 log: the first line is now a heading instead of `setup environment ready`, and a heading also comes before each step attempt and before the summary. Every other line is unchanged. Needs the maintainer's explicit acceptance (see the spec and ADR 0018).
 
 ## Heading
 

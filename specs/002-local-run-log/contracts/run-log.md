@@ -1,7 +1,7 @@
 # Contract: Run log
 
 **Status**: Replaces the unreleased transcript in `specs/001-host-pipeline-engine/contracts/cli.md`  
-**Changed by [spec 020](../../020-readable-run-log/spec.md)**: three heading lines (`==== ... ====`) are added before the setup, each step and the summary. The lines below are otherwise unchanged.  
+**Changed by [spec 020](../../020-readable-run-log/spec.md)**: three kinds of heading line (`==== ... ====`) are added before the setup, each step and the summary. The lines below are otherwise unchanged.  
 **Compatibility**: No version has been tagged. Schema version `"1"` and sequential fail-fast execution are unchanged. A successful step now shows its start, finish, duration, and Exit Code. Every line TRUSS writes carries a timestamp. The failure line is part of this log.
 
 ## Line

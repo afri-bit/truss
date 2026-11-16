@@ -26,7 +26,7 @@ view of it.
 
 ## Consequences
 
-- It changes the log of the released v0.1.0 (a new first line and two more), so it needs the maintainer's explicit acceptance.
+- It changes the log of the released v0.1.0 (a heading before the setup, before each step attempt and before the summary), so it needs the maintainer's explicit acceptance.
 - Additive in grammar: scripts that search for known lines keep working; a script that counts lines or
   expects `setup environment ready` first must skip the heading. The repository's own tests
   were updated.
