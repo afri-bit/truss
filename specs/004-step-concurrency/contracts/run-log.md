@@ -1,6 +1,7 @@
 # Contract: Run log
 
 **Status**: Extends `specs/003-step-dependencies/contracts/run-log.md` and `specs/002-local-run-log/contracts/run-log.md`  
+**Changed by [spec 020](../../020-readable-run-log/spec.md)**: three kinds of heading line (`==== ... ====`) are added before the setup, each step and the summary. The lines below are otherwise unchanged.  
 **Compatibility**: Setup, timestamp format, durations, summary, failure line, and `.truss/run.log` are unchanged. *Changed by [spec 016](../../016-project-layout/spec.md): The file is `.truss/state/<flow>/run.log`.* One new line type (`stopped`) appears only when a Step is stopped. Output lines from different Steps may alternate when Steps overlap. The log does not show the limit or any Dependency. No version has been tagged.
 
 ## Lines

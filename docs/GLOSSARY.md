@@ -26,6 +26,13 @@ steps:
     run: go test ./...
 ```
 
+### Flow
+
+TRUSS Desktop's label for a registered pipeline, and for the page that lists them. It is not a
+separate kind of thing: a Flow is a Pipeline. A project keeps its pipeline files in
+`.truss/flows/`, but any registered file shows up under Flows. The address of that page and the
+daemon API still say `pipelines`.
+
 ### Pipeline Run
 
 A single execution instance of a pipeline.
@@ -277,7 +284,9 @@ nothing that runs. A `truss.yaml` with steps is not a pipeline.
 ### Registration
 
 A name and the path of a pipeline file, stored by the daemon. The file stays where it is and
-stays the source of truth. A pipeline of a Project is registered under its pipeline name.
+stays the source of truth. A pipeline of a Project is registered under its pipeline name. That
+**registered name** never changes and keeps the flow's history; when the file renames the pipeline,
+the daemon shows the new name and accepts either (spec 019).
 
 ### Overlap
 

@@ -29,6 +29,8 @@ that matches it, and the checklist below is done. `go.mod`, `cmd/truss` and Desk
 | TRUSS Desktop | Dashboard, pipeline control, run view with graph and live log, file picker, browser tests | `007-truss-desktop`, `013-desktop-polish`, `014-desktop-redesign` | Implemented |
 | Resource figures | `GET /metrics`: host, daemon and step CPU and memory on Linux, macOS and Windows; step process ids; Desktop shows them (added by the maintainer, 2026-11-13) | `015-resource-metrics` | Implemented |
 | Retries and conditions | `retries`, `retry_delay`, `continue-on-error`, `if` on steps, `if` on jobs | `009-retries-and-conditions` | Implemented |
+| Flows follow their files | A registered file is the source of truth: the daemon notices an edit, shows a renamed flow under its new name and keeps its history (added by the maintainer, 2026-11-16) | `019-flows-follow-their-files` | Implemented |
+| A readable run log | The run log has headings for the setup, each step and the summary, and TRUSS Desktop shows it as one card per step (added by the maintainer, 2026-11-16) | `020-readable-run-log` | Implemented |
 | Project layout | `truss.yaml` is project metadata; pipelines are files in `.truss/flows/`; generated files in `.truss/state/` (added by the maintainer, 2026-11-15) | `016-project-layout` | Implemented |
 | Documentation site | A site with the docs (search, sidebar, light and dark) and a home page, built from `docs/` (added by the maintainer, 2026-11-16) | `017-docs-site` | Implemented (the first deploy needs the repository's Pages setting) |
 

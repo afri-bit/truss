@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -172,9 +173,11 @@ func (d *Daemon) postShutdown(w http.ResponseWriter, _ *http.Request) error {
 
 func (d *Daemon) listPipelines(w http.ResponseWriter, _ *http.Request) error {
 	list := []api.Pipeline{}
+	shown := d.names()
 	for _, e := range d.registry.List() {
-		list = append(list, d.view(e))
+		list = append(list, d.viewAs(e, shown))
 	}
+	sort.Slice(list, func(i, j int) bool { return list[i].Name < list[j].Name })
 	return writeJSON(w, http.StatusOK, list)
 }
 
@@ -191,6 +194,13 @@ func (d *Daemon) registerPipeline(w http.ResponseWriter, r *http.Request) error 
 	if err != nil {
 		return &invalidError{err}
 	}
+	// Without --name, a file that is registered is that registration, whatever
+	// name it carries or shows: no clash over a name, no second registration.
+	if req.Name == "" {
+		if held, ok := d.registry.ByPath(path); ok {
+			return writeJSON(w, http.StatusCreated, d.view(held))
+		}
+	}
 	name := req.Name
 	if name == "" {
 		name = def.Name
@@ -200,22 +210,42 @@ func (d *Daemon) registerPipeline(w http.ResponseWriter, r *http.Request) error 
 	} else if err := registry.CheckName(name); err != nil {
 		return badRequest("%s", err.Error())
 	}
-	e, err := d.registry.Add(name, path, d.opts.Now())
+	// A name that already answers to this file is that registration, shown
+	// under a name the file gave it; any other holder of the name is a clash.
+	if held, ok := d.lookup(name); ok {
+		if held.Path != path {
+			return fmt.Errorf("%w: %q is %s", registry.ErrExists, name, held.Path)
+		}
+		// Registering again under the registered name, with --name, keeps that
+		// name from now on (a registration made before names followed files).
+		if req.Name != "" && held.Name == req.Name && !held.Chosen {
+			var err error
+			if held, err = d.registry.SetChosen(held.Name); err != nil {
+				return err
+			}
+		}
+		return writeJSON(w, http.StatusCreated, d.view(held))
+	}
+	add := d.registry.Add
+	if req.Name != "" {
+		add = d.registry.AddChosen
+	}
+	now := d.opts.Now()
+	e, err := add(name, path, now)
 	if err != nil {
 		return err
 	}
-	d.refresh(d.opts.Now())
-	d.logf("pipeline %s: registered %s", e.Name, e.Path)
+	// Two requests for one file can both get here; only the one that created
+	// the registration says so.
+	if e.Name == name && e.RegisteredAt.Equal(now) {
+		d.refresh(d.opts.Now())
+		d.logf("pipeline %s: registered %s", e.Name, e.Path)
+	}
 	return writeJSON(w, http.StatusCreated, d.view(e))
 }
 
 func (d *Daemon) entry(r *http.Request) (registry.Entry, error) {
-	name := r.PathValue("name")
-	e, ok := d.registry.Get(name)
-	if !ok {
-		return e, fmt.Errorf("%w: %q", registry.ErrNotFound, name)
-	}
-	return e, nil
+	return d.find(r.PathValue("name"))
 }
 
 func (d *Daemon) getPipeline(w http.ResponseWriter, r *http.Request) error {
@@ -227,19 +257,26 @@ func (d *Daemon) getPipeline(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (d *Daemon) unregisterPipeline(w http.ResponseWriter, r *http.Request) error {
-	name := r.PathValue("name")
-	if err := d.registry.Remove(name); err != nil {
+	e, err := d.entry(r)
+	if err != nil {
+		return err
+	}
+	if err := d.registry.Remove(e.Name); err != nil {
 		return err
 	}
 	d.refresh(d.opts.Now())
-	d.logf("pipeline %s: unregistered", name)
+	d.logf("pipeline %s: unregistered", e.Name)
 	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
 
 func (d *Daemon) pausePipeline(paused bool) func(http.ResponseWriter, *http.Request) error {
 	return func(w http.ResponseWriter, r *http.Request) error {
-		e, err := d.registry.SetPaused(r.PathValue("name"), paused)
+		held, err := d.entry(r)
+		if err != nil {
+			return err
+		}
+		e, err := d.registry.SetPaused(held.Name, paused)
 		if err != nil {
 			return err
 		}
@@ -261,7 +298,7 @@ func (d *Daemon) triggerRun(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	d.logf("pipeline %s: manual trigger -> run %s (%s)", e.Name, run.ID, run.Status)
-	return writeJSON(w, http.StatusAccepted, run)
+	return writeJSON(w, http.StatusAccepted, showRun(d.names(), run))
 }
 
 func (d *Daemon) listRuns(w http.ResponseWriter, r *http.Request) error {
@@ -273,7 +310,16 @@ func (d *Daemon) listRuns(w http.ResponseWriter, r *http.Request) error {
 		}
 		limit = n
 	}
-	return writeJSON(w, http.StatusOK, d.runs.List(r.URL.Query().Get("pipeline"), limit))
+	var names []string
+	if name := r.URL.Query().Get("pipeline"); name != "" {
+		names = d.historyNames(name)
+	}
+	shown := d.names()
+	list := d.runs.ListFor(names, limit)
+	for i := range list {
+		list[i] = showRun(shown, list[i])
+	}
+	return writeJSON(w, http.StatusOK, list)
 }
 
 func (d *Daemon) getRun(w http.ResponseWriter, r *http.Request) error {
@@ -281,7 +327,7 @@ func (d *Daemon) getRun(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	return writeJSON(w, http.StatusOK, run)
+	return writeJSON(w, http.StatusOK, showRun(d.names(), run))
 }
 
 func (d *Daemon) cancelRun(w http.ResponseWriter, r *http.Request) error {
@@ -290,7 +336,7 @@ func (d *Daemon) cancelRun(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	d.logf("run %s: cancel requested", run.ID)
-	return writeJSON(w, http.StatusOK, run)
+	return writeJSON(w, http.StatusOK, showRun(d.names(), run))
 }
 
 func (d *Daemon) getRunLog(w http.ResponseWriter, r *http.Request) error {
@@ -342,7 +388,7 @@ func (d *Daemon) createTrackedRun(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 	d.logf("pipeline %s: tracked local run %s started", run.Pipeline, run.ID)
-	return writeJSON(w, http.StatusCreated, run)
+	return writeJSON(w, http.StatusCreated, showRun(d.names(), run))
 }
 
 func (d *Daemon) reportStep(w http.ResponseWriter, r *http.Request) error {
@@ -354,7 +400,7 @@ func (d *Daemon) reportStep(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	return writeJSON(w, http.StatusOK, run)
+	return writeJSON(w, http.StatusOK, showRun(d.names(), run))
 }
 
 func (d *Daemon) appendRunLog(w http.ResponseWriter, r *http.Request) error {
@@ -390,5 +436,5 @@ func (d *Daemon) finishTrackedRun(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 	d.logf("run %s: tracked local run %s", run.ID, run.Status)
-	return writeJSON(w, http.StatusOK, run)
+	return writeJSON(w, http.StatusOK, showRun(d.names(), run))
 }

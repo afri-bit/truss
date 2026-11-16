@@ -55,16 +55,22 @@ Run it by name, from the project folder:
 
 ```console
 $ truss run hello
+2026-11-16 09:00:00 ==== Setup: the environment the steps run in ====
 2026-11-16 09:00:00 setup environment ready
 2026-11-16 09:00:00 setup os linux
 2026-11-16 09:00:00 setup arch amd64
 2026-11-16 09:00:00 setup shell /bin/sh
 2026-11-16 09:00:00 setup directory /home/me/demo
+2026-11-16 09:00:00 ==== Step greet ====
 2026-11-16 09:00:00 step greet started
 2026-11-16 09:00:00 step greet | Hello from TRUSS
 2026-11-16 09:00:00 step greet finished duration 0.006s exit 0
+2026-11-16 09:00:00 ==== Summary ====
 2026-11-16 09:00:00 summary succeeded steps 1 duration 0.006s
 ```
+
+The `====` lines are headings: the setup (the machine your steps run on), each step, and the
+summary. What your command prints is always labelled `step <id> |`.
 
 `truss run` with no name is an error that lists the pipelines it finds (exit 1). `truss run <path>` runs any pipeline file.
 

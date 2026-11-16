@@ -151,6 +151,9 @@ elif ! has_line "step hello started" || ! has_line "step hello | Hello from TRUS
 	fail "explicit path" "missing step log"
 elif ! has_line "summary succeeded steps 1 duration *s"; then
 	fail "explicit path" "missing succeeded summary"
+elif ! has_line "==== Setup: the environment the steps run in ====" || ! has_line "==== Step hello ====" ||
+	! has_line "==== Summary ===="; then
+	fail "explicit path" "missing section headings"
 elif [[ "$out" == *"status:"* || "$out" == *"exit_code:"* ]]; then
 	fail "explicit path" "success transcript has a status block"
 else
@@ -567,6 +570,8 @@ if [ "$code" -ne 0 ]; then
 	fail "jobs" "want exit 0"
 elif ! has_line "step build/package | packaging" || ! has_line "step ship/publish | publishing"; then
 	fail "jobs" "missing job step output"
+elif ! has_line "==== Step ship/publish ===="; then
+	fail "jobs" "missing the heading of a step whose id has a slash"
 elif ! has_line "summary succeeded steps 3 duration *"; then
 	fail "jobs" "missing summary"
 else

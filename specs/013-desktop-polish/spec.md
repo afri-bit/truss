@@ -44,7 +44,7 @@ Written alongside the implementation (constitution 2.0.0, principle I).
   log says so instead of showing a blank box.
 - **FR-010** Automated browser tests (`tests/ui/`) cover the dashboard counters, register through
   the picker, run now, pause and resume, unregister, the run page (graph, live log, step
-  filter, cancel, run again), the unauthorized state, the unreachable state, empty states, and
+  filter, cancel, re-run), the unauthorized state, the unreachable state, empty states, and
   both color schemes loading without console errors. They run in CI on Linux.
 
 ## Out of scope

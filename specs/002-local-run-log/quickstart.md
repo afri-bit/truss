@@ -32,7 +32,7 @@ steps:
 truss run
 ```
 
-Expect exit 0. The log starts with `setup environment ready`, `setup os`, `setup arch`, `setup shell`, and `setup directory` before any step output. Each of `hello` and `where` has `started`, a `|` line with that command's output, and `finished` with `duration` and `exit 0`. The log ends with `summary succeeded steps 2 duration`. Every line begins with a local timestamp `YYYY-MM-DD HH:MM:SS`. No environment variable names are listed.
+Expect exit 0. The log starts with a heading line (`==== Setup: ... ====`, spec 020), then `setup environment ready`, `setup os`, `setup arch`, `setup shell`, and `setup directory` before any step output. Each of `hello` and `where` has `started`, a `|` line with that command's output, and `finished` with `duration` and `exit 0`. The log ends with `summary succeeded steps 2 duration`. Every line begins with a local timestamp `YYYY-MM-DD HH:MM:SS`. No environment variable names are listed.
 
 Open `.truss/run.log`. It matches the text just printed.
 

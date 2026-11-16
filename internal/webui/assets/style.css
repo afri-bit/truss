@@ -533,6 +533,21 @@ td .pipe { font-weight: 500; color: var(--text); }
 :root[data-logsize="13"] #log { font-size: 13px; line-height: 20px; }
 :root[data-logsize="11"] #log { font-size: 11px; line-height: 17px; }
 #log .ln { display: block; padding: 0 14px 0 0; white-space: pre; }
+/* The log is a stack of cards: the setup, one per step, the summary. */
+#log .sec { border-top: 1px solid var(--log-line); }
+#log .sec:first-child { border-top: 0; }
+#log .sec > summary { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 14px; cursor: pointer; list-style: none; user-select: none; }
+#log .sec > summary::-webkit-details-marker { display: none; }
+#log .sec > summary::before { content: ""; flex: none; width: 5px; height: 5px; border-right: 1.5px solid var(--log-dim); border-bottom: 1.5px solid var(--log-dim); transform: rotate(-45deg); }
+#log .sec[open] > summary::before { transform: rotate(45deg); }
+#log .sec > summary:hover { background: rgba(255, 255, 255, 0.04); }
+#log .sec > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#log .sec-name { flex: none; color: var(--log-text); font-weight: 600; }
+#log .sec.st-failed .sec-name { color: var(--log-bad); }
+#log .sec-note { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--log-dim); }
+#log .sec-dur { flex: none; margin-left: auto; color: var(--log-dim); }
+#log .sec-body { padding: 0 0 8px; }
+#log .key { display: inline-block; min-width: 12ch; color: var(--log-meta); }
 :root[data-logwrap="on"] #log .ln { white-space: pre-wrap; word-break: break-word; padding-left: 0; }
 #log .ln:hover { background: rgba(255, 255, 255, 0.035); }
 #log .no { display: inline-block; width: 48px; padding-right: 14px; text-align: right; color: #4b5563; user-select: none; }

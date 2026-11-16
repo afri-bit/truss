@@ -11,16 +11,17 @@ import (
 	"time"
 )
 
-func TestSetup_FiveLinesOmitEnvironment(t *testing.T) {
+func TestSetup_HeadingThenFiveLinesOmitEnvironment(t *testing.T) {
 	var buf bytes.Buffer
 	log := New(&buf, clockAt(time.Date(2026, 10, 26, 10, 0, 0, 0, time.Local)))
 	log.Setup("macOS", "arm64", "/bin/sh", "/work")
 
 	lines := splitLines(t, buf.String())
-	if len(lines) != 5 {
+	if len(lines) != 6 {
 		t.Fatalf("setup lines = %d\n%s", len(lines), buf.String())
 	}
 	want := []string{
+		"2026-10-26 10:00:00 ==== Setup: the environment the steps run in ====",
 		"2026-10-26 10:00:00 setup environment ready",
 		"2026-10-26 10:00:00 setup os macOS",
 		"2026-10-26 10:00:00 setup arch arm64",
@@ -95,16 +96,20 @@ func TestTranscript_SucceededSteps(t *testing.T) {
 
 	got := occurrences(t, buf.String())
 	want := []string{
+		"==== Setup: the environment the steps run in ====",
 		"setup environment ready",
 		"setup os linux",
 		"setup arch amd64",
 		"setup shell /bin/sh",
 		"setup directory /work",
+		"==== Step hello ====",
 		"step hello started",
 		"step hello | Hello from TRUSS",
 		"step hello finished duration 0.000s exit 0",
+		"==== Step where ====",
 		"step where started",
 		"step where finished duration 0.000s exit 0",
+		"==== Summary ====",
 		"summary succeeded steps 2 duration 0.000s",
 	}
 	if len(got) != len(want) {
@@ -136,6 +141,7 @@ func TestTranscript_FailedStep(t *testing.T) {
 	got := occurrences(t, buf.String())
 	wantTail := []string{
 		"step second finished duration 0.040s exit 1",
+		"==== Summary ====",
 		"summary failed steps 2 duration 1.500s",
 		"error fail-fast failed at second (exit 1)",
 	}
@@ -173,6 +179,7 @@ func TestTranscript_StartFailure(t *testing.T) {
 		t.Fatalf("start failure includes an exit code: %s", finish)
 	}
 	wantTail := []string{
+		"==== Summary ====",
 		"summary failed steps 1 duration 0.040s",
 		"error demo failed at missing: start command: not found",
 	}
@@ -197,6 +204,7 @@ func TestStep_BlankAndPartialLines(t *testing.T) {
 
 	got := occurrences(t, buf.String())
 	want := []string{
+		"==== Step hello ====",
 		"step hello started",
 		"step hello | a",
 		"step hello | ",
@@ -303,11 +311,11 @@ func TestLog_ConcurrentOutput(t *testing.T) {
 	out := buf.String()
 	got := splitLines(t, out)
 	outLine := regexp.MustCompile(`^\S+ \S+ step (s\d) \| (s\d) line (\d+)$`)
-	ctrlLine := regexp.MustCompile(`^\S+ \S+ step (s\d) (started|finished duration \d+\.\d{3}s exit 0)$`)
+	ctrlLine := regexp.MustCompile(`^\S+ \S+ (step (s\d) (started|finished duration \d+\.\d{3}s exit 0)|==== Step (s\d) ====)$`)
 	next := map[string]int{}
 	var prev string
 	for _, line := range got {
-		if strings.Count(line, " step ") != 1 {
+		if strings.Count(line, " step ")+strings.Count(line, " ==== Step ") != 1 {
 			t.Fatalf("line must carry exactly one step label: %q\n%s", line, out)
 		}
 		ts := stamp(line)
@@ -349,6 +357,7 @@ func TestLog_StepStopped(t *testing.T) {
 
 	got := occurrences(t, buf.String())
 	want := []string{
+		"==== Step b ====",
 		"step b started",
 		"step b | half a li",
 		"step b stopped because step a failed",
@@ -377,18 +386,22 @@ func TestTranscript_RetryContinueAndSkippedLines(t *testing.T) {
 	log.StepSkipped("deploy", "its if condition is false")
 	log.SummarySucceeded(2)
 
-	got := occurrences(t, buf.String())[5:]
+	got := occurrences(t, buf.String())[6:]
 	want := []string{
+		"==== Step flaky ====",
 		"step flaky started",
 		"step flaky finished duration 0.000s exit 1",
 		"step flaky retry 2 of 3 in 1.500s",
+		"==== Step flaky ====",
 		"step flaky started",
 		"step flaky finished duration 0.000s exit 0",
+		"==== Step lint ====",
 		"step lint started",
 		"step lint finished duration 0.000s exit 1",
 		"step lint failed but the run continues (continue-on-error)",
 		"step report skipped because step lint did not succeed",
 		"step deploy skipped because its if condition is false",
+		"==== Summary ====",
 		"summary succeeded steps 2 duration 0.000s",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
@@ -405,7 +418,41 @@ func TestTranscript_StepsWithoutRetriesKeepTheirLines(t *testing.T) {
 	log.StepStarted("a")
 	log.StepFinished("a", &one, nil)
 	got := occurrences(t, buf.String())
-	if len(got) != 2 || got[0] != "step a started" || got[1] != "step a finished duration 0.000s exit 1" {
+	if len(got) != 3 || got[0] != "==== Step a ====" || got[1] != "step a started" || got[2] != "step a finished duration 0.000s exit 1" {
 		t.Fatalf("lines = %q", got)
+	}
+}
+
+func TestHeadings_OpenEachSectionAndNeverLookLikeStepOutput(t *testing.T) {
+	t0 := time.Date(2026, 11, 16, 22, 44, 0, 0, time.Local)
+	var buf bytes.Buffer
+	log := New(&buf, clockAt(t0))
+	log.Setup("macOS", "arm64", "/bin/sh", "/work")
+	log.StepStarted("build/package")
+	// A command that prints something shaped like a heading stays step output.
+	log.StepOutput("build/package", []byte("==== Summary ====\n"))
+	zero := 0
+	log.StepFinished("build/package", &zero, nil)
+	log.SummarySucceeded(1)
+
+	var headings, spoofs []string
+	for _, line := range occurrences(t, buf.String()) {
+		switch {
+		case strings.HasPrefix(line, "==== "):
+			headings = append(headings, line)
+		case strings.Contains(line, "==== "):
+			spoofs = append(spoofs, line)
+		}
+	}
+	wantHeadings := []string{
+		"==== Setup: the environment the steps run in ====",
+		"==== Step build/package ====",
+		"==== Summary ====",
+	}
+	if strings.Join(headings, "\n") != strings.Join(wantHeadings, "\n") {
+		t.Fatalf("headings:\n%s\nwant:\n%s", strings.Join(headings, "\n"), strings.Join(wantHeadings, "\n"))
+	}
+	if len(spoofs) != 1 || spoofs[0] != "step build/package | ==== Summary ====" {
+		t.Fatalf("a command's own heading-shaped text must stay labelled step output: %q", spoofs)
 	}
 }

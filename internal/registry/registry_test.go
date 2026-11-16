@@ -69,3 +69,48 @@ func TestRegistry_RemoveAndUnknownNames(t *testing.T) {
 		t.Fatal("still registered")
 	}
 }
+
+func TestRegistry_RemembersWhichNamesWereChosen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "registry.json")
+	r, _ := Open(path)
+	if _, err := r.Add("from-file", "/one.yaml", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.AddChosen("mine", "/two.yaml", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := again.Get("from-file")
+	b, _ := again.Get("mine")
+	if a.Chosen || !b.Chosen {
+		t.Fatalf("chosen = %t and %t, want false and true", a.Chosen, b.Chosen)
+	}
+}
+
+func TestRegistry_AFileIsRegisteredOnceUnlessItIsGivenAChosenName(t *testing.T) {
+	r, _ := Open(filepath.Join(t.TempDir(), "registry.json"))
+	first, err := r.Add("alpha", "/one.yaml", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	same, err := r.Add("beta", "/one.yaml", time.Now())
+	if err != nil || same.Name != first.Name {
+		t.Fatalf("add under another name = %+v, %v; want the registration the file has", same, err)
+	}
+	second, err := r.AddChosen("second", "/one.yaml", time.Now())
+	if err != nil || second.Name != "second" || !second.Chosen {
+		t.Fatalf("chosen name = %+v, %v; want another registration of the file", second, err)
+	}
+	if got, err := r.SetChosen("alpha"); err != nil || !got.Chosen {
+		t.Fatalf("set chosen = %+v, %v", got, err)
+	}
+	if _, err := r.SetChosen("nope"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("set chosen of an unknown name: %v", err)
+	}
+	if len(r.List()) != 2 {
+		t.Fatalf("entries = %d, want 2", len(r.List()))
+	}
+}

@@ -146,6 +146,8 @@ const ICONS = {
   clock: '<circle cx="8" cy="8" r="6.25"/><path d="M8 4.5V8l2.25 1.5"/>',
   wrap: '<path d="M2.5 4h11M2.5 8h9a2 2 0 0 1 0 4H8.5"/><path d="M10 10.5 8.5 12l1.5 1.5M2.5 12H5"/>',
   follow: '<path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/>',
+  expand: '<path d="M4.5 6 8 2.5 11.5 6M4.5 10 8 13.5 11.5 10"/>',
+  collapse: '<path d="M4.5 2.5 8 6l3.5-3.5M4.5 13.5 8 10l3.5 3.5"/>',
   terminal: '<rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5"/><path d="m4.5 6 2 2-2 2M8.5 10.5h3"/>',
   x: '<path d="M4 4l8 8M12 4l-8 8"/>',
   key: '<circle cx="5.25" cy="10.75" r="2.75"/><path d="M7.25 8.75 13.25 2.75M11 5l1.75 1.75"/>',
@@ -395,7 +397,8 @@ function runsTable(runs, opts = {}) {
 }
 
 function pipelineActions(p, compactMode) {
-  const name = encodeURIComponent(p.name);
+  // Act on the registration, not on the name shown for it: a shown name can move to another flow.
+  const name = encodeURIComponent(p.registered_name || p.name);
   const hasSchedule = (p.schedules || []).length > 0;
   const pauseBtn = !hasSchedule
     ? h("button", { disabled: true, title: "This pipeline has no schedule" }, icon("pause", "sm"), "Pause schedule")
@@ -522,7 +525,8 @@ function lineChart(series, opts = {}) {
   const max = opts.max || Math.max(1, ...series.flatMap((x) => x.values)) * 1.15;
   const n = Math.max(...series.map((x) => x.values.length));
   const X = (i) => L + (i / Math.max(1, n - 1)) * (W - L - R);
-  const Y = (v) => T + (1 - v / max) * (H - T - B);
+  // A value outside 0..max stays on the plot edge instead of drawing over the page.
+  const Y = (v) => T + (1 - Math.min(max, Math.max(0, v)) / max) * (H - T - B);
   const svg = s("svg", { class: "chart", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", role: "img", "aria-label": opts.label || "chart" });
   for (let k = 0; k <= 4; k++) {
     const v = (max / 4) * k, y = Y(v);
@@ -636,7 +640,7 @@ function activity(runs) {
 
 views.pipelines = {
   nav: "pipelines",
-  crumbs: () => [["Pipelines"]],
+  crumbs: () => [["Flows"]],
   load: () => getJSON("/pipelines"),
   render(pipelines) {
     // The draft survives the periodic refresh, so a half-typed form is never lost.
@@ -655,7 +659,7 @@ views.pipelines = {
     const shown = pipelines.filter((p) => !q || p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q));
     const states = ["ready", "running", "paused", "invalid"].map((st) => [st, pipelines.filter((p) => pipelineState(p) === st).length]).filter(([, n]) => n);
     return [
-      h("div", { class: "head" }, h("div", { class: "title" }, h("h1", null, "Pipelines"),
+      h("div", { class: "head" }, h("div", { class: "title" }, h("h1", null, "Flows"),
         h("p", { class: "sub" }, "Pipeline files this daemon knows. The file stays where it is and is read again before every run."))),
       panel("Register a pipeline", { hint: "absolute path to a truss.yaml" }, form),
       h("div", { class: "toolbar" },
@@ -702,7 +706,7 @@ function pipelineCard(p) {
 
 views.pipeline = {
   nav: "pipelines",
-  crumbs: (name) => [["Pipelines", "#/pipelines"], [name]],
+  crumbs: (name) => [["Flows", "#/pipelines"], [name]],
   async load(name) {
     const enc = encodeURIComponent(name);
     const [pipeline, runs] = await Promise.all([getJSON("/pipelines/" + enc), getJSON(`/runs?pipeline=${enc}&limit=50`)]);
@@ -735,6 +739,7 @@ views.pipeline = {
         panel("Configuration", null, h("div", { class: "panel-body", style: "padding-top:4px;padding-bottom:4px" }, h("dl", { class: "facts" },
           h("dt", null, "File"), h("dd", { class: "mono", title: p.path }, p.path),
           p.definition_name && [h("dt", null, "Defined as"), h("dd", { class: "mono" }, p.definition_name)],
+          p.registered_name && [h("dt", null, "Registered as"), h("dd", { class: "mono", title: "The name it was registered under keeps its history and data; either name works in commands" }, p.registered_name)],
           p.valid && scheduleFacts(p),
           p.valid && [h("dt", null, "Concurrency"), h("dd", null, `${p.concurrency} step${p.concurrency === 1 ? "" : "s"} at once`)],
           p.valid && [h("dt", null, "Overlap"), h("dd", null, { queue: "a second run waits for the first", skip: "a second run is skipped", parallel: "runs may overlap" }[p.overlap] || p.overlap)],
@@ -767,39 +772,148 @@ views.runs = {
 };
 
 // The run view keeps its log between refreshes so the text is not re-fetched.
-const logState = { id: "", offset: 0, text: "", step: "", follow: true, timer: 0, done: false, query: "", decoder: null };
+// open holds the cards the reader opened or closed by hand, by card key.
+const logState = { id: "", offset: 0, text: "", step: "", follow: true, timer: 0, done: false, query: "", decoder: null, open: {}, ids: [], status: {}, focusSec: "" };
+
+// parseLog groups the run log into cards: the setup, one per step (however the
+// steps' lines interleave), and the summary. It reads only the line grammar of
+// specs 002 to 004, so a log written before the section headings groups the
+// same way. The headings themselves are skipped: the cards take their place.
+// ids are the run's step ids: a step id may hold a space, so a "step <id> ..."
+// line is matched against them, longest first, before it is read as one word.
+// status maps a step id to the state the API gives it, which wins where the
+// log cannot tell (a step that failed on its own while the run was cancelled).
+function parseLog(text, done, ids = [], status = {}) {
+  const known = [...ids].sort((a, b) => b.length - a.length);
+  const stepLine = (rest) => {
+    if (!rest.startsWith("step ")) return null;
+    const tail = rest.slice(5);
+    for (const id of known) if (tail.startsWith(id + " ")) return [id, tail.slice(id.length + 1)];
+    const i = tail.indexOf(" ");
+    return i < 0 ? null : [tail.slice(0, i), tail.slice(i + 1)];
+  };
+  const setup = { key: "setup", kind: "setup", title: "Setup", state: "succeeded", rows: [], facts: {} };
+  const summary = { key: "summary", kind: "summary", title: "Summary", state: "", rows: [], note: "" };
+  const steps = new Map();
+  const step = (id) => {
+    if (!steps.has(id)) steps.set(id, { key: "step:" + id, kind: "step", title: id, state: "pending", rows: [], dur: "", note: "", attempts: 0, stopped: false, continued: false });
+    return steps.get(id);
+  };
+  const order = [];
+  const placed = new Set();
+  const place = (c) => { if (!placed.has(c)) { placed.add(c); order.push(c); } return c; };
+  const lines = text.split("\n");
+  // While the log is arriving the last piece may be half a line; wait for its end.
+  if (!done) lines.pop();
+  for (const raw of lines) {
+    const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+    if (!line) continue;
+    // The s flag: a "." must also match a carriage return inside a line, which progress bars write.
+    const ts = line.slice(11, 20), rest = line.slice(20);
+    if (/^==== .* ====$/.test(rest)) continue;
+    let m;
+    const sl = stepLine(rest);
+    if ((m = /^setup (\S+)(?: (.*))?$/s.exec(rest))) {
+      place(setup).rows.push({ ts, raw: rest, label: m[1], text: m[2] || "" });
+      setup.facts[m[1]] = m[2] || "";
+    } else if (sl && (sl[1] === "|" || sl[1].startsWith("| "))) {
+      place(step(sl[0])).rows.push({ ts, raw: rest, text: sl[1].slice(2) });
+    } else if (sl) {
+      const c = place(step(sl[0])), what = sl[1];
+      let cls = "meta";
+      if (what === "started") { c.state = "running"; c.attempts++; c.dur = ""; }
+      else if ((m = /^finished duration (\S+) exit (-?\d+)$/.exec(what))) { c.state = m[2] === "0" ? "succeeded" : "failed"; c.dur = m[1]; cls = m[2] === "0" ? "good" : "fail"; }
+      else if ((m = /^finished duration (\S+) error /.exec(what))) { c.state = "failed"; c.dur = m[1]; cls = "fail"; }
+      else if (what.startsWith("skipped because ")) { c.state = "skipped"; c.note = what.slice(16); }
+      else if (what.startsWith("stopped because ")) { c.stopped = true; c.note = what; cls = "fail"; }
+      else if (what.startsWith("failed but the run continues")) { c.continued = true; }
+      c.rows.push({ ts, raw: rest, text: what, cls });
+    } else {
+      const c = place(summary);
+      let cls = "meta";
+      if ((m = /^summary (succeeded|failed|cancelled) steps (\d+) duration (\S+)$/.exec(rest))) {
+        c.state = m[1];
+        c.note = `${m[1]} · ${m[2]} step${m[2] === "1" ? "" : "s"} · ${m[3]}`;
+        cls = m[1] === "succeeded" ? "good" : "fail";
+      } else if (/^error /.test(rest)) cls = "fail";
+      c.rows.push({ ts, raw: rest, text: rest, cls });
+    }
+  }
+  for (const c of steps.values()) {
+    if (c.continued && c.state === "failed") c.state = "tolerated";
+    // A step the interrupt cut off logs a failure of its own; the run's end says why.
+    if (c.stopped || (summary.state === "cancelled" && c.state === "failed" && status[c.title] !== "failed")) c.state = "cancelled";
+    if (c.state === "running" && done) c.state = "cancelled";
+    if (c.attempts > 1 && !c.note) c.note = `attempt ${c.attempts}`;
+  }
+  for (const c of order) c.rows.forEach((r, i) => { r.no = i + 1; });
+  // Lines the parser does not know land in the summary card; it always comes last.
+  if (placed.has(summary)) { order.splice(order.indexOf(summary), 1); order.push(summary); }
+  const f = setup.facts;
+  setup.note = [f.os, f.arch, f.shell].filter(Boolean).join(" · ");
+  return order;
+}
+
+// A card is open unless it is a step that went well or the setup. Searching or
+// picking a step opens what it shows. What the reader opened or closed by hand
+// is kept, so a repaint does not undo it.
+function cardOpen(c, q) {
+  if (q || logState.step) return true;
+  const mine = logState.open[c.key];
+  if (mine !== undefined) return mine;
+  if (c.kind === "setup") return false;
+  return !(c.kind === "step" && (c.state === "succeeded" || c.state === "skipped"));
+}
+
+function logRow(row, no, q) {
+  return h("span", { class: "ln" },
+    h("span", { class: "no", "aria-hidden": "true" }, no),
+    h("span", { class: "ts" }, row.ts),
+    row.label != null
+      ? [h("span", { class: "key" }, row.label), highlight(row.text, q)]
+      : row.cls ? h("span", { class: row.cls }, highlight(row.text, q)) : highlight(row.text, q));
+}
+
+function logCard(c, rows, q) {
+  return h("details", { class: "sec st-" + (c.state || "pending"), "data-sec": c.key, open: cardOpen(c, q) },
+    h("summary", { onclick: (e) => { if (!q && !logState.step) logState.open[c.key] = !e.currentTarget.parentElement.open; } },
+      statusGlyph(c.state || "pending", 14),
+      h("span", { class: "sec-name" }, c.title),
+      c.note && h("span", { class: "sec-note", title: c.note }, c.note),
+      c.kind === "step" && h("span", { class: "sec-dur" }, c.dur || (c.state === "running" ? "running" : ""))),
+    h("div", { class: "sec-body" }, rows.map((r) => logRow(r, r.no, q))));
+}
+
+function setAllOpen(open) {
+  for (const c of parseLog(logState.text, logState.done, logState.ids, logState.status)) logState.open[c.key] = open;
+  paintLog();
+}
 
 function paintLog() {
   const pre = document.getElementById("log");
   if (!pre) return;
-  const marker = logState.step ? ` step ${logState.step} ` : "";
   const q = logState.query.toLowerCase();
   const frag = document.createDocumentFragment();
-  let count = 0, no = 0;
-  for (const line of logState.text.split("\n")) {
-    if (line) no++;
-    if (!line || (marker && !(line.slice(19) + " ").startsWith(marker))) continue;
-    if (q && !line.toLowerCase().includes(q)) continue;
-    const rest = line.slice(20);
-    let cls = "";
-    if (/^(setup|summary succeeded)/.test(rest)) cls = "meta";
-    if (/^summary succeeded|finished duration \S+ exit 0$/.test(rest)) cls = "good";
-    if (/^(error|summary (failed|cancelled))|finished duration \S+ (exit [1-9-]|error)| stopped because /.test(rest)) cls = "fail";
-    else if (!cls && !rest.includes(" | ")) cls = "meta";
-    const body = [];
-    const bar = rest.indexOf(" | ");
-    if (!cls && bar > 0) body.push(h("span", { class: "stepname" }, rest.slice(0, bar)), " │ ", highlight(rest.slice(bar + 3), q));
-    else body.push(cls ? h("span", { class: cls }, highlight(rest, q)) : highlight(rest, q));
-    frag.append(h("span", { class: "ln" }, h("span", { class: "no", "aria-hidden": "true" }, no), h("span", { class: "ts" }, line.slice(11, 20)), body));
-    count++;
+  let count = 0;
+  for (const c of parseLog(logState.text, logState.done, logState.ids, logState.status)) {
+    if (logState.step && c.key !== "step:" + logState.step) continue;
+    const rows = q ? c.rows.filter((r) => r.raw.toLowerCase().includes(q)) : c.rows;
+    if (q && !rows.length) continue;
+    frag.append(logCard(c, rows, q));
+    count += rows.length;
   }
-  if (!count) {
+  if (!frag.childNodes.length) {
     const what = logState.step ? `step ${logState.step}` : "this run";
     frag.append(h("span", { class: "placeholder" }, logState.query ? `No line matches “${logState.query}”.` : logState.done ? `No log lines for ${what}.` : `Waiting for log lines from ${what}…`));
   } else if (!logState.done) {
     frag.append(h("span", { class: "cursor", style: `animation-delay:${phase(1000)}` }));
   }
+  // Repainting replaces every card; keep keyboard focus on the header it was on.
+  const focused = document.activeElement;
+  const was = (focused && focused.tagName === "SUMMARY" && pre.contains(focused) ? focused.parentElement.dataset.sec : null) || logState.focusSec;
+  logState.focusSec = "";
   pre.replaceChildren(frag);
+  if (was) [...pre.querySelectorAll("details")].find((d) => d.dataset.sec === was)?.querySelector("summary")?.focus({ preventScroll: true });
   const lines = document.getElementById("log-count");
   if (lines) lines.textContent = `${count} line${count === 1 ? "" : "s"}`;
   if (logState.follow) pre.scrollTop = pre.scrollHeight;
@@ -839,23 +953,25 @@ views.run = {
   crumbs: (id, data) => [["Runs", "#/runs"], data ? [data.run.pipeline, href.pipeline(data.run.pipeline)] : null, [shortId(id)]].filter(Boolean),
   async load(id) {
     const run = await getJSON("/runs/" + encodeURIComponent(id));
-    const pipeline = await getJSON("/pipelines/" + encodeURIComponent(run.pipeline)).catch(() => null);
+    const pipeline = await getJSON("/pipelines/" + encodeURIComponent(run.registered_pipeline || run.pipeline)).catch(() => null);
     return { run, pipeline };
   },
   render({ run, pipeline }) {
     if (logState.id !== run.id) {
       clearTimeout(logState.timer);
-      Object.assign(logState, { id: run.id, offset: 0, text: "", step: "", follow: true, done: false, query: "", decoder: new TextDecoder("utf-8") });
+      Object.assign(logState, { id: run.id, offset: 0, text: "", step: "", follow: true, done: false, query: "", open: {}, decoder: new TextDecoder("utf-8") });
       pumpLog(run.id);
     }
     const select = (id) => { logState.step = logState.step === id ? "" : id; route(true); };
-    const pre = h("pre", { id: "log", tabindex: "0", "aria-label": "Run log", onscroll: (e) => {
+    const pre = h("div", { id: "log", tabindex: "0", "aria-label": "Run log", onscroll: (e) => {
       const el = e.currentTarget;
       const follow = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       if (follow !== logState.follow) { logState.follow = follow; document.getElementById("follow")?.setAttribute("aria-pressed", String(follow)); }
     } });
     queueMicrotask(paintLog);
     const steps = run.steps || [];
+    logState.ids = steps.map((st) => st.id);
+    logState.status = Object.fromEntries(steps.map((st) => [st.id, stepState(st)]));
     const doneN = steps.filter((st) => !["pending", "running", "queued"].includes(st.status)).length;
     const current = steps.filter((st) => st.status === "running").map((st) => st.id);
     const usage = res.run(run.id);
@@ -873,9 +989,9 @@ views.run = {
         h("div", { class: "actions" },
           active && h("button", { class: "danger", title: run.trigger === "local" ? "Asks the local run to stop; it ends within a second" : null, onclick: () => act("Cancel requested", () => api("POST", `/runs/${run.id}/cancel`)) }, icon("stop", "sm"), "Cancel run"),
           !active && run.trigger !== "local" && h("button", { class: "primary", onclick: () => act("Run requested", async () => {
-            const next = await (await api("POST", `/pipelines/${encodeURIComponent(run.pipeline)}/runs`)).json();
+            const next = await (await api("POST", `/pipelines/${encodeURIComponent(run.registered_pipeline || run.pipeline)}/runs`)).json();
             go(href.run(next.id));
-          }) }, icon("rotate", "sm"), "Run again"))),
+          }) }, icon("rotate", "sm"), "Re-run"))),
       h("div", { class: "strip", style: "--n:6" },
         h("div", null, h("div", { class: "k" }, "Progress"), h("div", { class: "v" }, `${doneN} / ${steps.length} steps`)),
         h("div", null, h("div", { class: "k" }, active ? "Running now" : "Ended"), h("div", { class: "v", title: current.join(", ") }, active ? (current.join(", ") || "waiting") : clock(run.finished_at))),
@@ -911,6 +1027,8 @@ views.run = {
             h("span", { id: "log-count", class: "mono" }),
             h("span", { class: "spacer" }),
             h("input", { type: "search", id: "log-find", placeholder: "Find in log", "aria-label": "Find in log", value: logState.query, oninput: (e) => { logState.query = e.target.value; paintLog(); } }),
+            h("button", { type: "button", id: "log-expand", title: "Open every card", "aria-label": "Open every card", onclick: () => setAllOpen(true) }, icon("expand", "sm")),
+            h("button", { type: "button", id: "log-collapse", title: "Close every card", "aria-label": "Close every card", onclick: () => setAllOpen(false) }, icon("collapse", "sm")),
             h("button", { type: "button", "aria-pressed": String(settings.logWrap), title: "Wrap long lines", onclick: () => setSetting("logWrap", !settings.logWrap) }, icon("wrap", "sm")),
             h("button", { type: "button", id: "follow", "aria-pressed": String(logState.follow), title: "Follow the end of the log", onclick: () => { logState.follow = true; paintLog(); route(true); } }, icon("follow", "sm")),
             active ? h("span", { class: "live" }, "live") : h("span", { class: "done" }, "complete")),
@@ -941,12 +1059,14 @@ function runResources(run) {
   const u = res.run(run.id), ser = res.runs.get(run.id) || { cpu: [], mem: [] };
   const live = (run.steps || []).filter((st) => st.status === "running");
   const memMax = Math.max(64, ...ser.mem) * 1.2;
+  // Both lines share one axis, so memory is scaled into the axis range that CPU sets.
+  const cpuMax = Math.max(10, ...ser.cpu) * 1.2;
   return h("div", { style: "display:grid;gap:14px" },
     h("div", { class: "metric-head" }, h("span", { class: "big" }, u.cpu.toFixed(1)), h("span", { class: "unit" }, "% CPU"),
       h("span", { class: "big", style: "margin-left:18px" }, u.mem.toFixed(0)), h("span", { class: "unit" }, "MiB RSS"),
-      h("span", { class: "legend" }, h("span", null, h("i"), "cpu %"), h("span", null, h("i", { class: "s2" }), "mem, % of chart"))),
+      h("span", { class: "legend" }, h("span", null, h("i"), "cpu %"), h("span", { title: "Memory is scaled to fit the chart, so only its shape is comparable to CPU" }, h("i", { class: "s2" }), "mem, scaled"))),
     ser.cpu.length > 1
-      ? lineChart([{ values: ser.cpu, area: true }, { values: ser.mem.map((m) => (m / memMax) * 100), cls: "s2" }], { height: 130, max: Math.max(10, ...ser.cpu) * 1.2, fmt: (v) => v.toFixed(0) + "%", ticks: ticksFor((ser.cpu.length - 1) * (res.m.interval_seconds || 2)), label: "Run CPU and memory" })
+      ? lineChart([{ values: ser.cpu, area: true }, { values: ser.mem.map((m) => (m / memMax) * cpuMax), cls: "s2" }], { height: 130, max: cpuMax, fmt: (v) => v.toFixed(0) + "%", ticks: ticksFor((ser.cpu.length - 1) * (res.m.interval_seconds || 2)), label: "Run CPU and memory" })
       : h("div", { class: "empty", style: "padding:18px" }, "Collecting samples…"),
     h("table", null,
       h("thead", null, h("tr", null, h("th", null, "PID"), h("th", null, "Step"), h("th", { class: "num" }, "Procs"), h("th", { class: "num" }, "CPU"), h("th", { class: "num" }, "RSS"), h("th", { class: "num" }, "Thr"))),
@@ -1217,10 +1337,10 @@ document.getElementById("picker").addEventListener("close", () => {
 const finder = { q: "", sel: 0, items: [] };
 function finderItems() {
   const q = finder.q.toLowerCase();
-  const pages = [["Dashboard", "#/", "dashboard"], ["Pipelines", "#/pipelines", "pipelines"], ["Runs", "#/runs", "runs"], ["Monitor", "#/monitor", "monitor"], ["Settings", "#/settings", "settings"]]
+  const pages = [["Dashboard", "#/", "dashboard"], ["Flows", "#/pipelines", "pipelines"], ["Runs", "#/runs", "runs"], ["Monitor", "#/monitor", "monitor"], ["Settings", "#/settings", "settings"]]
     .filter(([n]) => !q || n.toLowerCase().includes(q)).map(([n, to, ic]) => ({ group: "Pages", label: n, to, icon: icon(ic, "sm"), k: "" }));
   const pipes = shell.pipelines.filter((p) => !q || p.name.toLowerCase().includes(q)).slice(0, 6)
-    .map((p) => ({ group: "Pipelines", label: p.name, to: href.pipeline(p.name), icon: icon("pipelines", "sm"), k: pipelineState(p) }));
+    .map((p) => ({ group: "Flows", label: p.name, to: href.pipeline(p.name), icon: icon("pipelines", "sm"), k: pipelineState(p) }));
   const runs = shell.runs.filter((r) => !q || r.id.toLowerCase().includes(q) || r.pipeline.toLowerCase().includes(q)).slice(0, 6)
     .map((r) => ({ group: "Runs", label: `${r.pipeline} · ${shortId(r.id)}`, to: href.run(r.id), icon: statusGlyph(r.status, 14), k: r.status }));
   return [...pages, ...pipes, ...runs];
@@ -1310,7 +1430,7 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => appl
 
 // ---------- shell: nav, sidebar live runs, connection ----------
 
-const NAV = [["dashboard", "Dashboard", "#/"], ["pipelines", "Pipelines", "#/pipelines"], ["runs", "Runs", "#/runs"], ["monitor", "Monitor", "#/monitor"], ["settings", "Settings", "#/settings"]];
+const NAV = [["dashboard", "Dashboard", "#/"], ["pipelines", "Flows", "#/pipelines"], ["runs", "Runs", "#/runs"], ["monitor", "Monitor", "#/monitor"], ["settings", "Settings", "#/settings"]];
 function paintNav(current) {
   const nav = document.getElementById("nav");
   if (!nav.children.length) nav.append(...NAV.map(([key, label, to]) => h("a", { href: to, "data-route": key, title: label }, icon(key), h("span", null, label))));
@@ -1444,13 +1564,18 @@ async function route(force) {
     const keptId = lastHash === location.hash && main.contains(active) && active.id ? active.id : "";
     const scroll = document.getElementById("log") ? document.getElementById("log").scrollTop : null;
     const pageScroll = lastHash === location.hash ? main.scrollTop : 0;
+    // The view is rebuilt and its log is painted a moment later: remember which card header had focus.
+    const inLog = main.contains(active) && active.tagName === "SUMMARY" && active.closest("#log");
+    if (inLog && lastHash === location.hash) logState.focusSec = active.parentElement.dataset.sec;
     paintCrumbs(view, arg, data);
     main.replaceChildren(...view.render(data).flat(Infinity).filter(Boolean));
     main.scrollTop = pageScroll;
     if (scroll != null && document.getElementById("log") && !logState.follow) {
       queueMicrotask(() => { document.getElementById("log").scrollTop = scroll; });
     }
-    if (kept >= 0) {
+    if (logState.focusSec) {
+      // paintLog gives focus back to the card header once the log is painted.
+    } else if (kept >= 0) {
       const target = (keptId && document.getElementById(keptId)) || main.querySelectorAll(FOCUSABLE)[kept];
       if (target) {
         target.focus({ preventScroll: true });

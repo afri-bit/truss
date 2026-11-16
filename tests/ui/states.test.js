@@ -25,7 +25,7 @@ for (const scheme of ["light", "dark"]) {
     await d.waitRun(run.id);
     const page = await b.newPage({ colorScheme: scheme });
     await page.goto(d.authedUrl());
-    for (const [hash, heading] of [["#/", "Dashboard"], ["#/pipelines", "Pipelines"], ["#/pipelines/ok", "ok"], ["#/runs", "Runs"], ["#/runs/" + run.id, run.id], ["#/monitor", "Monitor"], ["#/settings", "Settings"]]) {
+    for (const [hash, heading] of [["#/", "Dashboard"], ["#/pipelines", "Flows"], ["#/pipelines/ok", "ok"], ["#/runs", "Runs"], ["#/runs/" + run.id, run.id], ["#/monitor", "Monitor"], ["#/settings", "Settings"]]) {
       await page.evaluate((h) => { location.hash = h; }, hash);
       await page.locator("h1", { hasText: heading }).first().waitFor();
       await page.waitForTimeout(300);

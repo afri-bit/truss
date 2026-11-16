@@ -33,6 +33,10 @@ type Entry struct {
 	// Paused stops the schedules of the pipeline. Manual runs still work.
 	Paused       bool      `json:"paused"`
 	RegisteredAt time.Time `json:"registered_at"`
+	// Chosen means the name was picked at registration (--name), so the name
+	// in the file never replaces it on screen. A registration without it
+	// follows the file's name.
+	Chosen bool `json:"chosen,omitempty"`
 }
 
 // Registry is the set of registered pipelines, saved to one JSON file.
@@ -68,27 +72,62 @@ func CheckName(name string) error {
 	return nil
 }
 
-// Add registers path under name. Registering the same name and path again
-// is not an error; a different path under a taken name is ErrExists.
+// Add registers path under name, a name taken from the file. Registering the
+// same name and path again is not an error; a different path under a taken
+// name is ErrExists.
 func (r *Registry) Add(name, path string, now time.Time) (Entry, error) {
+	return r.add(name, path, now, false)
+}
+
+// AddChosen is Add for a name the user picked: the entry is marked Chosen.
+func (r *Registry) AddChosen(name, path string, now time.Time) (Entry, error) {
+	return r.add(name, path, now, true)
+}
+
+func (r *Registry) add(name, path string, now time.Time, chosen bool) (Entry, error) {
 	if err := CheckName(name); err != nil {
 		return Entry{}, err
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if !chosen {
+		// A file registered again without a chosen name is the registration it
+		// already has, whatever name that carries now (even one that another
+		// registration holds). Only --name makes another registration of the
+		// same file.
+		if old, ok := r.byPath(path); ok {
+			return old, nil
+		}
+	}
 	if old, ok := r.entries[name]; ok {
 		if old.Path == path {
 			return old, nil
 		}
 		return Entry{}, fmt.Errorf("%w: %q is %s", ErrExists, name, old.Path)
 	}
-	e := Entry{Name: name, Path: path, RegisteredAt: now}
+	e := Entry{Name: name, Path: path, RegisteredAt: now, Chosen: chosen}
 	r.entries[name] = e
 	if err := r.save(); err != nil {
 		delete(r.entries, name)
 		return Entry{}, err
 	}
 	return e, nil
+}
+
+// ByPath returns the first registration of the file at path, in name order.
+func (r *Registry) ByPath(path string) (Entry, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.byPath(path)
+}
+
+func (r *Registry) byPath(path string) (Entry, bool) {
+	for _, e := range r.sorted() {
+		if e.Path == path {
+			return e, true
+		}
+	}
+	return Entry{}, false
 }
 
 // Remove forgets the pipeline registered under name.
@@ -117,6 +156,25 @@ func (r *Registry) SetPaused(name string, paused bool) (Entry, error) {
 	}
 	e := old
 	e.Paused = paused
+	r.entries[name] = e
+	if err := r.save(); err != nil {
+		r.entries[name] = old
+		return Entry{}, err
+	}
+	return e, nil
+}
+
+// SetChosen marks the name of a registration as chosen by the user, so the
+// name in its file never replaces it on screen.
+func (r *Registry) SetChosen(name string) (Entry, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	old, ok := r.entries[name]
+	if !ok {
+		return Entry{}, fmt.Errorf("%w: %q", ErrNotFound, name)
+	}
+	e := old
+	e.Chosen = true
 	r.entries[name] = e
 	if err := r.save(); err != nil {
 		r.entries[name] = old

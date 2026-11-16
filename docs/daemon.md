@@ -54,7 +54,23 @@ A registration is only a name and a path. The layout of a project is in
 [Project layout](pipeline-reference.md#project-layout).
 
 - The file stays where it is and stays the source of truth. The daemon reads it again before
-  every run and notices edits within a second: change the cron line, save, done.
+  every run and notices edits within a second: change the steps, the cron line or the name, save,
+  done. There is nothing to restart or register again.
+- **Renaming.** A registration keeps the name it was registered under (its *registered name*) for
+  good: its history, schedules and [data folder](#data-and-cache-folders) hang on it. When the file
+  changes `pipeline.name`, the daemon shows the new name, keeps every earlier run with the flow, and
+  accepts either name in every command. The API reports the registered name as `registered_name`
+  while the two differ, and each run as `registered_pipeline`.
+  - A new name that another registration holds or claims is not taken, and neither is a name you
+    chose with `--name` (or in Desktop's name field). Registering again with `--name` set to the
+    registered name keeps it.
+  - A file that stops loading keeps the name it was last read with (until the daemon restarts).
+  - **Scripts and schedulers should use the registered name.** A shown name can move to another flow;
+    a registered name never does.
+  - To change the registered name, unregister and register again (the history stays with the old
+    name). A file registered again without `--name` is never registered twice.
+  - On a network or synced folder a change may show later than one second, because the operating
+    system reports file times late there.
 - A flow in a project (`.truss/flows/` under a folder with a `truss.yaml`) runs its steps in the
   project root. Any other file runs in its own directory, as `truss run` does there. Either one
   can be changed with `pipeline.workdir`.
@@ -279,7 +295,7 @@ while the daemon stops).
 | `GET /status` | Version, address, counts, limits. |
 | `GET /metrics` | CPU and memory of the machine, the daemon and each running step, plus ten minutes of host history. See [Resource figures](#resource-figures). |
 | `POST /shutdown` | Stops the daemon. |
-| `GET /pipelines` | Registered pipelines with schedules, step graph and last run. |
+| `GET /pipelines` | Registered pipelines with schedules, step graph and last run. `name` is the name the file gives; `registered_name` is the name it was registered under, when that differs. Any call that takes `{name}` accepts either. |
 | `POST /pipelines` | Registers `{"path": "/abs/file.yaml", "name": "optional"}`. |
 | `GET /pipelines/{name}` | One pipeline. |
 | `DELETE /pipelines/{name}` | Unregisters it. |

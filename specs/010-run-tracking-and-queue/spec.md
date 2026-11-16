@@ -100,7 +100,7 @@ Written alongside the implementation (constitution 2.0.0, principle I).
   closed as `failed` with `the daemon stopped while this run was active`. Finished local runs are
   history like any other and obey the 200-run limit.
 - **FR-020** TRUSS Desktop shows the trigger of a local run as a `local` badge, does not offer
-  "Run again" for it (there is nothing registered to run), and offers Cancel while it runs.
+  "Re-run" for it (there is nothing registered to run), and offers Cancel while it runs.
 
 ## Out of scope
 
