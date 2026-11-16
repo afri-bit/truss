@@ -34,12 +34,14 @@ func New(w io.Writer, now func() time.Time) *Log {
 	}
 }
 
-// Setup writes the five environment lines before any step.
-// The lines name osName, arch, shell, and dir, and no environment variables.
+// Setup writes the setup heading and the five environment lines before any
+// step. The lines name osName, arch, shell, and dir, and no environment
+// variables.
 func (l *Log) Setup(osName, arch, shell, dir string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.setupAt = l.stamp()
+	l.writeAt(l.setupAt, heading("Setup: the environment the steps run in"))
 	l.writeAt(l.setupAt, "setup environment ready")
 	l.line("setup os " + osName)
 	l.line("setup arch " + arch)
@@ -47,13 +49,14 @@ func (l *Log) Setup(osName, arch, shell, dir string) {
 	l.line("setup directory " + dir)
 }
 
-// StepStarted writes the start line for id.
+// StepStarted writes the step's heading and its start line.
 func (l *Log) StepStarted(id string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	ts := l.stamp()
 	l.stepAt[id] = ts
 	l.pending[id] = &bytes.Buffer{}
+	l.writeAt(ts, heading("Step "+id))
 	l.writeAt(ts, "step "+id+" started")
 }
 
@@ -161,7 +164,15 @@ func (l *Log) SummaryCancelled(steps int) {
 func (l *Log) summary(status string, steps int) {
 	finish := l.stamp()
 	dur := formatDuration(finish.Sub(l.setupAt))
+	l.writeAt(finish, heading("Summary"))
 	l.writeAt(finish, fmt.Sprintf("summary %s steps %d duration %s", status, steps, dur))
+}
+
+// heading is the line that opens a section of the log. It starts with
+// "====" and never with "step", so a heading cannot be mistaken for a line of
+// step output, which always carries its "step <id> |" label.
+func heading(title string) string {
+	return "==== " + title + " ===="
 }
 
 func (l *Log) buf(id string) *bytes.Buffer {

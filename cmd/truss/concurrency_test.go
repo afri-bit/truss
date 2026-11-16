@@ -218,7 +218,7 @@ func TestRun_ConcurrentLogKeepsSetupAndSummaryShape(t *testing.T) {
 		t.Fatalf("exit = %d, stderr = %s\n%s", code, errOut, out)
 	}
 	_, texts := splitLog(t, out)
-	want := []string{"setup environment ready", "setup os ", "setup arch ", "setup shell ", "setup directory "}
+	want := []string{"==== Setup", "setup environment ready", "setup os ", "setup arch ", "setup shell ", "setup directory "}
 	for i, prefix := range want {
 		if i >= len(texts) || !strings.HasPrefix(texts[i], prefix) {
 			t.Fatalf("setup section line %d should start %q:\n%s", i+1, prefix, out)
@@ -442,9 +442,13 @@ func TestRun_NoLimitAndLimitOneKeepSequentialLogShape(t *testing.T) {
 				t.Fatalf("exit = %d, stderr = %s\n%s", code, errOut, out)
 			}
 			want := []string{
+				"==== Setup: the environment the steps run in ====",
 				"setup environment ready", "setup os X", "setup arch X", "setup shell X", "setup directory X",
+				"==== Step first ====",
 				"step first started", "step first | one 1", "step first | one 2", "step first finished duration D exit 0",
+				"==== Step second ====",
 				"step second started", "step second | two 1", "step second finished duration D exit 0",
+				"==== Summary ====",
 				"summary succeeded steps 2 duration D",
 			}
 			assertShape(t, normalized(t, out), want)
@@ -465,9 +469,13 @@ func TestRun_NoLimitAndLimitOneKeepSequentialLogShape(t *testing.T) {
 				t.Fatalf("exit = %d, stderr = %s\n%s", code, errOut, out)
 			}
 			want := []string{
+				"==== Setup: the environment the steps run in ====",
 				"setup environment ready", "setup os X", "setup arch X", "setup shell X", "setup directory X",
+				"==== Step first ====",
 				"step first started", "step first | one 1", "step first finished duration D exit 0",
+				"==== Step second ====",
 				"step second started", "step second finished duration D exit 1",
+				"==== Summary ====",
 				"summary failed steps 2 duration D",
 				"error fail-fast failed at second (exit 1)",
 			}
