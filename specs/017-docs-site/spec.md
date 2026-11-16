@@ -1,6 +1,6 @@
 # Feature Specification: Documentation site
 
-**Spec**: `017-docs-site` | **Created**: 2026-11-16 | **Status**: Implemented (publishing is a maintainer step)
+**Spec**: `017-docs-site` | **Created**: 2026-11-16 | **Status**: Implemented (the first deploy needs the repository's Pages setting)
 
 **Input**: The docs are Markdown in `docs/`. The maintainer wants, before v0.1.0, a site with search,
 a sidebar and a brand, and a home page that shows the product (decision 2026-11-16). Release scope:
@@ -55,14 +55,17 @@ file, the CLI and the daemon API do not change, and building TRUSS never needs N
   `https://afri-bit.github.io/truss/`). Fonts, links and assets all honour it.
 - **FR-007** CI builds the site when `site/`, `docs/` or Desktop's fonts change
   (`.github/workflows/docs.yml`).
+- **FR-009** On a push to `main` CI publishes the built site to GitHub Pages by uploading it as a Pages
+  package and deploying that; there is no `gh-pages` branch. The package contains `.nojekyll`. The
+  repository's Pages source must be "GitHub Actions" (a setting, not code).
 - **FR-008** The docs have a dark and light toggle: one button in the header (in the menu on a phone) that
   switches between the two, with a label that names the action. The docs follow the system scheme
   until it is used; after that the choice is remembered and applies to every page before it paints.
 
 ## Not in this spec
 
-Publishing (GitHub Pages needs the repository's settings), a share image for social cards, a
-dependency update routine for `site/`, and an accessibility check in CI.
+A share image for social cards, a dependency update routine for `site/`, and an accessibility check
+in CI.
 
 ## Verification
 
@@ -91,4 +94,6 @@ dependency update routine for `site/`, and an accessibility check in CI.
 - Reviews: independent reviews (general, spec, security) ran on `a3e9d2a` (rebased as `442b53a`, same
   site content), and delta reviews on the commits after it; all four verdicts are approve.
 - Not proved: Safari and Firefox rendering (`offset-path` is used by the schedule diagram, with a
-  `@supports` guard), a screen-reader pass, the CI job (first run is the pull request), publishing.
+  `@supports` guard), a screen-reader pass, and the first runs of the CI job and of the deploy (they need
+  the pull request and the Pages setting). Checked locally: the workflow parses, every action is pinned
+  to a commit, and `dist/.nojekyll` is in the build output.

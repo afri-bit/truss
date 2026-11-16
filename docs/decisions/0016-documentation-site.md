@@ -37,8 +37,11 @@ script (about 3.5 KB gzipped), with no animation library. Its pictures are live 
 TRUSS Desktop's own parts. The page is complete without script and under reduced motion.
 
 The site is served from a base path set by `SITE_URL` and `SITE_BASE` (default: GitHub Pages at
-`/truss`). Publishing is not part of this decision. Deploying needs the maintainer's repository
-settings.
+`/truss`).
+- Publishing (amendment, 2026-11-16): CI deploys the built site to GitHub Pages from `main` by
+  uploading it as a Pages package (`actions/upload-pages-artifact`, `actions/deploy-pages`, pinned by
+  commit). There is no `gh-pages` branch. `site/public/.nojekyll` is part of the package. The one
+  setting that is the repository's own is Pages > Source: "GitHub Actions".
 
 ## Consequences
 

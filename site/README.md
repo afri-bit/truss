@@ -60,5 +60,14 @@ motion, which show every picture in its finished state.
 
 The site is built for a base path. By default it is `https://afri-bit.github.io/truss/` (GitHub
 Pages); set `SITE_URL` and `SITE_BASE` for another host, for example `SITE_BASE=/` on a domain of
-its own. Publishing is not automated yet: it needs the repository's Pages setting ("GitHub Actions")
-and then a job that runs `actions/upload-pages-artifact` on `site/dist` and `actions/deploy-pages`.
+its own.
+
+## Publishing
+
+`.github/workflows/docs.yml` builds the site on every pull request that touches `site/` or `docs/`.
+On a push to `main` it also uploads `site/dist` as a GitHub Pages package and deploys it: there is
+no `gh-pages` branch, and `public/.nojekyll` travels in the package (the upload sets
+`include-hidden-files`, or the dotfile would be dropped). The deploy job needs one repository
+setting, once: **Settings > Pages > Build and deployment > Source: GitHub Actions**. The site is then
+at `https://afri-bit.github.io/truss/`. To publish by hand, run the workflow from the Actions tab
+(it deploys only from `main`).
