@@ -290,7 +290,7 @@ window.TrussDemo = (function () {
     switch (route) {
       case "GET status": {
         const views = all().map((r) => runView(r, now));
-        return json(200, { version: "0.1.0-demo", pid: 4242, started_at: iso(T0 - 3 * H - 12 * M), home: HOME + "/.truss", address: location.host, pipelines: world.pipelines.size,
+        return json(200, { version: "0.2.0-beta-demo", pid: 4242, started_at: iso(T0 - 3 * H - 12 * M), home: HOME + "/.truss", address: location.host, pipelines: world.pipelines.size,
           running_runs: views.filter((r) => r.status === "running").length, queued_runs: views.filter((r) => r.status === "queued").length, max_parallel_runs: 4 });
       }
       case "GET metrics": return json(200, metrics(now));
