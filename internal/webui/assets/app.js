@@ -11,7 +11,7 @@ const LOG_MS = 700;
 
 // ---------- settings ----------
 
-const DEFAULTS = { theme: "system", density: "comfortable", sidebar: "expanded", refresh: 1500, motion: "full", logWrap: false, logTs: true, logSize: 12 };
+const DEFAULTS = { theme: "system", density: "comfortable", sidebar: "expanded", refresh: 1500, motion: "full", logWrap: false, logTs: true, logSize: 12, flowsView: "cards" };
 const settings = Object.assign({}, DEFAULTS, (() => {
   try { return JSON.parse(localStorage.getItem("truss-settings") || "{}"); } catch { return {}; }
 })());
@@ -125,6 +125,8 @@ const ICONS = {
   dashboard: '<rect x="2.25" y="2.25" width="5" height="6" rx="1"/><rect x="8.75" y="2.25" width="5" height="3.5" rx="1"/><rect x="8.75" y="7.25" width="5" height="6.5" rx="1"/><rect x="2.25" y="9.75" width="5" height="4" rx="1"/>',
   pipelines: '<circle cx="3.75" cy="4" r="1.75"/><circle cx="3.75" cy="12" r="1.75"/><circle cx="12.25" cy="8" r="1.75"/><path d="M5.5 4h1.25a2 2 0 0 1 2 2v0a2 2 0 0 0 2 2h0M5.5 12h1.25a2 2 0 0 0 2-2v0a2 2 0 0 1 2-2"/>',
   runs: '<path d="M2.5 4h11M2.5 8h5.5M2.5 12h5.5"/><path d="M10.5 9.25v4.5l3.75-2.25z"/>',
+  grid: '<rect x="2.25" y="2.25" width="4.5" height="4.5" rx="1"/><rect x="9.25" y="2.25" width="4.5" height="4.5" rx="1"/><rect x="2.25" y="9.25" width="4.5" height="4.5" rx="1"/><rect x="9.25" y="9.25" width="4.5" height="4.5" rx="1"/>',
+  list: '<path d="M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h.1M2.5 8h.1M2.5 12h.1"/>',
   monitor: '<path d="M1.5 8.5h2.75l1.75-4.5 3 8.5 1.75-4h3.75"/>',
   settings: '<path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6"/><circle cx="10" cy="4.5" r="1.5"/><circle cx="6" cy="11.5" r="1.5"/>',
   search: '<circle cx="7" cy="7" r="4.25"/><path d="m10.25 10.25 3 3"/>',
@@ -396,26 +398,30 @@ function runsTable(runs, opts = {}) {
       !live && note && h("td", { class: "note", title: r.reason || "" }, r.reason || (r.scheduled_for ? "scheduled for " + clock(r.scheduled_for) : ""))))));
 }
 
-function pipelineActions(p, compactMode) {
+// A list row has no room for words (iconOnly): each button is an icon named by its label and tooltip.
+function pipelineActions(p, compactMode, iconOnly) {
   // Act on the registration, not on the name shown for it: a shown name can move to another flow.
   const name = encodeURIComponent(p.registered_name || p.name);
   const hasSchedule = (p.schedules || []).length > 0;
+  const btn = (label, ico, attrs) => h("button", iconOnly ? Object.assign({}, attrs, { "aria-label": label, title: attrs.title || label, class: ((attrs.class || "") + " icon-only").trim() }) : attrs,
+    icon(ico, "sm"), !iconOnly && label);
   const pauseBtn = !hasSchedule
-    ? h("button", { disabled: true, title: "This pipeline has no schedule" }, icon("pause", "sm"), "Pause schedule")
+    ? btn("Pause schedule", "pause", { disabled: true, title: "This pipeline has no schedule" })
     : p.paused
-      ? h("button", { onclick: () => act(`Schedules of ${p.name} resumed`, () => api("POST", `/pipelines/${name}/resume`)) }, icon("play", "sm"), "Resume schedule")
-      : h("button", { onclick: () => act(`Schedules of ${p.name} paused`, () => api("POST", `/pipelines/${name}/pause`)) }, icon("pause", "sm"), "Pause schedule");
+      ? btn("Resume schedule", "play", { onclick: () => act(`Schedules of ${p.name} resumed`, () => api("POST", `/pipelines/${name}/resume`)) })
+      : btn("Pause schedule", "pause", { onclick: () => act(`Schedules of ${p.name} paused`, () => api("POST", `/pipelines/${name}/pause`)) });
+  const small = compactMode || iconOnly;
   return h("div", { class: "actions" },
-    h("button", { class: "primary", disabled: !p.valid, onclick: () => act(`Run of ${p.name} requested`, async () => {
+    btn("Run now", "play", { class: "primary", disabled: !p.valid, onclick: () => act(`Run of ${p.name} requested`, async () => {
       const run = await (await api("POST", `/pipelines/${name}/runs`)).json();
       go(href.run(run.id));
-    }) }, icon("play", "sm"), "Run now"),
+    }) }),
     pauseBtn,
     compactMode && h("span", { class: "spacer" }),
-    h("button", { class: "danger" + (compactMode ? " icon-only" : ""), "aria-label": "Unregister", title: `Unregister ${p.name}`, onclick: () => {
+    h("button", { class: "danger" + (small ? " icon-only" : ""), "aria-label": "Unregister", title: `Unregister ${p.name}`, onclick: () => {
       if (!confirm(`Unregister ${p.name}? The file and its run history stay.`)) return;
       act(`${p.name} unregistered`, async () => { await api("DELETE", `/pipelines/${name}`); go("#/pipelines"); });
-    } }, icon("trash", "sm"), !compactMode && "Unregister"));
+    } }, icon("trash", "sm"), !small && "Unregister"));
 }
 
 function scheduleText(p) {
@@ -549,7 +555,7 @@ function lineChart(series, opts = {}) {
 
 const views = {};
 const draft = { path: "", name: "" };
-const ui = { runFilter: "all", runQuery: "", pipeQuery: "", pipeView: "grid" };
+const ui = { runFilter: "all", runQuery: "", pipeQuery: "" };
 
 views.dashboard = {
   nav: "dashboard",
@@ -658,18 +664,23 @@ views.pipelines = {
     const q = ui.pipeQuery.toLowerCase();
     const shown = pipelines.filter((p) => !q || p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q));
     const states = ["ready", "running", "paused", "invalid"].map((st) => [st, pipelines.filter((p) => pipelineState(p) === st).length]).filter(([, n]) => n);
+    const list = settings.flowsView === "list"; // anything else, or nothing stored, is cards
+    const viewBtn = (id, value, label, ico) => h("button", { type: "button", id, "aria-pressed": String(list === (value === "list")), onclick: () => setSetting("flowsView", value) }, icon(ico, "sm"), label);
     return [
       h("div", { class: "head" }, h("div", { class: "title" }, h("h1", null, "Flows"),
         h("p", { class: "sub" }, "Pipeline files this daemon knows. The file stays where it is and is read again before every run."))),
       panel("Register a pipeline", { hint: "absolute path to a truss.yaml" }, form),
       h("div", { class: "toolbar" },
-        h("input", { type: "search", id: "pipe-filter", class: "filter", placeholder: "Filter by name or path", "aria-label": "Filter pipelines", value: ui.pipeQuery, oninput: (e) => { ui.pipeQuery = e.target.value; filterInPlace(".cards > .card", ui.pipeQuery, "pipe-count", pipelines.length); } }),
+        h("input", { type: "search", id: "pipe-filter", class: "filter", placeholder: "Filter by name or path", "aria-label": "Filter pipelines", value: ui.pipeQuery, oninput: (e) => { ui.pipeQuery = e.target.value; filterInPlace(".cards > .card, #flows-table tbody tr", ui.pipeQuery, "pipe-count", pipelines.length); } }),
         h("span", { class: "muted", id: "pipe-count", style: "font-size:12px" }, `${shown.length} of ${pipelines.length}`),
         h("span", { class: "spacer" }),
-        states.map(([st, n]) => h("span", { class: "muted", style: "font-size:12px;display:inline-flex;gap:6px;align-items:center" }, badge(st), n))),
-      pipelines.length
-        ? h("div", { class: "cards" }, pipelines.map((p) => { const c = pipelineCard(p); c.hidden = !shown.includes(p); return c; }))
-        : h("div", { class: "panel empty" }, h("div", { class: "empty-title" }, "No pipelines registered yet."), "Use the form above or ", h("code", null, "truss register <path>")),
+        states.map(([st, n]) => h("span", { class: "muted", style: "font-size:12px;display:inline-flex;gap:6px;align-items:center" }, badge(st), n)),
+        pipelines.length > 0 && h("div", { class: "seg", role: "group", "aria-label": "Flows view" }, viewBtn("flows-view-cards", "cards", "Cards", "grid"), viewBtn("flows-view-list", "list", "List", "list"))),
+      !pipelines.length
+        ? h("div", { class: "panel empty" }, h("div", { class: "empty-title" }, "No pipelines registered yet."), "Use the form above or ", h("code", null, "truss register <path>"))
+        : list
+          ? flowsTable(pipelines, shown)
+          : h("div", { class: "cards" }, pipelines.map((p) => { const c = pipelineCard(p); c.hidden = !shown.includes(p); return c; })),
     ];
   },
 };
@@ -684,24 +695,51 @@ function filterInPlace(selector, query, countId, total) {
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-function pipelineCard(p) {
+// The cells a flow shows as a card and as a list row.
+// brief is the list row: the time left, with the clock time as its tooltip.
+const nextRunCell = (p, brief) => p.paused ? h("span", { class: "muted" }, "paused") : nextOf(p) ? (brief ? h("span", { title: clock(nextOf(p)) }, until(nextOf(p))) : [clock(nextOf(p)), h("span", { class: "muted" }, " · " + until(nextOf(p)))]) : h("span", { class: "muted" }, "–");
+const lastRunCell = (p) => p.last_run ? h("a", { href: href.run(p.last_run.id), style: "display:inline-flex;gap:8px;align-items:center;text-decoration:none" }, badge(p.last_run.status), h("span", { class: "mono muted" }, ago(p.last_run.created_at))) : h("span", { class: "muted" }, "never");
+const durationCell = (p) => p.last_run && p.last_run.started_at ? took(p.last_run) : h("span", { class: "muted" }, "–");
+
+// flowShape draws the step graph as small bars colored by the last run, and counts steps and stages.
+function flowShape(p, brief) {
   const last = p.last_run;
   const statusOf = (id) => { const x = last && last.steps.find((y) => y.id === id); return x ? stepState(x) : "pending"; };
   const cols = p.valid ? layoutSteps(p.steps || []) : [];
+  const full = `${plural((p.steps || []).length, "step")} · ${plural(cols.length, "stage")} · ${p.concurrency || 1}× concurrency`;
+  return h("div", { class: "shape", title: brief && p.valid ? full : null },
+    h("span", { class: "dag", "aria-hidden": "true" }, cols.map((col) => h("span", null, col.slice(0, 4).map((st) => h("b", { class: "s-" + statusOf(st.id) }))))),
+    p.valid ? h("span", null, brief ? plural((p.steps || []).length, "step") : full) : h("span", null, "not runnable"));
+}
+
+function pipelineCard(p) {
   return h("article", { class: "card", "data-filter": (p.name + " " + p.path).toLowerCase() },
     h("header", null, h("span", { class: "glyph" }, icon("pipelines", "sm")), h("a", { href: href.pipeline(p.name) }, p.name), badge(pipelineState(p))),
     h("div", { class: "path mono", title: p.path }, h("bdi", null, p.path)),
     p.valid
       ? h("dl", { class: "facts" },
         h("dt", null, "Schedule"), h("dd", null, scheduleText(p)),
-        h("dt", null, "Next run"), h("dd", { class: "mono" }, p.paused ? h("span", { class: "muted" }, "paused") : nextOf(p) ? [clock(nextOf(p)), h("span", { class: "muted" }, " · " + until(nextOf(p)))] : h("span", { class: "muted" }, "–")),
-        h("dt", null, "Last run"), h("dd", null, last ? h("a", { href: href.run(last.id), style: "display:inline-flex;gap:8px;align-items:center;text-decoration:none" }, badge(last.status), h("span", { class: "mono muted" }, ago(last.created_at))) : h("span", { class: "muted" }, "never")),
-        h("dt", null, "Duration"), h("dd", { class: "mono" }, last && last.started_at ? took(last) : h("span", { class: "muted" }, "–")))
+        h("dt", null, "Next run"), h("dd", { class: "mono" }, nextRunCell(p)),
+        h("dt", null, "Last run"), h("dd", null, lastRunCell(p)),
+        h("dt", null, "Duration"), h("dd", { class: "mono" }, durationCell(p)))
       : h("div", { class: "card-error" }, p.error),
-    h("div", { class: "shape" },
-      h("span", { class: "dag", "aria-hidden": "true" }, cols.map((col) => h("span", null, col.slice(0, 4).map((st) => h("b", { class: "s-" + statusOf(st.id) }))))),
-      p.valid ? h("span", null, `${plural((p.steps || []).length, "step")} · ${plural(cols.length, "stage")} · ${p.concurrency || 1}× concurrency`) : h("span", null, "not runnable")),
+    flowShape(p),
     pipelineActions(p, true));
+}
+
+// flowsTable is the list view: one row per flow, the same flows and filter as the cards.
+function flowsTable(pipelines, shown) {
+  const open = (p) => (e) => { if (!e.target.closest("a, button")) go(href.pipeline(p.name)); };
+  return h("div", { class: "panel", id: "flows-table" }, h("div", { class: "table-wrap flat" }, h("table", null,
+    h("thead", null, h("tr", null, ["State", "Flow", "Schedule", "Next run", "Last run", "Duration", "Shape", "Actions"].map((t) => h("th", { class: t === "Actions" ? "acts" : null }, t)))),
+    h("tbody", null, pipelines.map((p) => h("tr", { class: "link", onclick: open(p), hidden: !shown.includes(p), "data-filter": (p.name + " " + p.path).toLowerCase() },
+      h("td", null, badge(pipelineState(p))),
+      h("td", { class: "flow" }, h("a", { class: "pipe", href: href.pipeline(p.name) }, p.name), h("div", { class: "path mono", title: p.path }, h("bdi", null, p.path))),
+      p.valid
+        ? [h("td", null, (p.schedules || []).length ? scheduleText(p) : h("span", { class: "muted" }, "on demand")), h("td", { class: "mono" }, nextRunCell(p, true)), h("td", null, lastRunCell(p)), h("td", { class: "mono" }, durationCell(p))]
+        : h("td", { class: "error", colspan: "4", title: p.error }, p.error),
+      h("td", null, flowShape(p, true)),
+      h("td", { class: "acts" }, pipelineActions(p, false, true))))))));
 }
 
 views.pipeline = {

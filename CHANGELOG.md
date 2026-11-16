@@ -9,6 +9,10 @@ Dates below are when a release was made. 0.1.0 is the first release.
 
 ## [Unreleased]
 
+### Added
+
+- TRUSS Desktop: the Flows page can show the flows as cards (as before) or as a list, one row per flow with its state, schedule, next and last run, duration, step graph and actions. A switch beside the filter changes the view, and the choice is kept in the browser. No API change (specs/021-flows-view-toggle).
+
 ### Changed
 
 - The run log has headings so the parts can be told apart. `truss run`, `truss logs`, the saved `run.log` and the daemon's log gain a `==== Setup: the environment the steps run in ====` line before the setup, a `==== Step <id> ====` line before each step (each attempt) and a `==== Summary ====` line before the summary, each timestamped like every line. This changes the log of v0.1.0, whose first line was `setup environment ready`. Nothing else in the log changes; a script that expects the first line to be `setup environment ready` must skip the heading. TRUSS Desktop shows the run's log as cards: the setup (which machine the steps ran on), one card per step and the summary. Cards of steps that went well are closed, the others open, and your choice stays while the log updates. Logs without headings group the same way (specs/020-readable-run-log, ADR 0018).

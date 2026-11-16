@@ -3,7 +3,7 @@ const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { startDaemon, openBrowser } = require("./support");
+const { startDaemon, openBrowser, poll } = require("./support");
 
 let d, b, page;
 before(async () => { d = await startDaemon(); b = await openBrowser(); page = await b.newPage(); });
@@ -162,6 +162,106 @@ test("a flow follows an edit of its file, new name included, and keeps its runs"
     await page.getByRole("button", { name: "Re-run" }).click();
     await page.waitForFunction((id) => !location.hash.endsWith(id), run.id);
     assert.equal((await d.call("GET", "/runs?pipeline=after")).length, 2);
+    assert.deepEqual(page.problems, []);
+  } finally {
+    await page.context().close();
+  }
+});
+
+test("the Flows page shows cards or a list, and keeps the choice", async () => {
+  const bad = path.join(d.pipelines, "toggle-bad.yaml");
+  fs.writeFileSync(bad, fs.readFileSync(path.join(d.pipelines, "ok.yaml")));
+  await d.register("ok.yaml", "toggle-ok");
+  await d.register("nightly.yaml", "toggle-nightly");
+  await d.register("toggle-bad.yaml", "toggle-bad");
+  fs.writeFileSync(bad, 'version: "1"\nsteps: [\n'); // the file stops loading: the flow stays, as invalid
+  await poll(async () => (await d.call("GET", "/pipelines/toggle-bad")).valid === false || null, "toggle-bad invalid");
+
+  const page = await b.newPage(); // its own page: the view choice lives in the browser's storage
+  const row = (name) => page.locator("#flows-table tbody tr", { has: page.getByRole("link", { name, exact: true }) });
+  const pressed = (label) => page.getByRole("button", { name: label, exact: true }).getAttribute("aria-pressed");
+  const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem("truss-settings") || "{}").flowsView);
+  try {
+    await page.goto(d.authedUrl());
+    await page.evaluate(() => { location.hash = "#/pipelines"; });
+    await page.locator("h1", { hasText: "Flows" }).waitFor();
+    const total = (await d.call("GET", "/pipelines")).length;
+
+    // Cards are the default and the page shows nothing else.
+    await page.locator("article.card").first().waitFor();
+    assert.equal(await pressed("Cards"), "true");
+    assert.equal(await pressed("List"), "false");
+    assert.equal(await page.locator("#flows-table").count(), 0);
+    assert.equal(await page.locator("article.card").count(), total);
+
+    // The filter and the count carry over to the list.
+    await page.locator("#pipe-filter").fill("toggle-");
+    await page.locator("#pipe-count", { hasText: `3 of ${total}` }).waitFor();
+    await page.getByRole("button", { name: "List", exact: true }).click();
+    await page.locator("#flows-table").waitFor();
+    assert.equal(await page.locator("article.card").count(), 0);
+    assert.equal(await pressed("List"), "true");
+    assert.equal(await page.locator("#pipe-filter").inputValue(), "toggle-");
+    assert.equal(await page.locator("#pipe-count").textContent(), `3 of ${total}`);
+    assert.equal(await page.locator("#flows-table tbody tr:not([hidden])").count(), 3);
+    assert.ok(await page.locator("#flows-view-list").evaluate((el) => el === document.activeElement), "the switch keeps focus");
+    assert.equal(await stored(), "list");
+    const heads = await page.locator("#flows-table thead th").allTextContents();
+    assert.deepEqual(heads.slice(0, 7), ["State", "Flow", "Schedule", "Next run", "Last run", "Duration", "Shape"]);
+    await page.locator("#pipe-filter").fill("");
+    await page.locator("#pipe-count", { hasText: `${total} of ${total}` }).waitFor();
+    assert.equal(await page.locator("#flows-table tbody tr:not([hidden])").count(), total);
+
+    // A row says what a card says.
+    const ok = row("toggle-ok");
+    assert.ok((await ok.locator(".path").textContent()).endsWith("ok.yaml"));
+    await ok.locator(".badge", { hasText: "ready" }).waitFor();
+    assert.match(await ok.textContent(), /3 steps/);
+    const broken = row("toggle-bad");
+    await broken.locator(".badge", { hasText: "invalid" }).waitFor();
+    assert.match(await broken.textContent(), /not runnable/);
+    assert.ok((await broken.locator("td.error").textContent()).length > 0, "the error is shown");
+
+    // The actions work from a row, under the same names as on a card.
+    const nightly = row("toggle-nightly");
+    await nightly.getByRole("button", { name: "Pause schedule" }).click();
+    await nightly.locator(".badge", { hasText: "paused" }).waitFor();
+    await nightly.getByRole("button", { name: "Resume schedule" }).click();
+    await nightly.locator(".badge", { hasText: "ready" }).waitFor();
+    assert.equal(await ok.getByRole("button", { name: "Pause schedule" }).isDisabled(), true, "no schedule, nothing to pause");
+    assert.equal(await broken.getByRole("button", { name: "Run now" }).isDisabled(), true, "an invalid flow cannot run");
+
+    await ok.getByRole("button", { name: "Run now" }).click();
+    await page.waitForURL(/#\/runs\/./);
+    await page.locator(".badge.s-succeeded").first().waitFor();
+    await page.evaluate(() => { location.hash = "#/pipelines"; });
+    await row("toggle-ok").waitFor(); // still a list when the page comes back
+
+    // A row opens its flow; its buttons do not.
+    await row("toggle-ok").locator("td").nth(2).click();
+    await page.waitForURL(/#\/pipelines\/toggle-ok$/);
+    await page.evaluate(() => { location.hash = "#/pipelines"; });
+
+    // Unregister asks first.
+    page.once("dialog", (dlg) => dlg.dismiss());
+    await row("toggle-nightly").getByRole("button", { name: "Unregister" }).click();
+    await row("toggle-nightly").waitFor();
+    page.once("dialog", (dlg) => dlg.accept());
+    await row("toggle-nightly").getByRole("button", { name: "Unregister" }).click();
+    await row("toggle-nightly").waitFor({ state: "detached" });
+
+    // A reload keeps the list; Cards brings the cards back; an unknown stored value means Cards.
+    await page.reload();
+    await page.locator("#flows-table").waitFor();
+    assert.equal(await pressed("List"), "true");
+    await page.getByRole("button", { name: "Cards", exact: true }).click();
+    await page.locator("article.card").first().waitFor();
+    assert.equal(await page.locator("#flows-table").count(), 0);
+    assert.equal(await stored(), "cards");
+    await page.evaluate(() => localStorage.setItem("truss-settings", JSON.stringify({ flowsView: "bogus" })));
+    await page.reload();
+    await page.locator("article.card").first().waitFor();
+    assert.equal(await pressed("Cards"), "true");
     assert.deepEqual(page.problems, []);
   } finally {
     await page.context().close();
