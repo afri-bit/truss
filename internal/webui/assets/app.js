@@ -736,6 +736,7 @@ views.pipeline = {
         panel("Configuration", null, h("div", { class: "panel-body", style: "padding-top:4px;padding-bottom:4px" }, h("dl", { class: "facts" },
           h("dt", null, "File"), h("dd", { class: "mono", title: p.path }, p.path),
           p.definition_name && [h("dt", null, "Defined as"), h("dd", { class: "mono" }, p.definition_name)],
+          p.registered_name && [h("dt", null, "Registered as"), h("dd", { class: "mono", title: "The name it was registered under keeps its history and data; either name works in commands" }, p.registered_name)],
           p.valid && scheduleFacts(p),
           p.valid && [h("dt", null, "Concurrency"), h("dd", null, `${p.concurrency} step${p.concurrency === 1 ? "" : "s"} at once`)],
           p.valid && [h("dt", null, "Overlap"), h("dd", null, { queue: "a second run waits for the first", skip: "a second run is skipped", parallel: "runs may overlap" }[p.overlap] || p.overlap)],

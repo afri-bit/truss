@@ -1,6 +1,8 @@
 "use strict";
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const { startDaemon, openBrowser } = require("./support");
 
 let d, b, page;
@@ -128,4 +130,36 @@ test("the picker walks up and home, and submitting with Enter registers once", a
   await page.locator("#register-path").press("Enter"); // empty and required: nothing is sent
   await new Promise((r) => setTimeout(r, 300));
   assert.equal((await d.call("GET", "/pipelines")).length, before + 1);
+});
+
+test("a flow follows an edit of its file, new name included, and keeps its runs", async () => {
+  const file = path.join(d.pipelines, "follow.yaml");
+  const body = (name, ...steps) => `version: "1"\npipeline:\n  name: ${name}\nsteps:\n` + steps.map((s) => `  - id: ${s}\n    run: echo ${s}\n`).join("");
+  fs.writeFileSync(file, body("before", "one"));
+  await d.register("follow.yaml");
+  const run = await d.call("POST", "/pipelines/before/runs");
+  await d.waitRun(run.id);
+  const page = await b.newPage(); // its own page: the shared one may still be on its way to "#/"
+  try {
+    await page.goto(d.authedUrl());
+    await page.evaluate(() => { location.hash = "#/pipelines/before"; });
+    await page.locator("h1", { hasText: "before" }).waitFor();
+    await page.locator(".graph .node").first().waitFor();
+    assert.equal(await page.locator(".graph .node").count(), 1);
+
+    fs.writeFileSync(file, body("after", "first", "second"));
+    // The page refreshes by itself: the new name, the new graph, and the old run in the history.
+    await page.locator("h1", { hasText: "after" }).waitFor({ timeout: 15000 });
+    await page.waitForFunction(() => document.querySelectorAll(".graph .node").length === 2);
+    await page.locator(".facts dd", { hasText: "before" }).waitFor();
+    await page.locator(`a[href="#/runs/${run.id}"]`).first().waitFor();
+
+    // Either name still reaches it, and the run page shows the name the file gives.
+    assert.equal((await d.call("GET", "/pipelines/before")).name, "after");
+    await page.evaluate((id) => { location.hash = "#/runs/" + id; }, run.id);
+    await page.locator(".head .sub a", { hasText: "after" }).waitFor();
+    assert.deepEqual(page.problems, []);
+  } finally {
+    await page.context().close();
+  }
 });
