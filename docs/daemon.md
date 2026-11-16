@@ -64,7 +64,7 @@ A registration is only a name and a path. The layout of a project is in
   - A new name that another registration holds or claims is not taken, and neither is a name you
     chose with `--name` (or in Desktop's name field). Registering again with `--name` set to the
     registered name keeps it.
-  - A file that stops loading keeps the name it was last read with.
+  - A file that stops loading keeps the name it was last read with (until the daemon restarts).
   - **Scripts and schedulers should use the registered name.** A shown name can move to another flow;
     a registered name never does.
   - To change the registered name, unregister and register again (the history stays with the old

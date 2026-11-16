@@ -26,7 +26,9 @@ Risk class: tier 2 (daemon API and what a name means to clients). Scope decided 
   It checks every second and also on every request that shows or uses the file, so no answer lags an
   edit by up to a second (a request trusts a look at a file for at most 250 ms). A file that no
   longer loads is shown as invalid with the reason, and its history stays. It is read again at every
-  check until it loads, so a read that failed for a passing reason heals without another edit.
+  check until it loads, so a read that failed for a passing reason heals without another edit. A
+  file that fails on its content (YAML or validation) fails the same way until it changes and is
+  not parsed again.
 - **FR-002** Each registration has a **registered name**: the name it was registered under. It never
   changes. Run history, schedules, overlap control and the data and cache folders hang on it.
 - **FR-003** The name the daemon **shows** for a registration is `pipeline.name` from its file, when
@@ -38,7 +40,8 @@ Risk class: tier 2 (daemon API and what a name means to clients). Scope decided 
 - **FR-004** `name` in the API's pipeline object is the shown name. `registered_name` is present only
   when it differs. `definition_name` is unchanged.
 - **FR-005** Every command and API call that takes a pipeline name accepts the registered name or the
-  shown name: `GET`, `DELETE` and the `pause`, `resume` and `runs` calls of `/pipelines/{name}`, and
+  shown name (a name that answers to nothing is looked up once more with a fresh look at the files,
+  so a name a file took a moment ago is found): `GET`, `DELETE` and the `pause`, `resume` and `runs` calls of `/pipelines/{name}`, and
   `GET /runs?pipeline=`. A name that answers to no registration is an error as before (`404`).
 - **FR-006** The history of a flow is every run of its registered name, plus any run recorded under
   its shown name (a run tracked from a shell reports the file's name). `GET /runs?pipeline=` and the
@@ -48,7 +51,9 @@ Risk class: tier 2 (daemon API and what a name means to clients). Scope decided 
   registration: a shown name can move to another flow, a registered name cannot. A run record on
   disk keeps the registered name; nothing in the run history is rewritten.
 - **FR-008** Registering a file without `--name` (as `truss register --all` does) returns the
-  registration that file already has, whatever name it carries or shows, and creates no second one.
+  registration that file already has, whatever name it carries or shows (even one another
+  registration holds: no `409`), and creates no second one. A request that creates nothing writes no
+  "registered" line to the log.
   `--name` still makes another registration of the same file under that name. Registering another
   file under a name a registration holds or shows is `409`, as before. Registering a file again with
   `--name` set to its registered name marks that name as chosen.
@@ -85,12 +90,24 @@ does not change under a flow.
 - **An unresponsive share can stall the daemon.** Looking at a file takes the daemon's lock, as the
   one-second check always did, so a registered file on a share that stops answering holds up the
   daemon until the share answers. Looking at the files outside the lock is a follow-up.
+- **A kept name does not survive a restart.** The name a file keeps while it does not load is held
+  in memory. After the daemon restarts, a file that still does not parse is shown under its
+  registered name until it loads again.
+- **The same file by another spelling.** A file is the same file when its cleaned path is the same
+  text. A symlink to it, or the same path in a different letter case on macOS or Windows, is another
+  file to the registry, so registering it can create a second registration. Not new here; a
+  follow-up with the case-insensitive names above.
+- **A registration's reading is kept by its registered name.** If a name is unregistered and the same
+  name registered again for another file of exactly the same size and time before the next check,
+  the view could show the old reading until then. Runs always read the file. Not new here.
 - **Names on case-insensitive volumes.** Registered names that differ only by case share a data
   folder on macOS and Windows. Not new here; a follow-up.
 
 ## Compatibility
 
-Additive to API v1: one optional field, `registered_name`. The registry file is unchanged and needs
+Additive to API v1: optional fields `registered_name` on a pipeline and `registered_pipeline` on a run.
+Two visible changes ride with them: `GET /pipelines` is sorted by the name shown, and registering a
+file again without `--name` no longer makes a second registration. The registry file is unchanged and needs
 no migration, except an optional `chosen` flag on an entry registered with `--name`; an older daemon
 reads the file and ignores it. A registration made earlier with `--name` has no flag and follows the
 file's name from now on; register it again with `--name` to keep a name. For a flow whose file does
@@ -111,6 +128,12 @@ the name; a shown name is held (`409`) and works to unregister; runs name their 
 tracked runs join the history; the log says once that a file changed. A browser test in
 `tests/ui/pipelines.test.js` edits a flow's file, watches the page follow it, and re-runs an old
 run by the registration.
+Also tested: a file that could not be read heals without another edit (Unix; skipped on Windows and
+as root); a file that fails on its content is not parsed again; the list order; registering a
+file again when its new name is held by another flow; a run trigger that sees an edit first logs it;
+`runs.ListFor` and `runs.SummaryFor` in `internal/runs`.
 Not verified: Windows (nothing here is OS-specific; the file-time check is the one the daemon
-already used) and a file replaced by an editor that keeps the same size and time (the daemon would
-not see that edit until its size or time changes; every run still reads the file).
+already used); a file replaced by an editor that keeps the same size and time (the daemon would
+not see that edit until its size or time changes; every run still reads the file); the response of
+a cancelled run under a renamed flow (every run response passes the same mapping, tested for get,
+list, trigger and tracked runs); a flow on a network share that stops answering.

@@ -31,8 +31,11 @@ and behave differently per OS.
 - A shown name can move to another flow when claims change. Scripts and Desktop therefore act on the
   registered name, and runs carry it (`registered_pipeline`). A file that stops loading keeps the
   name it was last read with, so a name does not move while a file is being fixed.
-- A file registered again without `--name` is never registered twice; `--name` is the one way to
-  give a file a second registration.
+- A file registered again without `--name` is never registered twice, and is never a name clash;
+  `--name` is the one way to give a file a second registration. The path is compared as text, so a
+  symlink or a letter-case variant of the same file is another file to the registry (a follow-up).
+- A file that fails on its content is read once per change, and one that could not be read is read
+  again at every check, so a daemon is not kept busy by a broken file.
 - Following relies on the file's time and size, which a network share may report late (spec 019,
   known limits).
 - Name resolution lives in `internal/daemon`, because it needs the file's content; the registry

@@ -4,7 +4,7 @@
   "tier": 2,
   "branch": "feature/018-desktop-corrections",
   "status": "in_review",
-  "step": "review fixes applied; delta review of 057bc85..HEAD, then push",
+  "step": "delta review fixes applied (retry only read errors, path-first register, fresh lookup miss, tests); verify, push, PR",
   "steps_done": [
     "chart fix, Flows and Re-run, spec 018, docs; verify.sh pass; 30 UI tests pass",
     "review (reviewer, spec-reviewer) and delta review: approve at efb9803",
@@ -30,9 +30,10 @@
     "Retake docs/images/desktop-*.png (they show the old Pipelines sidebar name)",
     "Optionally fix the daemon's raw error when registering truss.yaml (CLI says project metadata)",
     "Nit: tests/ui/shell.test.js 'no Pipelines option' check in the Jump to test cannot fail (query is flows)",
-    "Follow-up: look at registered files outside the daemon lock (dead network share); case-insensitive registered names; FILE_SHARE_DELETE on Windows"
+    "Follow-up: look at registered files outside the daemon lock (dead network share); case-insensitive registered names; FILE_SHARE_DELETE on Windows",
+    "Follow-up: symlink and letter-case spellings of one path register twice; keep a kept name across a daemon restart"
   ],
   "pr": null,
   "created": "2026-11-16T15:58:40Z",
-  "updated": "2026-11-16T17:20:11Z"
+  "updated": "2026-11-16T17:28:45Z"
 }
