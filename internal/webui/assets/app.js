@@ -1566,14 +1566,16 @@ async function route(force) {
     const pageScroll = lastHash === location.hash ? main.scrollTop : 0;
     // The view is rebuilt and its log is painted a moment later: remember which card header had focus.
     const inLog = main.contains(active) && active.tagName === "SUMMARY" && active.closest("#log");
-    if (inLog) logState.focusSec = active.parentElement.dataset.sec;
+    if (inLog && lastHash === location.hash) logState.focusSec = active.parentElement.dataset.sec;
     paintCrumbs(view, arg, data);
     main.replaceChildren(...view.render(data).flat(Infinity).filter(Boolean));
     main.scrollTop = pageScroll;
     if (scroll != null && document.getElementById("log") && !logState.follow) {
       queueMicrotask(() => { document.getElementById("log").scrollTop = scroll; });
     }
-    if (kept >= 0) {
+    if (logState.focusSec) {
+      // paintLog gives focus back to the card header once the log is painted.
+    } else if (kept >= 0) {
       const target = (keptId && document.getElementById(keptId)) || main.querySelectorAll(FOCUSABLE)[kept];
       if (target) {
         target.focus({ preventScroll: true });
