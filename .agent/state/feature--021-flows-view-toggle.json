@@ -1,0 +1,28 @@
+{
+  "work_id": "feature--021-flows-view-toggle",
+  "title": "Flows page: toggle between cards and list",
+  "tier": 1,
+  "branch": "feature/021-flows-view-toggle",
+  "status": "in_review",
+  "step": "built, verified, independently reviewed (reviewer and spec-reviewer; delta reviewed up to f9bf09d); ready to push and open as a PR",
+  "steps_done": [
+    "spec 021, code, browser tests, docs",
+    "verify.sh green; full UI suite green on reruns",
+    "full review and delta review: approve with nits, nits fixed in f9bf09d"
+  ],
+  "requirements": [],
+  "specs": [
+    "specs/021-flows-view-toggle"
+  ],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [
+    "Maintainer: record spec 021 in docs/MILESTONE.md once the next release has a section (v0.1.0 is tagged)",
+    "Follow-up bugfix: a forced repaint after Enter in the register form can be dropped, leaving the Flows list stale until focus leaves the field (route() generation race, app.js)",
+    "Follow-up: group flows by project (maintainer will discuss later)"
+  ],
+  "pr": null,
+  "created": "2026-11-16T22:41:05Z",
+  "updated": "2026-11-16T23:21:36Z"
+}

@@ -394,6 +394,7 @@ td .pipe { font-weight: 500; color: var(--text); }
 .rowlink { text-decoration: none; display: inline-flex; }
 .table-wrap { max-height: 520px; overflow: auto; }
 .table-wrap.tall { max-height: calc(100vh - 230px); }
+.table-wrap.flat { max-height: none; }
 
 /* meters */
 .meter { display: grid; grid-template-columns: 30px 1fr 44px; align-items: center; gap: 8px; font: 11.5px var(--mono); color: var(--text-3); font-variant-numeric: tabular-nums; min-width: 0; }
@@ -447,16 +448,31 @@ td .pipe { font-weight: 500; color: var(--text); }
 .card .facts dt, .card .facts dd { padding: 6px 0; height: 31px; }
 .card .facts dt:nth-last-of-type(1), .card .facts dd:last-child { border-bottom: 1px solid var(--grid); }
 .card .card-error { padding: 8px 14px; color: var(--bad); font: 12px/1.5 var(--mono); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
-.card .shape { display: flex; align-items: center; gap: 10px; padding: 0 14px; color: var(--text-3); font-size: 11.5px; }
-.card .shape .dag { display: flex; gap: 3px; align-items: center; }
-.card .shape .dag span { display: flex; flex-direction: column; gap: 2px; }
-.card .shape .dag b { width: 10px; height: 4px; border-radius: 1px; background: var(--line-2); }
-.card .shape .dag b.s-succeeded { background: var(--ok); }
-.card .shape .dag b.s-failed { background: var(--bad); }
-.card .shape .dag b.s-running { background: var(--run); }
-.card .shape .dag b.s-tolerated { background: var(--warn); }
+.shape { display: flex; align-items: center; gap: 10px; color: var(--text-3); font-size: 11.5px; }
+.card .shape { padding: 0 14px; }
+.shape .dag { display: flex; gap: 3px; align-items: center; }
+.shape .dag span { display: flex; flex-direction: column; gap: 2px; }
+.shape .dag b { width: 10px; height: 4px; border-radius: 1px; background: var(--line-2); }
+.shape .dag b.s-succeeded { background: var(--ok); }
+.shape .dag b.s-failed { background: var(--bad); }
+.shape .dag b.s-running { background: var(--run); }
+.shape .dag b.s-tolerated { background: var(--warn); }
 .card > .actions { padding: 0 14px; border-top: 1px solid var(--line); background: var(--surface-2); border-radius: 0 0 var(--r) var(--r); flex-wrap: nowrap; }
 .card > .actions .spacer { flex: 1; }
+
+/* the list view of the Flows page */
+#flows-table th, #flows-table td { padding-left: 10px; padding-right: 10px; }
+#flows-table td.flow { min-width: 190px; max-width: 240px; }
+#flows-table td.flow .pipe { font-weight: 600; text-decoration: none; }
+#flows-table td.flow .pipe:hover { text-decoration: underline; }
+#flows-table td.flow .path { color: var(--text-3); font-size: 11.5px; line-height: 16px; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+#flows-table td.flow .path bdi { direction: ltr; }
+#flows-table td.error { color: var(--bad); font: 12px var(--mono); max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
+#flows-table td .actions { flex-wrap: nowrap; }
+/* The actions stay in view when a narrow window scrolls the table sideways. */
+#flows-table .acts { position: sticky; right: 0; background: var(--surface); border-left: 1px solid var(--grid); }
+#flows-table th.acts { background: var(--surface-2); }
+#flows-table tr.link:hover td.acts { background: linear-gradient(var(--hover), var(--hover)), var(--surface); }
 
 /* ---------- step graph ---------- */
 
