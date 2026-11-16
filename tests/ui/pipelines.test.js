@@ -12,7 +12,7 @@ const card = (name) => page.locator("article.card", { has: page.getByRole("link"
 test("register through the file picker, then run, pause, resume and unregister", async () => {
   await page.goto(d.authedUrl());
   await page.evaluate(() => { location.hash = "#/pipelines"; });
-  await page.locator("h1", { hasText: "Pipelines" }).waitFor();
+  await page.locator("h1", { hasText: "Flows" }).waitFor();
   await page.getByText("No pipelines registered yet").waitFor();
 
   // The picker opens at the user's home and lists names only.

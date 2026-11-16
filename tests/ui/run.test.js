@@ -9,7 +9,7 @@ after(async () => { await b?.close(); await d?.stop(); });
 
 const log = () => page.locator("#log");
 
-test("run page: step graph, step filter, then run again", async () => {
+test("run page: step graph, step filter, then re-run", async () => {
   await d.register("ok.yaml");
   const run = await d.call("POST", "/pipelines/ok/runs");
   await d.waitRun(run.id);
@@ -35,7 +35,7 @@ test("run page: step graph, step filter, then run again", async () => {
   await page.keyboard.press("Enter");
   await poll(async () => { const t = await log().textContent(); return t.includes("linting") && !t.includes("testing"); }, "keyboard filter");
 
-  await page.getByRole("button", { name: "Run again" }).click();
+  await page.getByRole("button", { name: "Re-run" }).click();
   await page.waitForFunction((id) => !location.hash.endsWith(id), run.id);
   await page.locator(".badge.s-succeeded").first().waitFor();
   assert.deepEqual(page.problems, []);
@@ -49,13 +49,13 @@ test("run page: live log while running, then cancel", async () => {
   await poll(async () => (await log().textContent()).includes("first-line"), "live log line");
   await page.locator(".head .badge.s-running").waitFor();
   await page.locator(".graph .node.s-running").waitFor();
-  assert.equal(await page.getByRole("button", { name: "Run again" }).count(), 0);
+  assert.equal(await page.getByRole("button", { name: "Re-run" }).count(), 0);
 
   await page.getByRole("button", { name: "Cancel run" }).click();
   await page.locator(".head .badge.s-cancelled").waitFor();
   await page.locator(".log .bar", { hasText: "complete" }).waitFor();
   await poll(async () => (await log().textContent()).includes("summary cancelled"), "cancel summary");
-  await page.getByRole("button", { name: "Run again" }).waitFor();
+  await page.getByRole("button", { name: "Re-run" }).waitFor();
   assert.deepEqual(page.problems, []);
 });
 

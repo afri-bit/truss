@@ -637,7 +637,7 @@ function activity(runs) {
 
 views.pipelines = {
   nav: "pipelines",
-  crumbs: () => [["Pipelines"]],
+  crumbs: () => [["Flows"]],
   load: () => getJSON("/pipelines"),
   render(pipelines) {
     // The draft survives the periodic refresh, so a half-typed form is never lost.
@@ -656,7 +656,7 @@ views.pipelines = {
     const shown = pipelines.filter((p) => !q || p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q));
     const states = ["ready", "running", "paused", "invalid"].map((st) => [st, pipelines.filter((p) => pipelineState(p) === st).length]).filter(([, n]) => n);
     return [
-      h("div", { class: "head" }, h("div", { class: "title" }, h("h1", null, "Pipelines"),
+      h("div", { class: "head" }, h("div", { class: "title" }, h("h1", null, "Flows"),
         h("p", { class: "sub" }, "Pipeline files this daemon knows. The file stays where it is and is read again before every run."))),
       panel("Register a pipeline", { hint: "absolute path to a truss.yaml" }, form),
       h("div", { class: "toolbar" },
@@ -703,7 +703,7 @@ function pipelineCard(p) {
 
 views.pipeline = {
   nav: "pipelines",
-  crumbs: (name) => [["Pipelines", "#/pipelines"], [name]],
+  crumbs: (name) => [["Flows", "#/pipelines"], [name]],
   async load(name) {
     const enc = encodeURIComponent(name);
     const [pipeline, runs] = await Promise.all([getJSON("/pipelines/" + enc), getJSON(`/runs?pipeline=${enc}&limit=50`)]);
@@ -876,7 +876,7 @@ views.run = {
           !active && run.trigger !== "local" && h("button", { class: "primary", onclick: () => act("Run requested", async () => {
             const next = await (await api("POST", `/pipelines/${encodeURIComponent(run.pipeline)}/runs`)).json();
             go(href.run(next.id));
-          }) }, icon("rotate", "sm"), "Run again"))),
+          }) }, icon("rotate", "sm"), "Re-run"))),
       h("div", { class: "strip", style: "--n:6" },
         h("div", null, h("div", { class: "k" }, "Progress"), h("div", { class: "v" }, `${doneN} / ${steps.length} steps`)),
         h("div", null, h("div", { class: "k" }, active ? "Running now" : "Ended"), h("div", { class: "v", title: current.join(", ") }, active ? (current.join(", ") || "waiting") : clock(run.finished_at))),
@@ -1220,10 +1220,10 @@ document.getElementById("picker").addEventListener("close", () => {
 const finder = { q: "", sel: 0, items: [] };
 function finderItems() {
   const q = finder.q.toLowerCase();
-  const pages = [["Dashboard", "#/", "dashboard"], ["Pipelines", "#/pipelines", "pipelines"], ["Runs", "#/runs", "runs"], ["Monitor", "#/monitor", "monitor"], ["Settings", "#/settings", "settings"]]
+  const pages = [["Dashboard", "#/", "dashboard"], ["Flows", "#/pipelines", "pipelines"], ["Runs", "#/runs", "runs"], ["Monitor", "#/monitor", "monitor"], ["Settings", "#/settings", "settings"]]
     .filter(([n]) => !q || n.toLowerCase().includes(q)).map(([n, to, ic]) => ({ group: "Pages", label: n, to, icon: icon(ic, "sm"), k: "" }));
   const pipes = shell.pipelines.filter((p) => !q || p.name.toLowerCase().includes(q)).slice(0, 6)
-    .map((p) => ({ group: "Pipelines", label: p.name, to: href.pipeline(p.name), icon: icon("pipelines", "sm"), k: pipelineState(p) }));
+    .map((p) => ({ group: "Flows", label: p.name, to: href.pipeline(p.name), icon: icon("pipelines", "sm"), k: pipelineState(p) }));
   const runs = shell.runs.filter((r) => !q || r.id.toLowerCase().includes(q) || r.pipeline.toLowerCase().includes(q)).slice(0, 6)
     .map((r) => ({ group: "Runs", label: `${r.pipeline} · ${shortId(r.id)}`, to: href.run(r.id), icon: statusGlyph(r.status, 14), k: r.status }));
   return [...pages, ...pipes, ...runs];
@@ -1313,7 +1313,7 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => appl
 
 // ---------- shell: nav, sidebar live runs, connection ----------
 
-const NAV = [["dashboard", "Dashboard", "#/"], ["pipelines", "Pipelines", "#/pipelines"], ["runs", "Runs", "#/runs"], ["monitor", "Monitor", "#/monitor"], ["settings", "Settings", "#/settings"]];
+const NAV = [["dashboard", "Dashboard", "#/"], ["pipelines", "Flows", "#/pipelines"], ["runs", "Runs", "#/runs"], ["monitor", "Monitor", "#/monitor"], ["settings", "Settings", "#/settings"]];
 function paintNav(current) {
   const nav = document.getElementById("nav");
   if (!nav.children.length) nav.append(...NAV.map(([key, label, to]) => h("a", { href: to, "data-route": key, title: label }, icon(key), h("span", null, label))));

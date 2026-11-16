@@ -234,6 +234,22 @@ test("a token link turns demo mode off in the same tab", async () => {
     await page.context().close();
   }
 });
+
+test("the sidebar calls the pipeline list Flows", async () => {
+  const page = await b.newPage();
+  try {
+    await page.goto(d.authedUrl());
+    const nav = page.locator("#nav");
+    await nav.getByRole("link", { name: "Flows" }).click();
+    await page.locator("h1", { hasText: "Flows" }).waitFor();
+    assert.equal(await nav.getByRole("link", { name: "Pipelines" }).count(), 0);
+    assert.ok(page.url().endsWith("#/pipelines"), "the address of the page does not change");
+    assert.deepEqual(page.problems, []);
+  } finally {
+    await page.context().close();
+  }
+});
+
 test("the run page's memory line stays inside the resource chart", async () => {
   const metrics = await d.call("GET", "/metrics");
   if (!metrics.supported) return; // no figures on this system, so no chart
