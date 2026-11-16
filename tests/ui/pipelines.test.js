@@ -158,6 +158,10 @@ test("a flow follows an edit of its file, new name included, and keeps its runs"
     assert.equal((await d.call("GET", "/pipelines/before")).name, "after");
     await page.evaluate((id) => { location.hash = "#/runs/" + id; }, run.id);
     await page.locator(".head .sub a", { hasText: "after" }).waitFor();
+    // Re-run acts on the registration the run belongs to.
+    await page.getByRole("button", { name: "Re-run" }).click();
+    await page.waitForFunction((id) => !location.hash.endsWith(id), run.id);
+    assert.equal((await d.call("GET", "/runs?pipeline=after")).length, 2);
     assert.deepEqual(page.problems, []);
   } finally {
     await page.context().close();

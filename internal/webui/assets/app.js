@@ -395,7 +395,8 @@ function runsTable(runs, opts = {}) {
 }
 
 function pipelineActions(p, compactMode) {
-  const name = encodeURIComponent(p.name);
+  // Act on the registration, not on the name shown for it: a shown name can move to another flow.
+  const name = encodeURIComponent(p.registered_name || p.name);
   const hasSchedule = (p.schedules || []).length > 0;
   const pauseBtn = !hasSchedule
     ? h("button", { disabled: true, title: "This pipeline has no schedule" }, icon("pause", "sm"), "Pause schedule")
@@ -841,7 +842,7 @@ views.run = {
   crumbs: (id, data) => [["Runs", "#/runs"], data ? [data.run.pipeline, href.pipeline(data.run.pipeline)] : null, [shortId(id)]].filter(Boolean),
   async load(id) {
     const run = await getJSON("/runs/" + encodeURIComponent(id));
-    const pipeline = await getJSON("/pipelines/" + encodeURIComponent(run.pipeline)).catch(() => null);
+    const pipeline = await getJSON("/pipelines/" + encodeURIComponent(run.registered_pipeline || run.pipeline)).catch(() => null);
     return { run, pipeline };
   },
   render({ run, pipeline }) {
@@ -875,7 +876,7 @@ views.run = {
         h("div", { class: "actions" },
           active && h("button", { class: "danger", title: run.trigger === "local" ? "Asks the local run to stop; it ends within a second" : null, onclick: () => act("Cancel requested", () => api("POST", `/runs/${run.id}/cancel`)) }, icon("stop", "sm"), "Cancel run"),
           !active && run.trigger !== "local" && h("button", { class: "primary", onclick: () => act("Run requested", async () => {
-            const next = await (await api("POST", `/pipelines/${encodeURIComponent(run.pipeline)}/runs`)).json();
+            const next = await (await api("POST", `/pipelines/${encodeURIComponent(run.registered_pipeline || run.pipeline)}/runs`)).json();
             go(href.run(next.id));
           }) }, icon("rotate", "sm"), "Re-run"))),
       h("div", { class: "strip", style: "--n:6" },
