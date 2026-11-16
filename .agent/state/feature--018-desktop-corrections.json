@@ -3,9 +3,12 @@
   "title": "Desktop corrections: chart, Flows, Re-run",
   "tier": 1,
   "branch": "feature/018-desktop-corrections",
-  "status": "in_progress",
-  "step": "review fixes applied; delta review, verify, then PR",
-  "steps_done": [],
+  "status": "in_review",
+  "step": "reviewed at efb9803; push and open the PR",
+  "steps_done": [
+    "chart fix, Flows and Re-run, spec 018, docs; verify.sh pass; 30 UI tests pass",
+    "review (reviewer, spec-reviewer) and delta review: approve at efb9803"
+  ],
   "requirements": [
     "specs/018-desktop-corrections/spec.md"
   ],
@@ -20,9 +23,10 @@
   ],
   "next_actions": [
     "Retake docs/images/desktop-*.png (they show the old Pipelines sidebar name)",
-    "Optionally fix the daemon's raw error when registering truss.yaml (CLI says project metadata)"
+    "Optionally fix the daemon's raw error when registering truss.yaml (CLI says project metadata)",
+    "Nit: tests/ui/shell.test.js 'no Pipelines option' check in the Jump to test cannot fail (query is flows)"
   ],
   "pr": null,
   "created": "2026-11-16T15:58:40Z",
-  "updated": "2026-11-16T16:03:58Z"
+  "updated": "2026-11-16T16:08:22Z"
 }
