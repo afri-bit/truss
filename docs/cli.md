@@ -117,6 +117,10 @@ RUN                     PIPELINE     STATUS     TRIGGER  CREATED              DU
 
 ## Registered pipelines
 
+A command that takes a registered pipeline's name accepts the name its file gives it now or the name
+it was registered under; they differ after a rename in the file (see [Registering
+pipelines](daemon.md#registering-pipelines)).
+
 | Command | What it does |
 |---|---|
 | `truss register <name> [--name <name>]`, `truss register <path> [--name <name>]`, `truss register --all` | Tells the daemon about a pipeline. The name defaults to `pipeline.name`, or the file name. `--all` registers every pipeline in the project, each under its pipeline name; `--name` is not allowed with `--all`. With no argument it is an error that lists the pipelines. When every pipeline registered, `--all` prints `registered N pipelines (M with schedules)` (`registered 1 pipeline (M with schedules)` for one). It prints no summary when a pipeline failed. |

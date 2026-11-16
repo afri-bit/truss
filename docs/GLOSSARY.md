@@ -284,7 +284,9 @@ nothing that runs. A `truss.yaml` with steps is not a pipeline.
 ### Registration
 
 A name and the path of a pipeline file, stored by the daemon. The file stays where it is and
-stays the source of truth. A pipeline of a Project is registered under its pipeline name.
+stays the source of truth. A pipeline of a Project is registered under its pipeline name. That
+**registered name** never changes and keeps the flow's history; when the file renames the pipeline,
+the daemon shows the new name and accepts either (spec 019).
 
 ### Overlap
 

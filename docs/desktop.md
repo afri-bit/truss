@@ -25,7 +25,7 @@ theme toggle, settings menu) and the content.
 |---|---|---|
 | **Dashboard** | Counters for today, active runs with progress, runs per hour, system load, health, the next scheduled runs, recent runs. | Jump to any run or pipeline. |
 | **Flows** | Every registered pipeline file as a card: state, schedule, next and last run, shape of its step graph. | Register a file (type its path or press **Browse…**), filter, run it now, pause or resume its schedules, unregister it. |
-| **Flow** | Its step graph colored by the last run, success rate, configuration, run history. | The same actions. |
+| **Flow** | Its step graph colored by the last run, success rate, configuration, run history. The page follows edits to the file, a new name included; *Registered as* shows the name it was registered under when that differs. | The same actions. |
 | **Runs** | Every run the daemon started or skipped, and every run tracked from a shell, newest first. | Filter by status or text, open one. |
 | **Run** | Progress, the running steps, elapsed time, the step graph with the running step highlighted, step results, the live log, resources and configuration. | Cancel the run, run it again, click a step to see only its log lines, find in the log, wrap, follow. |
 | **Monitor** | Health checks, CPU and memory, cores, the daemon's process and every live step. | Open the run behind a process. |

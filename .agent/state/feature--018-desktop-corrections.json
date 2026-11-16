@@ -1,19 +1,22 @@
 {
   "work_id": "feature--018-desktop-corrections",
   "title": "Desktop corrections: chart, Flows, Re-run",
-  "tier": 1,
+  "tier": 2,
   "branch": "feature/018-desktop-corrections",
   "status": "in_review",
-  "step": "reviewed at efb9803; push and open the PR",
+  "step": "spec 019 implemented; verify, independent review (reviewer, spec-reviewer, security-reviewer), then push",
   "steps_done": [
     "chart fix, Flows and Re-run, spec 018, docs; verify.sh pass; 30 UI tests pass",
-    "review (reviewer, spec-reviewer) and delta review: approve at efb9803"
+    "review (reviewer, spec-reviewer) and delta review: approve at efb9803",
+    "daemon follows a renamed flow and keeps history: spec 019, ADR 0017, tests, docs"
   ],
   "requirements": [
-    "specs/018-desktop-corrections/spec.md"
+    "specs/018-desktop-corrections/spec.md",
+    "specs/019-flows-follow-their-files/spec.md"
   ],
   "specs": [
-    "specs/018-desktop-corrections/spec.md"
+    "specs/018-desktop-corrections/spec.md",
+    "specs/019-flows-follow-their-files/spec.md"
   ],
   "owner_agent": "main-session",
   "blockers": [],
@@ -28,5 +31,5 @@
   ],
   "pr": null,
   "created": "2026-11-16T15:58:40Z",
-  "updated": "2026-11-16T16:08:22Z"
+  "updated": "2026-11-16T16:44:42Z"
 }
