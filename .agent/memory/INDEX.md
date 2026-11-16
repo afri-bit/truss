@@ -18,4 +18,4 @@
 | [MEM-0010](MEM-0010-check-adr-numbers-on-develop-run-lint-with.md) | procedural | Check ADR numbers on main; run lint with scripts/verify.sh | adr, lint, process | 2026-11-14 | active | high |
 | [MEM-0011](MEM-0011-commits-author-afri-bit-with-the-maintainer-s.md) | semantic | Commits: author afri-bit with the maintainer's email; Claude may co-author | git, owner-preferences | 2026-11-14 | active | high |
 | [MEM-0012](MEM-0012-the-enter-to-register-ui-test-flakes-on-a-real.md) | procedural | The Enter-to-register UI test flakes on a real route() race | desktop, testing, flaky-tests | 2026-11-16 | active | high |
-| [MEM-0013](MEM-0013-changelog-entries-a-title-bullet-then-the.md) | semantic | Changelog entries: a title bullet, then the explanation under it | changelog, owner-preferences, docs | 2026-11-16 | active | high |
+| [MEM-0013](MEM-0013-changelog-entries-a-title-bullet-then-the.md) | semantic | Changelog entries: a title, a hard line break, then the explanation | changelog, owner-preferences, docs | 2026-11-16 | active | high |
