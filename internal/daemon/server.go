@@ -172,8 +172,9 @@ func (d *Daemon) postShutdown(w http.ResponseWriter, _ *http.Request) error {
 
 func (d *Daemon) listPipelines(w http.ResponseWriter, _ *http.Request) error {
 	list := []api.Pipeline{}
+	shown := d.names()
 	for _, e := range d.registry.List() {
-		list = append(list, d.view(e))
+		list = append(list, d.viewAs(e, shown))
 	}
 	return writeJSON(w, http.StatusOK, list)
 }
@@ -200,7 +201,19 @@ func (d *Daemon) registerPipeline(w http.ResponseWriter, r *http.Request) error 
 	} else if err := registry.CheckName(name); err != nil {
 		return badRequest("%s", err.Error())
 	}
-	e, err := d.registry.Add(name, path, d.opts.Now())
+	// A name that already answers to this file is that registration, shown
+	// under a name the file gave it; any other holder of the name is a clash.
+	if held, ok := d.lookup(name); ok {
+		if held.Path != path {
+			return fmt.Errorf("%w: %q is %s", registry.ErrExists, name, held.Path)
+		}
+		return writeJSON(w, http.StatusCreated, d.view(held))
+	}
+	add := d.registry.Add
+	if req.Name != "" {
+		add = d.registry.AddChosen
+	}
+	e, err := add(name, path, d.opts.Now())
 	if err != nil {
 		return err
 	}
@@ -210,12 +223,7 @@ func (d *Daemon) registerPipeline(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (d *Daemon) entry(r *http.Request) (registry.Entry, error) {
-	name := r.PathValue("name")
-	e, ok := d.registry.Get(name)
-	if !ok {
-		return e, fmt.Errorf("%w: %q", registry.ErrNotFound, name)
-	}
-	return e, nil
+	return d.find(r.PathValue("name"))
 }
 
 func (d *Daemon) getPipeline(w http.ResponseWriter, r *http.Request) error {
@@ -227,19 +235,26 @@ func (d *Daemon) getPipeline(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (d *Daemon) unregisterPipeline(w http.ResponseWriter, r *http.Request) error {
-	name := r.PathValue("name")
-	if err := d.registry.Remove(name); err != nil {
+	e, err := d.entry(r)
+	if err != nil {
+		return err
+	}
+	if err := d.registry.Remove(e.Name); err != nil {
 		return err
 	}
 	d.refresh(d.opts.Now())
-	d.logf("pipeline %s: unregistered", name)
+	d.logf("pipeline %s: unregistered", e.Name)
 	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
 
 func (d *Daemon) pausePipeline(paused bool) func(http.ResponseWriter, *http.Request) error {
 	return func(w http.ResponseWriter, r *http.Request) error {
-		e, err := d.registry.SetPaused(r.PathValue("name"), paused)
+		held, err := d.entry(r)
+		if err != nil {
+			return err
+		}
+		e, err := d.registry.SetPaused(held.Name, paused)
 		if err != nil {
 			return err
 		}
@@ -261,7 +276,7 @@ func (d *Daemon) triggerRun(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	d.logf("pipeline %s: manual trigger -> run %s (%s)", e.Name, run.ID, run.Status)
-	return writeJSON(w, http.StatusAccepted, run)
+	return writeJSON(w, http.StatusAccepted, showRun(d.names(), run))
 }
 
 func (d *Daemon) listRuns(w http.ResponseWriter, r *http.Request) error {
@@ -273,7 +288,16 @@ func (d *Daemon) listRuns(w http.ResponseWriter, r *http.Request) error {
 		}
 		limit = n
 	}
-	return writeJSON(w, http.StatusOK, d.runs.List(r.URL.Query().Get("pipeline"), limit))
+	var names []string
+	if name := r.URL.Query().Get("pipeline"); name != "" {
+		names = d.historyNames(name)
+	}
+	shown := d.names()
+	list := d.runs.ListFor(names, limit)
+	for i := range list {
+		list[i] = showRun(shown, list[i])
+	}
+	return writeJSON(w, http.StatusOK, list)
 }
 
 func (d *Daemon) getRun(w http.ResponseWriter, r *http.Request) error {
@@ -281,7 +305,7 @@ func (d *Daemon) getRun(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	return writeJSON(w, http.StatusOK, run)
+	return writeJSON(w, http.StatusOK, showRun(d.names(), run))
 }
 
 func (d *Daemon) cancelRun(w http.ResponseWriter, r *http.Request) error {
@@ -290,7 +314,7 @@ func (d *Daemon) cancelRun(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	d.logf("run %s: cancel requested", run.ID)
-	return writeJSON(w, http.StatusOK, run)
+	return writeJSON(w, http.StatusOK, showRun(d.names(), run))
 }
 
 func (d *Daemon) getRunLog(w http.ResponseWriter, r *http.Request) error {
@@ -342,7 +366,7 @@ func (d *Daemon) createTrackedRun(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 	d.logf("pipeline %s: tracked local run %s started", run.Pipeline, run.ID)
-	return writeJSON(w, http.StatusCreated, run)
+	return writeJSON(w, http.StatusCreated, showRun(d.names(), run))
 }
 
 func (d *Daemon) reportStep(w http.ResponseWriter, r *http.Request) error {
@@ -354,7 +378,7 @@ func (d *Daemon) reportStep(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	return writeJSON(w, http.StatusOK, run)
+	return writeJSON(w, http.StatusOK, showRun(d.names(), run))
 }
 
 func (d *Daemon) appendRunLog(w http.ResponseWriter, r *http.Request) error {
@@ -390,5 +414,5 @@ func (d *Daemon) finishTrackedRun(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 	d.logf("run %s: tracked local run %s", run.ID, run.Status)
-	return writeJSON(w, http.StatusOK, run)
+	return writeJSON(w, http.StatusOK, showRun(d.names(), run))
 }

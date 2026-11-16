@@ -317,6 +317,9 @@ func (d *Daemon) load(e registry.Entry, since time.Time, force bool) *definition
 			cur.armed = cur.def.Schedules
 		}
 		d.defs[e.Name] = cur
+		if old != nil && !force {
+			d.logChanged(e, cur)
+		}
 	}
 	// The scheduler is told again only when the schedules really changed (or
 	// were switched on or off). Reloading an unchanged file, as a manual
@@ -331,6 +334,18 @@ func (d *Daemon) load(e registry.Entry, since time.Time, force bool) *definition
 		cur.scheduled = false
 	}
 	return cur
+}
+
+// logChanged records that a registered file was read again because it changed.
+func (d *Daemon) logChanged(e registry.Entry, cur *definition) {
+	switch {
+	case cur.err != nil:
+		d.logf("pipeline %s: file changed and does not load: %v", e.Name, cur.err)
+	case cur.def.Name != e.Name:
+		d.logf("pipeline %s: file changed, read again (it is named %s)", e.Name, cur.def.Name)
+	default:
+		d.logf("pipeline %s: file changed, read again", e.Name)
+	}
 }
 
 // maxDefinitionBytes bounds a registered definition file; the daemon reads
@@ -424,17 +439,37 @@ func (e *invalidError) Error() string { return e.err.Error() }
 func (e *invalidError) Unwrap() error { return e.err }
 
 // view builds the API form of one registered pipeline.
-func (d *Daemon) view(e registry.Entry) api.Pipeline {
-	p := api.Pipeline{Name: e.Name, Path: e.Path, Paused: e.Paused, RegisteredAt: e.RegisteredAt, Schedules: []api.Schedule{}, Steps: []api.PlanStep{}}
-	d.mu.Lock()
-	cur := d.defs[e.Name]
-	if cur == nil {
-		cur = d.load(e, d.opts.Now(), false)
+func (d *Daemon) view(e registry.Entry) api.Pipeline { return d.viewAs(e, d.names()) }
+
+// viewAs is view with the names shown for every registration already worked
+// out (see shownNames).
+func (d *Daemon) viewAs(e registry.Entry, shown map[string]string) api.Pipeline {
+	name := shown[e.Name]
+	if name == "" {
+		name = e.Name
 	}
+	p := api.Pipeline{Name: name, Path: e.Path, Paused: e.Paused, RegisteredAt: e.RegisteredAt, Schedules: []api.Schedule{}, Steps: []api.PlanStep{}}
+	if name != e.Name {
+		p.RegisteredName = e.Name
+	}
+	d.mu.Lock()
+	// The file is checked on every read, so a view never lags an edit; the
+	// check reads the file only when its size or time changed.
+	cur := d.load(e, d.opts.Now(), false)
 	next := d.sched.Next(e.Name)
 	d.mu.Unlock()
 
-	p.ActiveRuns, p.LastRun = d.runs.Summary(e.Name)
+	var history []string
+	if name != e.Name {
+		history = []string{e.Name, name}
+	} else {
+		history = []string{e.Name}
+	}
+	p.ActiveRuns, p.LastRun = d.runs.SummaryFor(history)
+	if p.LastRun != nil {
+		last := showRun(shown, *p.LastRun)
+		p.LastRun = &last
+	}
 	if cur.err != nil {
 		p.Error = cur.err.Error()
 		return p

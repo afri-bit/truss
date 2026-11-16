@@ -33,6 +33,10 @@ type Entry struct {
 	// Paused stops the schedules of the pipeline. Manual runs still work.
 	Paused       bool      `json:"paused"`
 	RegisteredAt time.Time `json:"registered_at"`
+	// Chosen means the name was picked at registration (--name), so the name
+	// in the file never replaces it on screen. A registration without it
+	// follows the file's name.
+	Chosen bool `json:"chosen,omitempty"`
 }
 
 // Registry is the set of registered pipelines, saved to one JSON file.
@@ -68,9 +72,19 @@ func CheckName(name string) error {
 	return nil
 }
 
-// Add registers path under name. Registering the same name and path again
-// is not an error; a different path under a taken name is ErrExists.
+// Add registers path under name, a name taken from the file. Registering the
+// same name and path again is not an error; a different path under a taken
+// name is ErrExists.
 func (r *Registry) Add(name, path string, now time.Time) (Entry, error) {
+	return r.add(name, path, now, false)
+}
+
+// AddChosen is Add for a name the user picked: the entry is marked Chosen.
+func (r *Registry) AddChosen(name, path string, now time.Time) (Entry, error) {
+	return r.add(name, path, now, true)
+}
+
+func (r *Registry) add(name, path string, now time.Time, chosen bool) (Entry, error) {
 	if err := CheckName(name); err != nil {
 		return Entry{}, err
 	}
@@ -82,7 +96,7 @@ func (r *Registry) Add(name, path string, now time.Time) (Entry, error) {
 		}
 		return Entry{}, fmt.Errorf("%w: %q is %s", ErrExists, name, old.Path)
 	}
-	e := Entry{Name: name, Path: path, RegisteredAt: now}
+	e := Entry{Name: name, Path: path, RegisteredAt: now, Chosen: chosen}
 	r.entries[name] = e
 	if err := r.save(); err != nil {
 		delete(r.entries, name)

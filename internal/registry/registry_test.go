@@ -69,3 +69,23 @@ func TestRegistry_RemoveAndUnknownNames(t *testing.T) {
 		t.Fatal("still registered")
 	}
 }
+
+func TestRegistry_RemembersWhichNamesWereChosen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "registry.json")
+	r, _ := Open(path)
+	if _, err := r.Add("from-file", "/one.yaml", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.AddChosen("mine", "/two.yaml", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := again.Get("from-file")
+	b, _ := again.Get("mine")
+	if a.Chosen || !b.Chosen {
+		t.Fatalf("chosen = %t and %t, want false and true", a.Chosen, b.Chosen)
+	}
+}

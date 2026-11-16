@@ -106,10 +106,15 @@ type PlanStep struct {
 
 // Pipeline is a registered pipeline as the daemon currently sees its file.
 type Pipeline struct {
-	Name         string    `json:"name"`
-	Path         string    `json:"path"`
-	Paused       bool      `json:"paused"`
-	RegisteredAt time.Time `json:"registered_at"`
+	// Name is what to call the pipeline: pipeline.name from its file when that
+	// is free to use, else RegisteredName. Every command accepts either.
+	Name string `json:"name"`
+	// RegisteredName is the name the pipeline was registered under, which keeps
+	// its history, data and schedules. It is empty when it equals Name.
+	RegisteredName string    `json:"registered_name,omitempty"`
+	Path           string    `json:"path"`
+	Paused         bool      `json:"paused"`
+	RegisteredAt   time.Time `json:"registered_at"`
 	// Valid is false when the file is missing or fails validation; Error says why.
 	Valid bool   `json:"valid"`
 	Error string `json:"error,omitempty"`

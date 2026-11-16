@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -303,12 +304,21 @@ func (m *Manager) Get(id string) (api.Run, error) {
 // List returns runs, newest first. An empty name lists every pipeline; a
 // limit below 1 means no limit.
 func (m *Manager) List(name string, limit int) []api.Run {
+	if name == "" {
+		return m.ListFor(nil, limit)
+	}
+	return m.ListFor([]string{name}, limit)
+}
+
+// ListFor returns the runs of any of the named pipelines, newest first. No
+// names lists every pipeline; a limit below 1 means no limit.
+func (m *Manager) ListFor(names []string, limit int) []api.Run {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	list := []api.Run{}
 	for i := len(m.order) - 1; i >= 0; i-- {
 		run := m.records[m.order[i]].run
-		if name != "" && run.Pipeline != name {
+		if len(names) > 0 && !slices.Contains(names, run.Pipeline) {
 			continue
 		}
 		list = append(list, run.Copy())
@@ -356,11 +366,16 @@ func (m *Manager) Active() []api.Run {
 // Summary returns the number of active runs of a pipeline and its newest
 // run that actually executed or is about to, if any.
 func (m *Manager) Summary(name string) (active int, last *api.Run) {
+	return m.SummaryFor([]string{name})
+}
+
+// SummaryFor is Summary over the runs of any of the named pipelines.
+func (m *Manager) SummaryFor(names []string) (active int, last *api.Run) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for i := len(m.order) - 1; i >= 0; i-- {
 		run := m.records[m.order[i]].run
-		if run.Pipeline != name {
+		if !slices.Contains(names, run.Pipeline) {
 			continue
 		}
 		if run.Active() {
