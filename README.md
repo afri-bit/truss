@@ -334,7 +334,7 @@ After v0.1.0, roughly in this order. Scope and order may change.
 
 ## Contributing
 
-Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) has the rules: build and checks, specs and tests, branches and commits, pull requests and releases.
+[CONTRIBUTING.md](CONTRIBUTING.md) has the rules for changing TRUSS: build and checks, specs and tests, branches and commits, pull requests and releases.
 
 ## License
 

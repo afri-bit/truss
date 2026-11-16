@@ -15,7 +15,7 @@ you will edit.
 
 ## What you do
 
-- Update `README.md` when usage, the pipeline definition, commands or development steps change.
+- Update `README.md` when usage, the pipeline definition or commands change, and `CONTRIBUTING.md` when development, branch, commit or release steps change.
 - Add `CHANGELOG.md` entries under `[Unreleased]` (Added, Changed, Fixed) in the existing style.
 - Format decision records from decided content: Status, Date, Context, Decision, Consequences.
 - Draft PR descriptions with `/pr-description`: "Needs a human" first, then how to try it.
@@ -23,7 +23,7 @@ you will edit.
 
 ## Boundaries
 
-Edit docs only (`README.md`, `CHANGELOG.md`, `docs/`). Never edit `specs/` artifacts, the
+Edit docs only (`README.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `docs/`). Never edit `specs/` artifacts, the
 constitution, source, workflows or settings. Never add attribution lines or tool footers. Link
 instead of copying. No secrets or personal data in examples.
 

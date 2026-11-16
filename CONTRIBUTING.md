@@ -38,8 +38,8 @@ go build -o bin/truss ./cmd/truss
 bash .github/scripts/e2e-test.sh bin/truss   # the built binary, including a real daemon
 ```
 
-`bash scripts/verify.sh` runs all of these, plus the tooling tests. It is the gate CI and the agent
-hooks use. Run it before you push and before you open or update a pull request.
+`bash scripts/verify.sh` runs all of these, plus the tooling tests. It runs the same checks as CI and
+is the gate the agent hooks use. Run it before you push and before you open or update a pull request.
 
 TRUSS checks itself with its own pipelines. `truss run verify` runs the same checks in parallel
 (about 20 seconds), `truss run release-check` checks the version declarations, and `nightly` repeats
@@ -59,16 +59,16 @@ reload the page.
 
   | Type | For |
   |---|---|
-  | `feature` | a new capability or behavioral change |
-  | `bugfix` | a fix |
-  | `hotfix` | an urgent fix to a released version |
-  | `release` | preparing a release |
-  | `task` | other planned work |
-  | `chore` | formatting, dependencies, tooling, docs |
+  | `feature` | a new capability or a behavioral change |
+  | `bugfix` | a non-urgent fix to a defect |
+  | `hotfix` | an urgent fix to a defect in released code |
+  | `release` | preparing a release (version files and changelog) |
+  | `task` | planned work that is not a feature or a fix, such as documentation or tests |
+  | `chore` | maintenance: dependencies, tooling, formatting |
 
   The name is lowercase, hyphenated and short. For a feature with a spec, use the `specs/` folder
   name, for example `feature/003-step-dependencies`. Anything else, `feat/` and `fix/` included, is
-  rejected.
+  rejected. The constitution's Branching section is the authority.
 - If the pull request for your branch is already merged, start a new branch from the latest `main`.
 
 ## Commits
@@ -80,8 +80,8 @@ reload the page.
   `chore: ...`), and a short bullet body.
 - Never skip hooks (`--no-verify`), force-push, or rewrite pushed history.
 
-The `Repository rules` workflow checks the branch name and the commit author on every push and pull
-request (see [ADR 0014](docs/decisions/0014-branch-prefixes-commit-identity-and-release-gate.md)).
+The `Repository rules` workflow checks the branch name on every push and pull request, and the
+author of every commit in a pull request (see [ADR 0014](docs/decisions/0014-branch-prefixes-commit-identity-and-release-gate.md)).
 
 ## Pull requests
 
@@ -93,25 +93,39 @@ request (see [ADR 0014](docs/decisions/0014-branch-prefixes-commit-identity-and-
   what was not verified. Paste the `scripts/verify.sh` table.
 - A change is reviewed by someone other than its author. Fix the findings, then have the final code
   reviewed.
-- Changes to a public contract, a new dependency, a boundary change or a constitution amendment need
-  a decision record in `docs/decisions/` and the maintainer's approval.
+- An incompatible change to an established contract, or a boundary decision, needs a decision record
+  in `docs/decisions/`.
+- Ask the maintainer before adding a third-party module, making an incompatible change to a released
+  public contract, or amending the constitution.
 - Update the docs and `CHANGELOG.md` (`[Unreleased]`) in the same pull request as the behavior they
   describe.
 
 ## Releasing
 
-Releases are cut by pushing a semantic version tag such as `v0.1.0` or `v0.2.0-rc.1`. The release workflow refuses to publish unless:
+Releases are cut by pushing a semantic version tag such as `v0.1.0` or `v0.2.0-rc.1`. The release
+workflow refuses to publish unless:
 
 1. The `// version: X.Y.Z` line in `go.mod` equals the tag.
 2. The module path follows Go's major-version rule: no suffix for v0 and v1, `/vN` from v2 onward.
 3. `const Version` in `cmd/truss/version.go` (what `truss version` prints) equals the tag.
-4. `internal/webui/VERSION`, the version of TRUSS Desktop, equals the tag. It is a file of its own, apart from the Go version.
-5. `CHANGELOG.md` has `## [X.Y.Z] - YYYY-MM-DD` as its latest section, with entries, the tag's date, and only the headings Added, Changed, Deprecated, Removed, Fixed and Security.
+4. `internal/webui/VERSION`, the version of TRUSS Desktop, equals the tag. It is a file of its own,
+   apart from the Go version.
+5. `CHANGELOG.md` has `## [X.Y.Z] - YYYY-MM-DD` as its latest section, with entries, the tag's date,
+   and only the headings Added, Changed, Deprecated, Removed, Fixed and Security.
 
-It then runs the full CI suite, builds Linux, macOS and Windows binaries (amd64 and arm64), and publishes a GitHub Release with checksums. The release notes are the changelog section followed by the notes GitHub generates (contributors and history). Pre-release tags are published as pre-releases.
+It then runs the full CI suite, builds Linux, macOS and Windows binaries (amd64 and arm64), and
+publishes a GitHub Release with checksums. The release notes are the changelog section followed by
+the notes GitHub generates (contributors and history). Pre-release tags are published as
+pre-releases.
 
 To cut a release:
 
-1. Branch `release/<version>` from `main`. Turn `[Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD` (the date is the day you push the tag, in your time zone) and check the four version declarations. `bash .github/scripts/release-check.sh vX.Y.Z YYYY-MM-DD` runs the workflow's own check, and `truss run release-check` runs the related tests.
-2. Open a pull request from the release branch to `main` and merge it once CI is green on Linux, macOS and Windows.
-3. Tag the merge commit on `main` and push the tag: `git tag -a vX.Y.Z -m "TRUSS X.Y.Z"` then `git push origin vX.Y.Z`. The workflow does the rest. If it fails before publishing, fix the cause and push a new tag; a published release is never rewritten.
+1. Branch `release/<version>` from `main`. Turn `[Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD` (the
+   date is the day you push the tag, in your time zone) and check the four version declarations.
+   `bash .github/scripts/release-check.sh vX.Y.Z YYYY-MM-DD` runs the workflow's own check, and
+   `truss run release-check` runs the related tests.
+2. Open a pull request from the release branch to `main` and merge it once CI is green on Linux,
+   macOS and Windows.
+3. Tag the merge commit on `main` and push the tag: `git tag -a vX.Y.Z -m "TRUSS X.Y.Z"` then `git
+   push origin vX.Y.Z`. The workflow does the rest. If it fails before publishing, fix the cause and
+   push a new tag; a published release is never rewritten.
