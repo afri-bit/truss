@@ -89,7 +89,9 @@ does not change under a flow.
   FAT) is not seen until it changes again; a run always reads the file.
 - **An unresponsive share can stall the daemon.** Looking at a file takes the daemon's lock, as the
   one-second check always did, so a registered file on a share that stops answering holds up the
-  daemon until the share answers. Looking at the files outside the lock is a follow-up.
+  daemon until the share answers. A name that answers to nothing is looked up once more with a fresh
+  look at every file, at most once per 250 ms, so asking for unknown names does not add to this. Looking
+  at the files outside the lock is a follow-up.
 - **A kept name does not survive a restart.** The name a file keeps while it does not load is held
   in memory. After the daemon restarts, a file that still does not parse is shown under its
   registered name until it loads again.
