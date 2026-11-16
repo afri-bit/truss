@@ -46,7 +46,7 @@ What is left before the tag. Items marked "you" cannot be done from code.
 - [ ] CI is green on Linux, macOS and Windows for them. The daemon, Desktop and the project layout have only run on Linux and macOS locally; Windows and the Desktop browser tests (Linux only, by design) get their first proof here.
 - [ ] You: try `truss daemon install` for real on each OS you support. It is verified by generation and fakes only ([spec 011](../specs/011-daemon-start-at-login/spec.md)).
 - [ ] You: Settings > Pages > Source: "GitHub Actions", so the docs site deploys from `main`.
-- [ ] `release/0.1.0` is merged into `main` through a pull request, then the tag is pushed (see "Releasing" in the README).
+- [ ] `release/0.1.0` is merged into `main` through a pull request, then the tag is pushed (see "Releasing" in [CONTRIBUTING.md](../CONTRIBUTING.md)).
 
 ### Not in v0.1.0
 
