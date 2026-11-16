@@ -17,18 +17,20 @@ only. Grouping flows by project is a separate, later decision.
 ## Requirements
 
 - **FR-001** The Flows page has a switch with two choices, *Cards* and *List*, in the toolbar
-  beside the filter. Cards is the default and is what the page showed before this spec.
+  beside the filter. Cards is the default and is what the page showed before this spec. With no flow
+  registered there is nothing to switch, and the page shows its empty state without the switch.
 - **FR-002** *List* shows one table row per registered flow with these columns: state, flow (the
   name, a link to the flow's page, and its file path), schedule, next run, last run, duration, the
   shape of its step graph, and the actions. A flow whose file does not load shows its error in
   place of the schedule, next run, last run and duration, and *not runnable* as its shape.
 - **FR-003** A row has the same actions as a card, with the same accessible names: *Run now*,
   *Pause schedule* or *Resume schedule* (disabled when the flow has no schedule), and *Unregister*
-  (which asks first). They are icon buttons with a tooltip. Pressing a row outside its links and
-  buttons opens the flow's page.
-- **FR-004** Both views show the same flows, in the same order, and answer the same filter. Changing
-  the view keeps the filter text and the half-typed register form, and does not change the count
-  (*N of M*).
+  (which asks first). They are icon buttons with a tooltip. Pressing a row outside its links
+  and its actions cell opens the flow's page.
+- **FR-004** Both views show the same flows, in the same order, and answer the same filter. The
+  filter reads the text trimmed, against the name and the path together, whether it was just typed
+  or the page was drawn again. Changing the view keeps the filter text and the half-typed register
+  form, and does not change the count (*N of M*).
 - **FR-005** The choice is kept in this browser with the other Desktop settings, and survives a
   reload. A missing or unknown stored value means *Cards*. The page keeps following the daemon
   while it shows the list (the same refresh as for cards).

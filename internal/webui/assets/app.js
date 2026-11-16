@@ -661,8 +661,8 @@ views.pipelines = {
         draft.path = draft.name = path.value = name.value = "";
       });
     } }, path, h("button", { type: "button", id: "browse", onclick: () => openPicker(path) }, icon("folder", "sm"), "Browse…"), name, h("button", { class: "primary", type: "submit" }, "Register"));
-    const q = ui.pipeQuery.toLowerCase();
-    const shown = pipelines.filter((p) => !q || p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q));
+    const q = ui.pipeQuery.trim().toLowerCase(); // the same reading as filterInPlace, so a repaint keeps what typing showed
+    const shown = pipelines.filter((p) => !q || flowText(p).includes(q));
     const states = ["ready", "running", "paused", "invalid"].map((st) => [st, pipelines.filter((p) => pipelineState(p) === st).length]).filter(([, n]) => n);
     const list = settings.flowsView === "list"; // anything else, or nothing stored, is cards
     const viewBtn = (id, value, label, ico) => h("button", { type: "button", id, "aria-pressed": String(list === (value === "list")), onclick: () => setSetting("flowsView", value) }, icon(ico, "sm"), label);
@@ -695,6 +695,9 @@ function filterInPlace(selector, query, countId, total) {
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+// flowText is what the Flows filter reads: the name and the path, in both views.
+const flowText = (p) => (p.name + " " + p.path).toLowerCase();
+
 // The cells a flow shows as a card and as a list row.
 // brief is the list row: the time left, with the clock time as its tooltip.
 const nextRunCell = (p, brief) => p.paused ? h("span", { class: "muted" }, "paused") : nextOf(p) ? (brief ? h("span", { title: clock(nextOf(p)) }, until(nextOf(p))) : [clock(nextOf(p)), h("span", { class: "muted" }, " · " + until(nextOf(p)))]) : h("span", { class: "muted" }, "–");
@@ -713,7 +716,7 @@ function flowShape(p, brief) {
 }
 
 function pipelineCard(p) {
-  return h("article", { class: "card", "data-filter": (p.name + " " + p.path).toLowerCase() },
+  return h("article", { class: "card", "data-filter": flowText(p) },
     h("header", null, h("span", { class: "glyph" }, icon("pipelines", "sm")), h("a", { href: href.pipeline(p.name) }, p.name), badge(pipelineState(p))),
     h("div", { class: "path mono", title: p.path }, h("bdi", null, p.path)),
     p.valid
@@ -729,10 +732,10 @@ function pipelineCard(p) {
 
 // flowsTable is the list view: one row per flow, the same flows and filter as the cards.
 function flowsTable(pipelines, shown) {
-  const open = (p) => (e) => { if (!e.target.closest("a, button")) go(href.pipeline(p.name)); };
+  const open = (p) => (e) => { if (!e.target.closest("a, button, td.acts")) go(href.pipeline(p.name)); };
   return h("div", { class: "panel", id: "flows-table" }, h("div", { class: "table-wrap flat" }, h("table", null,
     h("thead", null, h("tr", null, ["State", "Flow", "Schedule", "Next run", "Last run", "Duration", "Shape", "Actions"].map((t) => h("th", { class: t === "Actions" ? "acts" : null }, t)))),
-    h("tbody", null, pipelines.map((p) => h("tr", { class: "link", onclick: open(p), hidden: !shown.includes(p), "data-filter": (p.name + " " + p.path).toLowerCase() },
+    h("tbody", null, pipelines.map((p) => h("tr", { class: "link", onclick: open(p), hidden: !shown.includes(p), "data-filter": flowText(p) },
       h("td", null, badge(pipelineState(p))),
       h("td", { class: "flow" }, h("a", { class: "pipe", href: href.pipeline(p.name) }, p.name), h("div", { class: "path mono", title: p.path }, h("bdi", null, p.path))),
       p.valid

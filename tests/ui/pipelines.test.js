@@ -207,7 +207,7 @@ test("the Flows page shows cards or a list, and keeps the choice", async () => {
     assert.ok(await page.locator("#flows-view-list").evaluate((el) => el === document.activeElement), "the switch keeps focus");
     assert.equal(await stored(), "list");
     const heads = await page.locator("#flows-table thead th").allTextContents();
-    assert.deepEqual(heads.slice(0, 7), ["State", "Flow", "Schedule", "Next run", "Last run", "Duration", "Shape"]);
+    assert.deepEqual(heads, ["State", "Flow", "Schedule", "Next run", "Last run", "Duration", "Shape", "Actions"]);
     await page.locator("#pipe-filter").fill("");
     await page.locator("#pipe-count", { hasText: `${total} of ${total}` }).waitFor();
     assert.equal(await page.locator("#flows-table tbody tr:not([hidden])").count(), total);
@@ -228,6 +228,8 @@ test("the Flows page shows cards or a list, and keeps the choice", async () => {
     await nightly.locator(".badge", { hasText: "paused" }).waitFor();
     await nightly.getByRole("button", { name: "Resume schedule" }).click();
     await nightly.locator(".badge", { hasText: "ready" }).waitFor();
+    assert.equal(await ok.getByRole("button", { name: "Run now" }).getAttribute("title"), "Run now", "an icon button has a tooltip");
+    assert.equal(await ok.getByRole("button", { name: "Unregister" }).getAttribute("title"), "Unregister toggle-ok");
     assert.equal(await ok.getByRole("button", { name: "Pause schedule" }).isDisabled(), true, "no schedule, nothing to pause");
     assert.equal(await broken.getByRole("button", { name: "Run now" }).isDisabled(), true, "an invalid flow cannot run");
 
@@ -262,6 +264,68 @@ test("the Flows page shows cards or a list, and keeps the choice", async () => {
     await page.reload();
     await page.locator("article.card").first().waitFor();
     assert.equal(await pressed("Cards"), "true");
+    assert.deepEqual(page.problems, []);
+  } finally {
+    await page.context().close();
+  }
+});
+
+test("switching the Flows view keeps the filter, the order and the register form, and the list follows the daemon", async () => {
+  await d.register("nightly.yaml", "keep-a");
+  await d.register("ok.yaml", "keep-b");
+  const page = await b.newPage();
+  const cardNames = () => page.locator("article.card:not([hidden]) > header a").allTextContents();
+  const rowNames = () => page.locator("#flows-table tbody tr:not([hidden]) td.flow a.pipe").allTextContents();
+  try {
+    await page.goto(d.authedUrl());
+    await page.evaluate(() => { location.hash = "#/pipelines"; });
+    await page.locator("article.card").first().waitFor();
+    const total = (await d.call("GET", "/pipelines")).length;
+
+    // The same flows in the same order, and a half-typed form that nothing wipes.
+    const cards = await cardNames();
+    await page.locator("#register-name").fill("half-typed");
+    await page.locator("#flows-view-list").click();
+    await page.locator("#flows-table").waitFor();
+    assert.deepEqual(await rowNames(), cards);
+    assert.equal(await page.locator("#register-name").inputValue(), "half-typed");
+
+    // A filter with a trailing space reads the same when the page is drawn again as when it was typed.
+    await page.locator("#pipe-filter").fill("keep-a ");
+    await page.locator("#pipe-count", { hasText: `1 of ${total}` }).waitFor();
+    await page.getByRole("button", { name: "Cards", exact: true }).click();
+    await page.locator("article.card:not([hidden])").first().waitFor();
+    assert.equal(await page.locator("#pipe-count").textContent(), `1 of ${total}`);
+    assert.deepEqual(await cardNames(), ["keep-a"]);
+    await page.getByRole("button", { name: "List", exact: true }).click();
+    await page.locator("#flows-table").waitFor();
+    assert.deepEqual(await rowNames(), ["keep-a"]);
+    await page.locator("#pipe-filter").fill("");
+    await page.locator("#pipe-count", { hasText: `${total} of ${total}` }).waitFor();
+
+    // The switch works from the keyboard and keeps focus.
+    await page.locator("#flows-view-list").focus();
+    await page.keyboard.press("Shift+Tab");
+    assert.equal(await page.evaluate(() => document.activeElement.id), "flows-view-cards");
+    await page.keyboard.press("Space");
+    await page.locator("article.card").first().waitFor();
+    assert.equal(await page.locator("#flows-view-cards").getAttribute("aria-pressed"), "true");
+    assert.equal(await page.evaluate(() => document.activeElement.id), "flows-view-cards");
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Enter");
+    await page.locator("#flows-table").waitFor();
+    assert.equal(await page.evaluate(() => document.activeElement.id), "flows-view-list");
+
+    // A press beside a button in the actions cell does not leave the page.
+    const row = page.locator("#flows-table tbody tr", { has: page.getByRole("link", { name: "keep-a", exact: true }) });
+    await row.locator("td.acts").click({ position: { x: 2, y: 2 } });
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(await page.evaluate(() => location.hash), "#/pipelines");
+
+    // The list follows the daemon by itself: nothing is clicked here.
+    await row.locator(".badge", { hasText: "ready" }).waitFor();
+    await d.call("POST", "/pipelines/keep-a/pause");
+    await row.locator(".badge", { hasText: "paused" }).waitFor({ timeout: 10000 });
     assert.deepEqual(page.problems, []);
   } finally {
     await page.context().close();
