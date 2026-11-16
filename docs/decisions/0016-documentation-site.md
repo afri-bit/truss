@@ -1,6 +1,6 @@
 # 0016. Documentation site
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 
 ## Context
