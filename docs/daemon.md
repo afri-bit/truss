@@ -60,9 +60,17 @@ A registration is only a name and a path. The layout of a project is in
   good: its history, schedules and [data folder](#data-and-cache-folders) hang on it. When the file
   changes `pipeline.name`, the daemon shows the new name, keeps every earlier run with the flow, and
   accepts either name in every command. The API reports the registered name as `registered_name`
-  while the two differ. A new name that another registration holds or claims is not taken; the
-  registered name stays, and so does a name you chose with `--name` (or in Desktop's name field). To change the registered name, unregister and register again (the history
-  stays with the old name).
+  while the two differ, and each run as `registered_pipeline`.
+  - A new name that another registration holds or claims is not taken, and neither is a name you
+    chose with `--name` (or in Desktop's name field). Registering again with `--name` set to the
+    registered name keeps it.
+  - A file that stops loading keeps the name it was last read with.
+  - **Scripts and schedulers should use the registered name.** A shown name can move to another flow;
+    a registered name never does.
+  - To change the registered name, unregister and register again (the history stays with the old
+    name). A file registered again without `--name` is never registered twice.
+  - On a network or synced folder a change may show later than one second, because the operating
+    system reports file times late there.
 - A flow in a project (`.truss/flows/` under a folder with a `truss.yaml`) runs its steps in the
   project root. Any other file runs in its own directory, as `truss run` does there. Either one
   can be changed with `pipeline.workdir`.

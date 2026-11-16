@@ -4,11 +4,12 @@
   "tier": 2,
   "branch": "feature/018-desktop-corrections",
   "status": "in_review",
-  "step": "spec 019 implemented; verify, independent review (reviewer, spec-reviewer, security-reviewer), then push",
+  "step": "review fixes applied; delta review of 057bc85..HEAD, then push",
   "steps_done": [
     "chart fix, Flows and Re-run, spec 018, docs; verify.sh pass; 30 UI tests pass",
     "review (reviewer, spec-reviewer) and delta review: approve at efb9803",
-    "daemon follows a renamed flow and keeps history: spec 019, ADR 0017, tests, docs"
+    "daemon follows a renamed flow and keeps history: spec 019, ADR 0017, tests, docs",
+    "reviews of spec 019 (reviewer, spec, security, portability) answered: path dedupe, kept names, retry, log once, registered_pipeline, Desktop acts by registration"
   ],
   "requirements": [
     "specs/018-desktop-corrections/spec.md",
@@ -22,14 +23,16 @@
   "blockers": [],
   "open_questions": [
     "Is Flow a glossary term, or only Desktop's label for a registered pipeline? (docs/GLOSSARY.md)",
-    "A flow showed stale content after a YAML edit; not reproduced here (current code re-reads on edit and on every run). Need the exact steps and file path."
+    "A flow showed stale content after a YAML edit; not reproduced here (current code re-reads on edit and on every run). Need the exact steps and file path.",
+    "Milestone: which release holds spec 019 (0.1.0 untagged vs 0.2.0-beta)? And is 0.2.0-beta a new number for the 0.1.0 content or a release after it?"
   ],
   "next_actions": [
     "Retake docs/images/desktop-*.png (they show the old Pipelines sidebar name)",
     "Optionally fix the daemon's raw error when registering truss.yaml (CLI says project metadata)",
-    "Nit: tests/ui/shell.test.js 'no Pipelines option' check in the Jump to test cannot fail (query is flows)"
+    "Nit: tests/ui/shell.test.js 'no Pipelines option' check in the Jump to test cannot fail (query is flows)",
+    "Follow-up: look at registered files outside the daemon lock (dead network share); case-insensitive registered names; FILE_SHARE_DELETE on Windows"
   ],
   "pr": null,
   "created": "2026-11-16T15:58:40Z",
-  "updated": "2026-11-16T16:44:42Z"
+  "updated": "2026-11-16T17:20:11Z"
 }

@@ -28,6 +28,13 @@ and behave differently per OS.
   none and follows the file; the maintainer's release is still a beta.
 - Two names can answer for one flow. The API says so (`registered_name`) and Desktop shows it.
 - A flow renamed twice keeps the history of its registered name and of its current name only.
+- A shown name can move to another flow when claims change. Scripts and Desktop therefore act on the
+  registered name, and runs carry it (`registered_pipeline`). A file that stops loading keeps the
+  name it was last read with, so a name does not move while a file is being fixed.
+- A file registered again without `--name` is never registered twice; `--name` is the one way to
+  give a file a second registration.
+- Following relies on the file's time and size, which a network share may report late (spec 019,
+  known limits).
 - Name resolution lives in `internal/daemon`, because it needs the file's content; the registry
   stays a store of names and paths.
 - `TRUSS_PIPELINE` in step environments stays the registered name, so a run's environment does not

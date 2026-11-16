@@ -11,11 +11,11 @@ Dates below are when a release was made. 0.1.0 is the first release.
 
 ### Changed
 
+- The daemon and TRUSS Desktop follow a registered file when its `pipeline.name` changes: the flow shows the new name, keeps all of its runs, and answers to both names in commands and the API. A registration keeps the name it was registered under for its history, schedules and data. The API adds the optional fields `registered_name` (on a pipeline) and `registered_pipeline` (on a run) while they differ from `name` and `pipeline`; `name` and `pipeline` now carry the name from the file. A name another flow holds, or one chosen with `--name`, is never replaced; a registration made earlier with `--name` follows the file unless it is registered again with `--name`. A file registered again without `--name` is no longer registered twice. Views no longer lag an edit by up to a second (specs/019-flows-follow-their-files, ADR 0017).
 - TRUSS Desktop: the sidebar item, page heading, breadcrumbs and *Jump to…* entry and group that list registered pipelines now say *Flows* (the addresses and the API are unchanged), and the run page's *Run again* button is now *Re-run* (specs/018-desktop-corrections).
 
 ### Fixed
 
-- The daemon and TRUSS Desktop follow a registered file when its `pipeline.name` changes: the flow shows the new name, keeps all of its runs, and answers to both names in commands and the API. A registration keeps the name it was registered under for its history, schedules and data; the API adds the optional field `registered_name` while it differs from `name`. Views no longer lag an edit by up to a second (specs/019-flows-follow-their-files, ADR 0017).
 - TRUSS Desktop: on a running run's Resources chart the memory line no longer leaves the chart and draws over the panel title. Memory is scaled into the CPU axis and the legend says *mem, scaled* (specs/018-desktop-corrections).
 
 ## [0.1.0] - 2026-11-16
