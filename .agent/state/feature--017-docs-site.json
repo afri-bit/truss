@@ -3,16 +3,23 @@
   "title": "Documentation site: Astro Starlight, brand and animated home",
   "tier": 1,
   "branch": "feature/017-docs-site",
-  "status": "planned",
-  "step": "",
+  "status": "in_review",
+  "step": "independent and delta reviews done (reviewer, spec-reviewer, security-reviewer: approve); final nits fixed; ready to push and open the PR (stacked on chore/dogfood-pipelines on feature/016-project-layout)",
   "steps_done": [],
   "requirements": [],
-  "specs": [],
+  "specs": [
+    "specs/017-docs-site"
+  ],
   "owner_agent": "orchestrator",
   "blockers": [],
-  "open_questions": [],
-  "next_actions": [],
+  "open_questions": [
+    "Approve ADR 0016 and the new npm packages (astro, starlight, mermaid)? Approve the new .github/workflows/docs.yml? Publish with GitHub Pages (needs repository settings)?"
+  ],
+  "next_actions": [
+    "open the PRs in order: 016, dogfood, site",
+    "first CI run of docs.yml; publishing"
+  ],
   "pr": null,
   "created": "2026-11-15T23:27:51Z",
-  "updated": "2026-11-15T23:27:51Z"
+  "updated": "2026-11-16T05:17:29Z"
 }
