@@ -773,13 +773,23 @@ views.runs = {
 
 // The run view keeps its log between refreshes so the text is not re-fetched.
 // open holds the cards the reader opened or closed by hand, by card key.
-const logState = { id: "", offset: 0, text: "", step: "", follow: true, timer: 0, done: false, query: "", decoder: null, open: {} };
+const logState = { id: "", offset: 0, text: "", step: "", follow: true, timer: 0, done: false, query: "", decoder: null, open: {}, ids: [] };
 
 // parseLog groups the run log into cards: the setup, one per step (however the
 // steps' lines interleave), and the summary. It reads only the line grammar of
 // specs 002 to 004, so a log written before the section headings groups the
 // same way. The headings themselves are skipped: the cards take their place.
-function parseLog(text, done) {
+// ids are the run's step ids: a step id may hold a space, so a "step <id> ..."
+// line is matched against them, longest first, before it is read as one word.
+function parseLog(text, done, ids = []) {
+  const known = [...ids].sort((a, b) => b.length - a.length);
+  const stepLine = (rest) => {
+    if (!rest.startsWith("step ")) return null;
+    const tail = rest.slice(5);
+    for (const id of known) if (tail.startsWith(id + " ")) return [id, tail.slice(id.length + 1)];
+    const i = tail.indexOf(" ");
+    return i < 0 ? null : [tail.slice(0, i), tail.slice(i + 1)];
+  };
   const setup = { key: "setup", kind: "setup", title: "Setup", state: "succeeded", rows: [], facts: {} };
   const summary = { key: "summary", kind: "summary", title: "Summary", state: "", rows: [], note: "" };
   const steps = new Map();
@@ -788,24 +798,31 @@ function parseLog(text, done) {
     return steps.get(id);
   };
   const order = [];
-  const place = (c) => { if (!order.includes(c)) order.push(c); return c; };
-  for (const line of text.split("\n")) {
+  const placed = new Set();
+  const place = (c) => { if (!placed.has(c)) { placed.add(c); order.push(c); } return c; };
+  const lines = text.split("\n");
+  // While the log is arriving the last piece may be half a line; wait for its end.
+  if (!done) lines.pop();
+  for (const raw of lines) {
+    const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
     if (!line) continue;
+    // The s flag: a "." must also match a carriage return inside a line, which progress bars write.
     const ts = line.slice(11, 20), rest = line.slice(20);
     if (/^==== .* ====$/.test(rest)) continue;
     let m;
-    if ((m = /^setup (\S+)(?: (.*))?$/.exec(rest))) {
+    const sl = stepLine(rest);
+    if ((m = /^setup (\S+)(?: (.*))?$/s.exec(rest))) {
       place(setup).rows.push({ ts, raw: rest, label: m[1], text: m[2] || "" });
       setup.facts[m[1]] = m[2] || "";
-    } else if ((m = /^step (\S+) \|(?: (.*))?$/.exec(rest))) {
-      place(step(m[1])).rows.push({ ts, raw: rest, text: m[2] || "" });
-    } else if ((m = /^step (\S+) (.+)$/.exec(rest))) {
-      const c = place(step(m[1])), what = m[2];
+    } else if (sl && (sl[1] === "|" || sl[1].startsWith("| "))) {
+      place(step(sl[0])).rows.push({ ts, raw: rest, text: sl[1].slice(2) });
+    } else if (sl) {
+      const c = place(step(sl[0])), what = sl[1];
       let cls = "meta";
       if (what === "started") { c.state = "running"; c.attempts++; c.dur = ""; }
       else if ((m = /^finished duration (\S+) exit (-?\d+)$/.exec(what))) { c.state = m[2] === "0" ? "succeeded" : "failed"; c.dur = m[1]; cls = m[2] === "0" ? "good" : "fail"; }
       else if ((m = /^finished duration (\S+) error /.exec(what))) { c.state = "failed"; c.dur = m[1]; cls = "fail"; }
-      else if (what.startsWith("skipped because ")) { c.state = "skipped"; c.note = what.slice(8); }
+      else if (what.startsWith("skipped because ")) { c.state = "skipped"; c.note = what.slice(16); }
       else if (what.startsWith("stopped because ")) { c.stopped = true; c.note = what; cls = "fail"; }
       else if (what.startsWith("failed but the run continues")) { c.continued = true; }
       c.rows.push({ ts, raw: rest, text: what, cls });
@@ -822,7 +839,8 @@ function parseLog(text, done) {
   }
   for (const c of steps.values()) {
     if (c.continued && c.state === "failed") c.state = "tolerated";
-    if (c.stopped) c.state = "cancelled";
+    // A step the interrupt cut off logs a failure of its own; the run's end says why.
+    if (c.stopped || (summary.state === "cancelled" && c.state === "failed")) c.state = "cancelled";
     if (c.state === "running" && done) c.state = "cancelled";
     if (c.attempts > 1 && !c.note) c.note = `attempt ${c.attempts}`;
   }
@@ -853,7 +871,7 @@ function logRow(row, no, q) {
 
 function logCard(c, rows, q) {
   return h("details", { class: "sec st-" + (c.state || "pending"), "data-sec": c.key, open: cardOpen(c, q) },
-    h("summary", { onclick: (e) => { logState.open[c.key] = !e.currentTarget.parentElement.open; } },
+    h("summary", { onclick: (e) => { if (!q && !logState.step) logState.open[c.key] = !e.currentTarget.parentElement.open; } },
       statusGlyph(c.state || "pending", 14),
       h("span", { class: "sec-name" }, c.title),
       c.note && h("span", { class: "sec-note", title: c.note }, c.note),
@@ -862,7 +880,7 @@ function logCard(c, rows, q) {
 }
 
 function setAllOpen(open) {
-  for (const c of parseLog(logState.text, logState.done)) logState.open[c.key] = open;
+  for (const c of parseLog(logState.text, logState.done, logState.ids)) logState.open[c.key] = open;
   paintLog();
 }
 
@@ -872,7 +890,7 @@ function paintLog() {
   const q = logState.query.toLowerCase();
   const frag = document.createDocumentFragment();
   let count = 0;
-  for (const c of parseLog(logState.text, logState.done)) {
+  for (const c of parseLog(logState.text, logState.done, logState.ids)) {
     if (logState.step && c.key !== "step:" + logState.step) continue;
     const rows = q ? c.rows.filter((r) => r.raw.toLowerCase().includes(q)) : c.rows;
     if (q && !rows.length) continue;
@@ -885,7 +903,11 @@ function paintLog() {
   } else if (!logState.done) {
     frag.append(h("span", { class: "cursor", style: `animation-delay:${phase(1000)}` }));
   }
+  // Repainting replaces every card; keep keyboard focus on the header it was on.
+  const focused = document.activeElement;
+  const was = focused && focused.tagName === "SUMMARY" && pre.contains(focused) ? focused.parentElement.dataset.sec : null;
   pre.replaceChildren(frag);
+  if (was) [...pre.querySelectorAll("details")].find((d) => d.dataset.sec === was)?.querySelector("summary")?.focus({ preventScroll: true });
   const lines = document.getElementById("log-count");
   if (lines) lines.textContent = `${count} line${count === 1 ? "" : "s"}`;
   if (logState.follow) pre.scrollTop = pre.scrollHeight;
@@ -942,6 +964,7 @@ views.run = {
     } });
     queueMicrotask(paintLog);
     const steps = run.steps || [];
+    logState.ids = steps.map((st) => st.id);
     const doneN = steps.filter((st) => !["pending", "running", "queued"].includes(st.status)).length;
     const current = steps.filter((st) => st.status === "running").map((st) => st.id);
     const usage = res.run(run.id);

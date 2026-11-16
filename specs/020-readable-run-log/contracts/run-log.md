@@ -36,7 +36,10 @@ Three headings exist, in this place:
   follows the summary line.
 - A heading starts with `==== `. No other line TRUSS writes starts with it, and command output
   always starts with `step <id> | `, so it cannot be a heading.
-- `<id>` is a step id as validated by the pipeline schema; it holds no line break.
+- `<id>` is written as the pipeline file gives it. The schema does not restrict the characters of
+  a step id yet (a follow-up), so an id that holds a line break, ` | ` or `====` can forge lines. The
+  contract holds for ids made of letters, digits and `_ . - /`; a log of a file with other ids may
+  not be trusted to tell the parts apart.
 - Every line still has a timestamp, and timestamps still never go backwards.
 - Lines of different steps may alternate (spec 004). A heading marks where a step starts, not an
   exclusive section.

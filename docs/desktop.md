@@ -56,7 +56,7 @@ card names the step, its state and how long it took, and holds its output with l
 counted from 1 in that card. Steps that run at the same time each keep their own card, so their
 lines are not mixed. A step that succeeded is closed; a step that is running, failed or stopped
 is open, and so is the summary. Click a card to open or close it; the choice stays while the log
-keeps arriving. The two buttons in the log's bar open or close every card. Finding text shows
+keeps arriving (not while you search or pick a step, which open what they show). The two buttons in the log's bar open or close every card. Finding text shows
 only the cards with a match, opened. Logs from before the `====` headings (see
 [the run log](cli.md#reading-the-run-log)) group the same way, because the cards are built from the
 step lines, not from the headings.
