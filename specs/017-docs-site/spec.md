@@ -55,6 +55,9 @@ file, the CLI and the daemon API do not change, and building TRUSS never needs N
   `https://afri-bit.github.io/truss/`). Fonts, links and assets all honour it.
 - **FR-007** CI builds the site when `site/`, `docs/` or Desktop's fonts change
   (`.github/workflows/docs.yml`).
+- **FR-008** The docs have a dark and light toggle: one button in the header (in the menu on a phone) that
+  switches between the two, with a label that names the action. The docs follow the system scheme
+  until it is used; after that the choice is remembered and applies to every page before it paints.
 
 ## Not in this spec
 
@@ -75,6 +78,9 @@ dependency update routine for `site/`, and an accessibility check in CI.
 - No violet: every computed colour (text, background, border, fill, stroke) of 9 pages in both schemes,
   about 131,000 values, was scanned for hues 255 to 335, with none found. The same scan finds a
   planted violet on all 18 page and scheme combinations.
+- The theme toggle (`ThemeToggle.astro`): starting from a dark and from a light system scheme, it
+  switches, stores the choice, keeps it on another page set before paint, works from the keyboard,
+  updates its label, has a 44 px target and causes no console error; on a phone it is in the menu.
 - All Mermaid diagrams draw; docs pages have no console error in either scheme.
 - Text contrast: every measured pair is at least 4.5:1 in both schemes (the lowest rendered pair is 4.56:1;
   the light scheme's muted text was darkened to 5.25:1 on its tightest surface).

@@ -20,7 +20,11 @@ export default defineConfig({
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/afri-bit/truss' }],
       // The brand (colours, type) is src/styles/brand.css; it replaces Starlight's default theme.
       customCss: ['./src/styles/fonts.css', './src/styles/brand.css'],
-      components: { Footer: './src/components/DocsFooter.astro' },
+      components: {
+        Footer: './src/components/DocsFooter.astro',
+        // One button for dark and light, in place of Starlight's three-way select.
+        ThemeSelect: './src/components/ThemeToggle.astro',
+      },
       tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 },
       lastUpdated: false,
       // Code blocks: the brand's own syntax themes (no violet), in Starlight's frame.
