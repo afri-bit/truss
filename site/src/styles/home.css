@@ -768,8 +768,12 @@ p code,
   height: 168px;
   padding: var(--s-2) 0;
   overflow: hidden;
+  /* The oldest visible line fades out instead of being cut in half. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
 }
 .ln {
+  flex: none; /* in a fixed-height column the lines must clip, never shrink and overlap */
   display: flex;
   gap: var(--s-3);
   padding: 0 56px 0 var(--s-4);
