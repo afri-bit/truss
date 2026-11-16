@@ -20,7 +20,7 @@ Written alongside the implementation (constitution 2.0.0, principle I).
 
 ## Requirements
 
-- **FR-001** One page with a collapsible sidebar (Dashboard, Pipelines, Runs, Monitor, Settings,
+- **FR-001** One page with a collapsible sidebar (Dashboard, Flows, Runs, Monitor, Settings,
   active runs, daemon status), a header (breadcrumbs, *Jump to…*, connection state with latency,
   theme toggle, settings menu) and a scrollable content area. The collapse button sits at the
   bottom left; `[` toggles it.

@@ -9,6 +9,14 @@ Dates below are when a release was made. 0.1.0 is the first release.
 
 ## [Unreleased]
 
+### Changed
+
+- TRUSS Desktop: the sidebar item, page heading, breadcrumbs and *Jump to…* entry that list registered pipelines now say *Flows* (the addresses and the API are unchanged), and the run page's *Run again* button is now *Re-run* (specs/018-desktop-corrections).
+
+### Fixed
+
+- TRUSS Desktop: on a running run's Resources chart the memory line no longer leaves the chart and draws over the panel title. Memory is scaled into the CPU axis and the legend says *mem, scaled* (specs/018-desktop-corrections).
+
 ## [0.1.0] - 2026-11-16
 
 The first release: run a pipeline file by hand, or let the daemon run it on a schedule, and watch it from the terminal or TRUSS Desktop, on Linux, macOS and Windows.

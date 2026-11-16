@@ -31,7 +31,7 @@ Written alongside the implementation (constitution 2.0.0, principle I).
   unregister (with confirmation).
 - **FR-006** Run: status, trigger, times, reason; step graph by dependency depth; per-step
   status, duration and non-zero exit code; run log that grows while the run is active;
-  selecting a step filters the log to it; cancel while active, run again afterwards.
+  selecting a step filters the log to it; cancel while active, re-run afterwards.
 - **FR-007** Views refresh without user action. A form being typed in is not reset by a refresh.
 - **FR-008** Text from pipelines, logs and errors is always inserted as text, never as markup.
   The daemon sends a Content-Security-Policy that allows only its own origin.

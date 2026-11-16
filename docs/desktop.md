@@ -24,8 +24,8 @@ theme toggle, settings menu) and the content.
 | Page | Shows | You can |
 |---|---|---|
 | **Dashboard** | Counters for today, active runs with progress, runs per hour, system load, health, the next scheduled runs, recent runs. | Jump to any run or pipeline. |
-| **Pipelines** | Every registered file as a card: state, schedule, next and last run, shape of its step graph. | Register a file (type its path or press **Browse…**), filter, run it now, pause or resume its schedules, unregister it. |
-| **Pipeline** | Its step graph colored by the last run, success rate, configuration, run history. | The same actions. |
+| **Flows** | Every registered pipeline file as a card: state, schedule, next and last run, shape of its step graph. | Register a file (type its path or press **Browse…**), filter, run it now, pause or resume its schedules, unregister it. |
+| **Flow** | Its step graph colored by the last run, success rate, configuration, run history. | The same actions. |
 | **Runs** | Every run the daemon started or skipped, and every run tracked from a shell, newest first. | Filter by status or text, open one. |
 | **Run** | Progress, the running steps, elapsed time, the step graph with the running step highlighted, step results, the live log, resources and configuration. | Cancel the run, run it again, click a step to see only its log lines, find in the log, wrap, follow. |
 | **Monitor** | Health checks, CPU and memory, cores, the daemon's process and every live step. | Open the run behind a process. |
@@ -37,14 +37,15 @@ theme toggle, settings menu) and the content.
 
 **Resource figures** (CPU, memory, step processes) come from the daemon, which measures them on
 Linux, macOS and Windows. On any other system the page says the daemon does not collect them. A run's own chart
-starts when you open its page; the machine's charts show the last ten minutes. See
-[spec 015](../specs/015-resource-metrics/spec.md).
+starts when you open its page; the machine's charts show the last ten minutes. On a run's chart
+the memory line is drawn relative to its own peak, so only its shape compares with CPU; the
+figures above the chart give the real numbers. See [spec 015](../specs/015-resource-metrics/spec.md).
 
 ![Monitor](images/desktop-monitor.png)
 
 Runs started with `truss run --track` appear next to the daemon's own, with a **local** badge
 in the Trigger column and on the run's page. They show their steps and log live, like any run.
-Cancel works (the CLI notices within a second and stops); **Run again** is not offered, because
+Cancel works (the CLI notices within a second and stops); **Re-run** is not offered, because
 nothing registered stands behind a local run.
 
 The pages refresh on their own about every second and a half (change it in Settings).

@@ -1,0 +1,20 @@
+{
+  "work_id": "feature--018-desktop-corrections",
+  "title": "Desktop corrections: chart, Flows, Re-run",
+  "tier": 1,
+  "branch": "feature/018-desktop-corrections",
+  "status": "in_progress",
+  "step": "implemented and verified (verify.sh pass, 29 UI tests); next: independent review, PR. Open question: stale flow after yaml edit not reproduced",
+  "steps_done": [],
+  "requirements": [
+    "specs/018-desktop-corrections/spec.md"
+  ],
+  "specs": [],
+  "owner_agent": "main-session",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [],
+  "pr": null,
+  "created": "2026-11-16T15:58:40Z",
+  "updated": "2026-11-16T15:58:40Z"
+}

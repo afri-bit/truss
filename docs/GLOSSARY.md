@@ -26,6 +26,11 @@ steps:
     run: go test ./...
 ```
 
+### Flow
+
+A pipeline file in a project's `.truss/flows/` folder. TRUSS Desktop calls its list of registered
+pipelines **Flows**; the address of that page and the daemon API still say `pipelines`.
+
 ### Pipeline Run
 
 A single execution instance of a pipeline.
