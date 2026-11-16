@@ -88,7 +88,7 @@ export const LOG: LogLine[] = (() => {
   lines.push({
     at: SUMMARY_AT,
     id: null,
-    text: `summary succeeded steps ${STEPS.length} duration ${precise(SUMMARY_AT - STEPS[0].start)}`,
+    text: `summary succeeded steps ${STEPS.length} duration ${precise(SUMMARY_AT)}`,
     kind: 'sum',
   });
   return lines.sort((a, b) => a.at - b.at);

@@ -84,14 +84,14 @@ function driveRun(host: HTMLElement) {
       el.classList.toggle('chip--ok', done);
       el.classList.toggle('chip--run', !done && t >= first);
     }
-    const secs = Math.max(0, Math.min(t, SUMMARY_AT) - first) / 1000;
+    const secs = Math.max(0, Math.min(t, SUMMARY_AT)) / 1000;
     for (const el of elapsed) setText(el, `${secs.toFixed(1)}s`);
     const okCount = STEPS.filter((s) => state.get(s.id) === 'ok').length;
     for (const el of progress) setText(el, `${okCount} / ${STEPS.length} steps`);
     const running = STEPS.filter((s) => state.get(s.id) === 'running').map((s) => s.id);
     // Desktop shows "Running now" while a run goes on and "Ended <time>" once it is done.
     for (const el of nowLabel) setText(el, done ? 'Ended' : 'Running now');
-    for (const el of now) setText(el, done ? stamp(SUMMARY_AT) : running.length ? running.join(', ') : '–');
+    for (const el of now) setText(el, done ? stamp(SUMMARY_AT) : running.length ? running.join(', ') : 'waiting');
     for (const el of bar) el.style.transform = `scaleX(${Math.max(0, Math.min(1, (t - first) / (SUMMARY_AT - first)))})`;
     for (const el of live) {
       setText(el, done ? 'done' : 'live');

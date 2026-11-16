@@ -2,10 +2,10 @@
 // temporary folder (SYNC_REPO and SYNC_SITE), so nothing real is read or written. `npm test`.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'sync.mjs');
@@ -28,8 +28,13 @@ function fixture(page) {
   write('README.md', '# r\n');
   write('internal/webui/assets/fonts/a.woff2', 'font');
   mkdirSync(site, { recursive: true });
+  cleanup.push(root);
   return { repo, site };
 }
+
+// Every fixture lives in its own temporary folder; remove them when the tests are done.
+const cleanup = [];
+after(() => cleanup.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 
 function run({ repo, site }, env = {}) {
   const r = spawnSync(process.execPath, [script], { env: { ...process.env, SYNC_REPO: repo, SYNC_SITE: site, ...env }, encoding: 'utf8' });
@@ -123,4 +128,21 @@ test('a symbolic link in docs/images is not copied', () => {
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /not a regular file/);
   assert.ok(!existsSync(join(f.site, 'public', 'favicon.svg')), 'nothing was published');
+});
+
+test('a docs page that is a symbolic link is refused', () => {
+  const f = fixture('# T\n\nBody.\n');
+  const page = join(f.repo, 'docs', 'getting-started.md');
+  writeFileSync(join(f.repo, 'secret.txt'), 'secret');
+  unlinkSync(page);
+  symlinkSync(join(f.repo, 'secret.txt'), page);
+  const r = run(f);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /not a regular file/);
+});
+
+test('a branch name with link characters is refused', () => {
+  const r = run(fixture('# T\n\nBody.\n'), { TRUSS_DOCS_BRANCH: 'main) [x](evil' });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /not a branch name/);
 });

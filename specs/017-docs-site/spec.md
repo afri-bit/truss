@@ -82,7 +82,7 @@ dependency update routine for `site/`, and an accessibility check in CI.
 - The product windows show what TRUSS prints: three-decimal durations and the setup lines in the log,
   the real `truss validate` output for the file shown, Desktop's 14-character run id in the
   breadcrumb, and "Ended" for a finished run.
-- Reviews: independent reviews ran on `a3e9d2a` (general, spec, security); their findings are fixed in
-  the commits after it.
+- Reviews: independent reviews (general, spec, security) ran on `a3e9d2a` (rebased as `442b53a`, same
+  site content), and delta reviews on the commits after it; all four verdicts are approve.
 - Not proved: Safari and Firefox rendering (`offset-path` is used by the schedule diagram, with a
   `@supports` guard), a screen-reader pass, the CI job (first run is the pull request), publishing.

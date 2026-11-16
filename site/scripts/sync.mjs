@@ -22,6 +22,7 @@ const docsDir = join(repo, 'docs');
 const outDocs = join(site, 'src', 'content', 'docs', 'docs');
 const REPO_URL = 'https://github.com/afri-bit/truss';
 const BRANCH = process.env.TRUSS_DOCS_BRANCH || 'main';
+if (!/^[A-Za-z0-9._/-]+$/.test(BRANCH)) throw new Error(`sync: TRUSS_DOCS_BRANCH is not a branch name: ${BRANCH}`);
 
 // The pages of the site, in sidebar order (astro.config.mjs lists the same slugs).
 const pages = [
@@ -153,6 +154,7 @@ async function rewriteLine(line, fromFile) {
 }
 
 async function transform(page) {
+  if (!(await lstat(join(docsDir, page.file))).isFile()) throw new Error(`sync: docs/${page.file} is not a regular file (links are not followed)`);
   const source = await readFile(join(docsDir, page.file), 'utf8');
   const lines = source.replace(/\r\n/g, '\n').split('\n');
   if (lines[0].startsWith('# ')) lines.shift(); // Starlight renders the title itself

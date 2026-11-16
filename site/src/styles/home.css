@@ -1664,6 +1664,9 @@ p code,
   .tl {
     display: none; /* its labels would draw at about 5px */
   }
+  .schedule__visual .pause {
+    display: none !important; /* nothing moves here, so nothing to pause */
+  }
   .tl-list {
     display: grid;
   }
