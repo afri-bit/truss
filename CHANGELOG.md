@@ -5,13 +5,17 @@ All notable changes to TRUSS are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Dates below are when the work landed on `main`. No version has been tagged yet, so there is no released section.
+Dates below are when a release was made. 0.1.0 is the first release.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-16
+
+The first release: run a pipeline file by hand, or let the daemon run it on a schedule, and watch it from the terminal or TRUSS Desktop, on Linux, macOS and Windows.
+
 ### Changed
 
-- Project layout (breaking; nothing is tagged yet; specs/016-project-layout, ADR 0015). `truss.yaml` is now project metadata only: `version`, `project.name` and `project.description`. The project's `truss.yaml` (in the working directory) with `steps` or `jobs` is rejected; a `truss.yaml` in another folder, given by path, runs as any pipeline file. Pipelines are files in `.truss/flows/` (`.yaml` or `.yml`), run by name with `truss run <name>`; `truss run <path>` still runs any file. `pipeline.name` is optional and defaults to the file name. A run's log and data move to `.truss/state/<name>/` (`run.log`, `data/`, `data/cache/`), and TRUSS writes `.truss/.gitignore` so git ignores only that folder. Older `.truss/run.log` and `.truss/data` are ignored. `truss register --all` registers every pipeline in a project. Pipeline files are capped at 1 MiB. A flow registered in a project runs its steps in the project root. The error `prepare data folder` is now `prepare state folder`. After a successful `register --all` (every flow registered, none failed) the CLI prints `registered N pipelines (M with schedules)`, or `registered 1 pipeline (M with schedules)` for one. No summary is printed when a flow failed.
+- Project layout (breaking against earlier development builds; specs/016-project-layout, ADR 0015). `truss.yaml` is now project metadata only: `version`, `project.name` and `project.description`. The project's `truss.yaml` (in the working directory) with `steps` or `jobs` is rejected; a `truss.yaml` in another folder, given by path, runs as any pipeline file. Pipelines are files in `.truss/flows/` (`.yaml` or `.yml`), run by name with `truss run <name>`; `truss run <path>` still runs any file. `pipeline.name` is optional and defaults to the file name. A run's log and data move to `.truss/state/<name>/` (`run.log`, `data/`, `data/cache/`), and TRUSS writes `.truss/.gitignore` so git ignores only that folder. Older `.truss/run.log` and `.truss/data` are ignored. `truss register --all` registers every pipeline in a project. Pipeline files are capped at 1 MiB. A flow registered in a project runs its steps in the project root. The error `prepare data folder` is now `prepare state folder`. After a successful `register --all` (every flow registered, none failed) the CLI prints `registered N pipelines (M with schedules)`, or `registered 1 pipeline (M with schedules)` for one. No summary is printed when a flow failed.
 - License: TRUSS is now released under the Apache License 2.0 (was MIT). Nothing was tagged under MIT. A `NOTICE` file ships in every release archive.
 - Release process: the release check also compares the tag with `truss version` and with TRUSS Desktop's own version (`internal/webui/VERSION`), and accepts only the Keep a Changelog headings. Branches must start with `bugfix/`, `feature/`, `hotfix/`, `release/`, `task/` or `chore/`, and commits must be authored by `afri-bit`; CI and the agent hooks enforce both (ADR 0014, constitution 2.1.0).
 - Queued runs survive a daemon restart. They stay `queued` when the daemon stops and start in request order when it starts again, instead of being cancelled. A queued run whose pipeline can no longer be loaded is closed as `failed`. Runs that were running are cancelled on a graceful stop, or closed as `failed` after a crash, as before.
@@ -26,7 +30,7 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 ### Added
 
-- **Documentation site.** The docs are now also a website with search, a sidebar and light and dark schemes, and a home page that shows a pipeline being built and run, schedules with a catch-up run, and TRUSS Desktop. It is built from `docs/` by `site/` (Astro and Starlight, pinned; not part of the product). A new *Getting started* page takes you from install to a scheduled pipeline. The brand is amber on graphite, the colours of TRUSS Desktop (specs/017-docs-site, ADR 0016).
+- **Documentation site.** The docs are now also a website with search, a sidebar and light and dark schemes, and a home page that shows a pipeline being built and run, schedules with a catch-up run, and TRUSS Desktop. It is built from `docs/` by `site/` (Astro and Starlight, pinned; not part of the product). A new *Getting started* page takes you from install to a scheduled pipeline. The brand is amber on graphite, the colours of TRUSS Desktop (specs/017-docs-site, ADR 0016). It is published to GitHub Pages from `main` by CI.
 - **TRUSS Desktop redesign.** Collapsible sidebar, header with breadcrumbs, *Jump to…* and a settings menu, light and dark themes, a Monitor page (health checks, CPU, memory, cores, processes) and a Settings page. The run page shows progress, the running steps, a stage-by-stage step graph with the running step highlighted, and a live log with line numbers, find, wrap and follow. Pipeline cards keep every element in a fixed position (specs/014-desktop-redesign).
 - **Resource figures.** `GET /api/v1/metrics` reports the machine's CPU, per-core load, memory and load average, the daemon's own process, and each running step's processes, with ten minutes of history. Steps carry their process id (`pid`). Linux, macOS and Windows. TRUSS Desktop shows these instead of simulated figures (specs/015-resource-metrics).
 - **`truss desktop --demo`** shows TRUSS Desktop on moving sample data without a daemon, for trying it or reviewing its design. Off by default; Ctrl-C stops it.
@@ -76,4 +80,5 @@ Dates below are when the work landed on `main`. No version has been tagged yet, 
 
 - `truss run` no longer writes through symbolic links a repository can carry in `.truss`. A link planted at `.truss/run.log.tmp` used to receive the run log, overwriting a file outside the folder. A `.truss`, `.truss/data` or `.truss/data/cache` that is a link is now refused before any step starts; before, the run log, data and cache went into the folder the link pointed to (specs/002-local-run-log FR-018).
 
-[Unreleased]: https://github.com/afri-bit/truss/commits/main
+[Unreleased]: https://github.com/afri-bit/truss/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/afri-bit/truss/releases/tag/v0.1.0
