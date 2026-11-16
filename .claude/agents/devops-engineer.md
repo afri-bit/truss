@@ -16,7 +16,7 @@ Read `AGENTS.md`, `docs/agents.md`, `CONTRIBUTING.md`, `.github/workflows/`,
 ## How you work
 
 - Keep CI honest: it must run `gofmt`, `go vet`, `golangci-lint`, `go test -race` and the end-to-end
-  script on Linux, macOS and Windows as the README says. Do not reduce coverage to get green.
+  script on Linux, macOS and Windows (see `CONTRIBUTING.md`). Do not reduce coverage to get green.
 - Pin third-party actions to a full commit SHA before any workflow gets access to a secret. Least
   privilege: `permissions: contents: read` unless a job needs more.
 - Never put secrets in files. Workflows read them from the repository's secrets.
