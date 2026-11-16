@@ -18,7 +18,7 @@ that matches it. `go.mod` already says `// version: 0.1.0`. The changelog stays 
 
 | Capability | What it means | Spec | State |
 |---|---|---|---|
-| Local runs | `truss run` executes `truss.yaml` on the host shell, fail-fast | `001-host-pipeline-engine` | Implemented |
+| Local runs | `truss run <name>` executes a pipeline of the project (or any file by path) on the host shell, fail-fast | `001-host-pipeline-engine` | Implemented |
 | Run log | Timestamped, readable log; `truss help`, `truss version` | `002-local-run-log` | Implemented |
 | Step dependencies | `needs` between steps | `003-step-dependencies` | Implemented |
 | Step concurrency | `pipeline.concurrency`, strict fields, stoppable process trees | `004-step-concurrency` | Implemented |
@@ -29,6 +29,7 @@ that matches it. `go.mod` already says `// version: 0.1.0`. The changelog stays 
 | TRUSS Desktop | Dashboard, pipeline control, run view with graph and live log, file picker, browser tests | `007-truss-desktop`, `013-desktop-polish`, `014-desktop-redesign` | Implemented |
 | Resource figures | `GET /metrics`: host, daemon and step CPU and memory on Linux, macOS and Windows; step process ids; Desktop shows them (added by the maintainer, 2026-11-13) | `015-resource-metrics` | Implemented |
 | Retries and conditions | `retries`, `retry_delay`, `continue-on-error`, `if` on steps, `if` on jobs | `009-retries-and-conditions` | Implemented |
+| Project layout | `truss.yaml` is project metadata; pipelines are files in `.truss/flows/`; generated files in `.truss/state/` (added by the maintainer, 2026-11-15) | `016-project-layout` | Implemented |
 
 **Operating systems.** Linux, macOS and Windows. A `run` string is a command for that host's
 shell; v0.1.0 does not promise that one file runs unchanged on every shell.

@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"math"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -146,5 +147,33 @@ func TestParse_DoesNotFailOnSchemaFaults(t *testing.T) {
 				t.Fatalf("Parse() error = %v, want nil (Validate reports schema faults)", err)
 			}
 		})
+	}
+}
+
+func TestParseFile_RefusesNonRegularFile(t *testing.T) {
+	_, err := ParseFile(context.Background(), t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestParseFile_LimitsSize(t *testing.T) {
+	dir := t.TempDir()
+	pad := "# " + strings.Repeat("x", MaxFileBytes) + "\n"
+	big := filepath.Join(dir, "big.yaml")
+	if err := os.WriteFile(big, []byte("version: \"1\"\n"+pad), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseFile(context.Background(), big); err == nil || !strings.Contains(err.Error(), "too large") {
+		t.Fatalf("error = %v, want too large", err)
+	}
+	// Exactly the limit is read.
+	body := "version: \"1\"\n"
+	ok := filepath.Join(dir, "ok.yaml")
+	if err := os.WriteFile(ok, []byte(body+"#"+strings.Repeat("x", MaxFileBytes-len(body)-1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseFile(context.Background(), ok); err != nil {
+		t.Fatalf("a file of exactly the limit: %v", err)
 	}
 }

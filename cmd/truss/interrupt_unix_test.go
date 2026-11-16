@@ -57,7 +57,7 @@ func TestMain_InterruptEndsStepsAndKeepsLog(t *testing.T) {
 			logPath, previous := writeBlockingPipeline(t, dir, pidfile)
 
 			var stdout, stderr bytes.Buffer
-			cmd := exec.Command(bin, "run") //nolint:gosec // the binary built above
+			cmd := exec.Command(bin, "run", "pipeline.yaml") //nolint:gosec // the binary built above
 			cmd.Dir = dir
 			cmd.Stdout, cmd.Stderr = &stdout, &stderr
 			cmd.WaitDelay = 5 * time.Second

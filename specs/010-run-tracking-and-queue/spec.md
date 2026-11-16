@@ -3,7 +3,7 @@
 **Spec**: `010-run-tracking-and-queue` | **Created**: 2026-11-12 | **Status**: Implemented
 
 **Input**: Two gaps in the daemon (spec 006): queued runs are lost when the daemon stops, and a
-`truss run` leaves only `.truss/run.log` so it never shows up in `truss runs` or Desktop.
+`truss run` leaves only `.truss/run.log` so it never shows up in `truss runs` or Desktop. *Changed by [spec 016](../016-project-layout/spec.md): It leaves only `.truss/state/<flow>/run.log`.*
 
 Builds on [spec 006](../006-daemon-registry-and-scheduling/spec.md) and
 [ADR 0003](../../docs/decisions/0003-daemon-local-api-and-file-state.md) (decisions 8 and 9: the
@@ -53,6 +53,7 @@ Written alongside the implementation (constitution 2.0.0, principle I).
   caller's process, shell, working directory and environment, with the same run log on stdout, the
   same `.truss/run.log`, the same exit code. `--track` is the only option of `run`; any other
   argument is the path.
+  *Changed by [spec 016](../016-project-layout/spec.md): The command is `truss run <name|path> --track`. A bare `truss run` exits 1 and lists the flows. The log is `.truss/state/<flow>/run.log` (spec 016 FR-010, FR-013).*
 - **FR-008** `--track` needs a daemon. When none runs, `truss run --track` prints the usual
   `error: ... (start it with: truss daemon start)` line on stderr, exits `1`, writes nothing to
   stdout and runs nothing. A definition that does not load fails as it does without `--track`,
@@ -94,7 +95,7 @@ Written alongside the implementation (constitution 2.0.0, principle I).
   four times a second, sees the status in the answer, ends the run's processes as an interrupt
   does, exits `1` and prints `error: cancelled from the daemon`. A cancel that arrives after the
   pipeline finished does not change its exit code (FR-010). Like any interrupted run it saves
-  no `.truss/run.log` (spec 001 FR-017).
+  no `.truss/run.log` (spec 001 FR-017). *Changed by [spec 016](../016-project-layout/spec.md): The file is `.truss/state/<flow>/run.log`.*
 - **FR-019** When the daemon stops (gracefully or not), a `local` run that is `running` is
   closed as `failed` with `the daemon stopped while this run was active`. Finished local runs are
   history like any other and obey the 200-run limit.

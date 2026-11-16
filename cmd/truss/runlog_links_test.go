@@ -29,10 +29,10 @@ func TestRun_PlantedTempLinkIsNotFollowed(t *testing.T) {
 	if err := os.WriteFile(victim, []byte(keep), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(filepath.Join(dir, ".truss"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, ".truss", "state", "pipeline"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	plantLink(t, victim, filepath.Join(dir, ".truss", "run.log.tmp"))
+	plantLink(t, victim, filepath.Join(dir, ".truss", "state", "pipeline", "run.log.tmp"))
 	path := filepath.Join(dir, "pipeline.yaml")
 	if err := os.WriteFile(path, []byte(validPipeline(echoHello())), 0o644); err != nil {
 		t.Fatal(err)
@@ -57,10 +57,10 @@ func TestRun_PlantedLogLinkIsReplacedNotFollowed(t *testing.T) {
 	if err := os.WriteFile(victim, []byte(keep), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(filepath.Join(dir, ".truss"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, ".truss", "state", "pipeline"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	plantLink(t, victim, filepath.Join(dir, ".truss", "run.log"))
+	plantLink(t, victim, filepath.Join(dir, ".truss", "state", "pipeline", "run.log"))
 	path := filepath.Join(dir, "pipeline.yaml")
 	if err := os.WriteFile(path, []byte(validPipeline(echoHello())), 0o644); err != nil {
 		t.Fatal(err)
@@ -73,7 +73,7 @@ func TestRun_PlantedLogLinkIsReplacedNotFollowed(t *testing.T) {
 	if got, err := os.ReadFile(victim); err != nil || string(got) != keep {
 		t.Fatalf("file behind the planted link changed: %q, %v", got, err)
 	}
-	info, err := os.Lstat(filepath.Join(dir, ".truss", "run.log"))
+	info, err := os.Lstat(filepath.Join(dir, ".truss", "state", "pipeline", "run.log"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestRun_LeavesNoTemporaryLog(t *testing.T) {
 	if code, _, errOut := invoke(t, dir, []string{"run", path}); code != 0 {
 		t.Fatalf("exit = %d, stderr = %s", code, errOut)
 	}
-	assertNoTemporaryLog(t, filepath.Join(dir, ".truss"))
+	assertNoTemporaryLog(t, filepath.Join(dir, ".truss", "state", "pipeline"))
 }
 
 func TestRun_FailedRunLeavesNoTemporaryLog(t *testing.T) {
@@ -120,14 +120,20 @@ func TestRun_FailedRunLeavesNoTemporaryLog(t *testing.T) {
 		t.Fatalf("exit = %d, want 1", code)
 	}
 	readRunLog(t, dir) // FR-011: a failed run still saves its log
-	assertNoTemporaryLog(t, filepath.Join(dir, ".truss"))
+	assertNoTemporaryLog(t, filepath.Join(dir, ".truss", "state", "pipeline"))
 }
 
-// A link at .truss (or .truss/data) would send the run log, data and cache into
+// A link at .truss (or any folder under .truss/state) would send the run log, data and cache into
 // a folder the checkout chose, such as ~/.bashrc.d. Such a folder is refused
 // before any Step starts.
 func TestRun_LinkedTrussFoldersAreRefused(t *testing.T) {
-	for _, linked := range []string{".truss", filepath.Join(".truss", "data"), filepath.Join(".truss", "data", "cache")} {
+	for _, linked := range []string{
+		".truss",
+		filepath.Join(".truss", "state"),
+		filepath.Join(".truss", "state", "pipeline"),
+		filepath.Join(".truss", "state", "pipeline", "data"),
+		filepath.Join(".truss", "state", "pipeline", "data", "cache"),
+	} {
 		t.Run(filepath.ToSlash(linked), func(t *testing.T) {
 			dir := t.TempDir()
 			victim := t.TempDir()

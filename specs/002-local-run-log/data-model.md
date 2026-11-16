@@ -45,10 +45,10 @@ Step duration is the finish time minus the start time, in the same seconds form 
 
 | Field | Rules |
 |---|---|
-| Path | `.truss/run.log` in the invoker's working directory. |
+| Path | `.truss/run.log` in the invoker's working directory. *Changed by [spec 016](../016-project-layout/spec.md): The path is `.truss/state/<flow>/run.log`.* |
 | Contents | The run log bytes of the most recent pipeline run that started and finished. |
 | Replacement | The previous file is replaced only after that run finishes. A rejected definition does not create or replace it. |
-| History | One file. Older runs are not stored. Ignore files are not edited. |
+| History | One file. Older runs are not stored. Ignore files are not edited. *Changed by [spec 016](../016-project-layout/spec.md): The one exception is `.truss/.gitignore` (FR-015).* |
 
 ## Relationships
 
@@ -63,4 +63,4 @@ Step duration is the finish time minus the start time, in the same seconds form 
 | Definition cannot be read, parsed, or validated | Unchanged. No new file. |
 | `.truss` or the temporary log cannot be created | Unchanged. No step starts. |
 | Run finishes, succeeded or failed | Replaced with that run's log. |
-| Final replace fails | Previous `.truss/run.log` stays. The process exits non-zero. |
+| Final replace fails | Previous `.truss/run.log` stays. *Changed by [spec 016](../016-project-layout/spec.md): The file is `.truss/state/<flow>/run.log`.* The process exits non-zero. |

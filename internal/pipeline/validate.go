@@ -19,9 +19,6 @@ func Validate(p Pipeline) error {
 	if p.unknownField != "" {
 		return fmt.Errorf("unknown field %q %s", p.unknownField, p.unknownIn)
 	}
-	if strings.TrimSpace(p.Name) == "" {
-		return fmt.Errorf("missing pipeline name")
-	}
 	if p.concurrencyBad || p.Concurrency < 0 {
 		text := p.concurrencyText
 		if !p.concurrencyBad {

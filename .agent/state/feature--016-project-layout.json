@@ -1,0 +1,29 @@
+{
+  "work_id": "feature--016-project-layout",
+  "title": "Project layout: truss.yaml metadata and .truss/flows",
+  "tier": 2,
+  "branch": "feature/016-project-layout",
+  "status": "in_progress",
+  "step": "delta reviews done; final fixes",
+  "steps_done": [],
+  "requirements": [],
+  "specs": [
+    "specs/016-project-layout"
+  ],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [
+    "Should `truss run --help` print help (now a flow name)?",
+    "Keep register --all without a confirmation prompt?",
+    "Non-blocking open for named pipes (check-then-open race): this PR or follow-up?"
+  ],
+  "next_actions": [
+    "open PR against develop",
+    "CI first proof on Windows and macOS",
+    "dogfood pipelines in .truss/flows",
+    "docs site (Starlight) on its own branch"
+  ],
+  "pr": null,
+  "created": "2026-11-15T22:07:03Z",
+  "updated": "2026-11-15T22:45:36Z"
+}

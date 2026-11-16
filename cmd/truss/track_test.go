@@ -18,11 +18,11 @@ import (
 
 func TestRunTrack_ReportsRunStepsAndLogToTheDaemon(t *testing.T) {
 	s := newSession(t, true)
-	s.write("truss.yaml", definition("tracked", "",
+	s.write("pipeline.yaml", definition("tracked", "",
 		stepDef{id: "one", run: helperCmd("print-lines", "2", "first")},
 		stepDef{id: "two", run: helperCmd("print-lines", "1", "second"), needs: []string{"one"}},
 	))
-	code, out, errOut := s.truss("run", "--track")
+	code, out, errOut := s.truss("run", "pipeline.yaml", "--track")
 	if code != 0 {
 		t.Fatalf("exit %d\nstdout: %s\nstderr: %s", code, out, errOut)
 	}
@@ -34,7 +34,7 @@ func TestRunTrack_ReportsRunStepsAndLogToTheDaemon(t *testing.T) {
 	if !strings.Contains(out, "step one | first 2") || !strings.Contains(out, "summary succeeded steps 2") || strings.Contains(out, "tracking") {
 		t.Fatalf("stdout:\n%s", out)
 	}
-	if _, err := os.Stat(filepath.Join(s.dir, ".truss", "run.log")); err != nil {
+	if _, err := os.Stat(filepath.Join(s.dir, ".truss", "state", "pipeline", "run.log")); err != nil {
 		t.Fatalf("the local run log is gone: %v", err)
 	}
 
@@ -61,11 +61,11 @@ func TestRunTrack_ReportsRunStepsAndLogToTheDaemon(t *testing.T) {
 
 func TestRunTrack_FailureKeepsTheExitCodeAndRecordsTheFailure(t *testing.T) {
 	s := newSession(t, true)
-	s.write("truss.yaml", definition("broken", "",
+	s.write("pipeline.yaml", definition("broken", "",
 		stepDef{id: "boom", run: helperCmd("exit", "3")},
 		stepDef{id: "after", run: helperCmd("exit", "0"), needs: []string{"boom"}},
 	))
-	code, _, errOut := s.truss("run", "--track")
+	code, _, errOut := s.truss("run", "pipeline.yaml", "--track")
 	if code != 1 {
 		t.Fatalf("exit = %d, stderr %s", code, errOut)
 	}
@@ -81,8 +81,8 @@ func TestRunTrack_FailureKeepsTheExitCodeAndRecordsTheFailure(t *testing.T) {
 func TestRunTrack_UsesTheCallersEnvironmentNotTheDaemons(t *testing.T) {
 	s := newSession(t, true)
 	s.env = append(s.env, "TRUSS_TRACK_PROBE=from-the-caller")
-	s.write("truss.yaml", definition("hello-world", "", stepDef{id: "hello", run: helperCmd("print-env", "TRUSS_TRACK_PROBE")}))
-	code, out, errOut := s.truss("run", "--track")
+	s.write("pipeline.yaml", definition("hello-world", "", stepDef{id: "hello", run: helperCmd("print-env", "TRUSS_TRACK_PROBE")}))
+	code, out, errOut := s.truss("run", "pipeline.yaml", "--track")
 	if code != 0 || !strings.Contains(out, "from-the-caller") {
 		t.Fatalf("exit %d\nstdout: %s\nstderr: %s", code, out, errOut)
 	}
@@ -91,8 +91,8 @@ func TestRunTrack_UsesTheCallersEnvironmentNotTheDaemons(t *testing.T) {
 func TestRunTrack_WithoutADaemonFailsBeforeRunning(t *testing.T) {
 	s := newSession(t, false)
 	marker := filepath.Join(s.dir, "ran")
-	s.write("truss.yaml", definition("hello-world", "", stepDef{id: "hello", run: helperCmd("touch", marker)}))
-	code, out, errOut := s.truss("run", "--track")
+	s.write("pipeline.yaml", definition("hello-world", "", stepDef{id: "hello", run: helperCmd("touch", marker)}))
+	code, out, errOut := s.truss("run", "pipeline.yaml", "--track")
 	if code != 1 || out != "" || !strings.Contains(errOut, "truss daemon start") || !strings.Contains(errOut, "--track") {
 		t.Fatalf("exit %d\nstdout: %q\nstderr: %q", code, out, errOut)
 	}
@@ -100,7 +100,7 @@ func TestRunTrack_WithoutADaemonFailsBeforeRunning(t *testing.T) {
 		t.Fatalf("the pipeline ran although tracking was impossible: %v", err)
 	}
 	// Without --track nothing changes: no daemon is needed.
-	if code, _, errOut := s.truss("run"); code != 0 {
+	if code, _, errOut := s.truss("run", "pipeline.yaml"); code != 0 {
 		t.Fatalf("plain run: %d %q", code, errOut)
 	}
 	if _, err := os.Stat(marker); err != nil {
@@ -110,8 +110,8 @@ func TestRunTrack_WithoutADaemonFailsBeforeRunning(t *testing.T) {
 
 func TestRunTrack_InvalidDefinitionNeverReachesTheDaemon(t *testing.T) {
 	s := newSession(t, true)
-	s.write("truss.yaml", "version: \"1\"\npipeline: {name: x}\nsteps: []\n")
-	code, _, errOut := s.truss("run", "--track")
+	s.write("pipeline.yaml", "version: \"1\"\npipeline: {name: x}\nsteps: []\n")
+	code, _, errOut := s.truss("run", "pipeline.yaml", "--track")
 	if code != 1 || !strings.Contains(errOut, "pipeline must contain one or more steps") {
 		t.Fatalf("exit %d, stderr %q", code, errOut)
 	}
@@ -130,8 +130,8 @@ func TestRunTrack_TooManyArgumentsPrintUsage(t *testing.T) {
 func TestRunTrack_DaemonCancelStopsTheLocalRun(t *testing.T) {
 	s := newSession(t, true)
 	pidfile := filepath.Join(s.dir, "pid")
-	s.write("truss.yaml", definition("stuck", "", stepDef{id: "block", run: helperCmd("block", pidfile)}))
-	res := s.start("run", "--track")
+	s.write("pipeline.yaml", definition("stuck", "", stepDef{id: "block", run: helperCmd("block", pidfile)}))
+	res := s.start("run", "pipeline.yaml", "--track")
 	if !pollFile(pidfile, 30*time.Second) {
 		t.Fatal("the step never started")
 	}
@@ -149,7 +149,7 @@ func TestRunTrack_DaemonCancelStopsTheLocalRun(t *testing.T) {
 		t.Fatalf("run = %+v", run)
 	}
 	// An interrupted local run saves no run log (spec 001 FR-017); this one is no exception.
-	if _, err := os.Stat(filepath.Join(s.dir, ".truss", "run.log")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(s.dir, ".truss", "state", "pipeline", "run.log")); !os.IsNotExist(err) {
 		t.Fatalf("run log exists: %v", err)
 	}
 }
@@ -157,8 +157,8 @@ func TestRunTrack_DaemonCancelStopsTheLocalRun(t *testing.T) {
 func TestRunTrack_RunSurvivesTheDaemonStoppingMidRun(t *testing.T) {
 	s := newSession(t, true)
 	mine, other := filepath.Join(s.dir, "started"), filepath.Join(s.dir, "release")
-	s.write("truss.yaml", definition("outlive", "", stepDef{id: "wait", run: helperCmd("touch-and-wait", mine, other)}))
-	res := s.start("run", "--track")
+	s.write("pipeline.yaml", definition("outlive", "", stepDef{id: "wait", run: helperCmd("touch-and-wait", mine, other)}))
+	res := s.start("run", "pipeline.yaml", "--track")
 	if !pollFile(mine, 30*time.Second) {
 		t.Fatal("the step never started")
 	}
@@ -225,13 +225,13 @@ func getRun(t *testing.T, s *session, id string) api.Run {
 func TestRunTrack_InterruptClosesTheRunAsCancelled(t *testing.T) {
 	s := newSession(t, true)
 	pidfile := filepath.Join(s.dir, "pid")
-	s.write("truss.yaml", definition("stuck", "", stepDef{id: "block", run: helperCmd("block", pidfile)}))
+	s.write("pipeline.yaml", definition("stuck", "", stepDef{id: "block", run: helperCmd("block", pidfile)}))
 	ctx, interrupt := context.WithCancel(context.Background())
 	defer interrupt()
 	done := make(chan result, 1)
 	go func() {
 		var stdout, stderr bytes.Buffer
-		code := Run(ctx, []string{"run", "--track"}, s.dir, s.env, &stdout, &stderr)
+		code := Run(ctx, []string{"run", "pipeline.yaml", "--track"}, s.dir, s.env, &stdout, &stderr)
 		done <- result{code, stdout.String(), stderr.String()}
 	}()
 	if !pollFile(pidfile, 30*time.Second) {
@@ -255,7 +255,7 @@ func TestRunTrack_InterruptClosesTheRunAsCancelled(t *testing.T) {
 	if run.Status != "cancelled" || run.Reason != "interrupted" || run.Steps[0].Status != "cancelled" {
 		t.Fatalf("run = %+v", run)
 	}
-	if _, err := os.Stat(filepath.Join(s.dir, ".truss", "run.log")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(s.dir, ".truss", "state", "pipeline", "run.log")); !os.IsNotExist(err) {
 		t.Fatalf("run log exists: %v", err)
 	}
 }
@@ -263,8 +263,8 @@ func TestRunTrack_InterruptClosesTheRunAsCancelled(t *testing.T) {
 func TestRunTrack_TheDaemonLogIsRedactedToo(t *testing.T) {
 	s := newSession(t, true)
 	s.setSecret("TRUSS_TEST_TOKEN", canary)
-	s.write("truss.yaml", secretPipelineText())
-	code, out, errOut := s.truss("run", "--track")
+	s.write("pipeline.yaml", secretPipelineText())
+	code, out, errOut := s.truss("run", "pipeline.yaml", "--track")
 	if code != 0 || strings.Contains(out, canary) {
 		t.Fatalf("exit %d\nstdout: %s\nstderr: %s", code, out, errOut)
 	}

@@ -48,8 +48,8 @@ Reject before any Step command starts, with no new run log, when any earlier rej
 | An unrecognised field under `pipeline` | `unknown field "<name>" in pipeline` |
 | An unrecognised field in a Step | `unknown field "<name>" in step "<id>"`, or `in step <N>` (1-based) when the Step has no id |
 
-Check order: schema version, unknown field, name, `concurrency`, steps, `id`, `run`, then `needs` (spec 003 order). Existing diagnostics are unchanged. The CLI prints `error: <diagnostic>` on standard error. An existing `.truss/run.log` is unchanged.
+Check order: schema version, unknown field, name, `concurrency`, steps, `id`, `run`, then `needs` (spec 003 order). Existing diagnostics are unchanged. The CLI prints `error: <diagnostic>` on standard error. An existing `.truss/run.log` is unchanged. *Changed by [spec 016](../../016-project-layout/spec.md): The file is `.truss/state/<flow>/run.log`.*
 
 ## Filename
 
-Unchanged. The document may use any filename. `truss.yaml` is only the default lookup when `truss run` is given no path.
+Unchanged. The document may use any filename. *Changed by [spec 016](../../016-project-layout/spec.md): `truss.yaml` is project metadata and is never a pipeline file. Bare `truss run` exits 1.*

@@ -53,10 +53,10 @@ func writeBlockingPipeline(t *testing.T, dir, pidfile string) (logPath string, p
 	t.Helper()
 	body := "version: \"1\"\npipeline:\n  name: interrupt\nsteps:\n  - id: wait\n    run: " +
 		yamlSingle(helperCmd("spawn-grandchild", pidfile)) + "\n"
-	if err := os.WriteFile(filepath.Join(dir, "truss.yaml"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "pipeline.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	logPath = filepath.Join(dir, ".truss", "run.log")
+	logPath = filepath.Join(dir, ".truss", "state", "pipeline", "run.log")
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestRun_CancelledContextEndsStepsAndKeepsLog(t *testing.T) {
 	done := make(chan outcome, 1)
 	go func() {
 		var stdout, stderr bytes.Buffer
-		code := Run(ctx, []string{"run"}, dir, os.Environ(), &stdout, &stderr)
+		code := Run(ctx, []string{"run", "pipeline.yaml"}, dir, os.Environ(), &stdout, &stderr)
 		done <- outcome{code, stdout.String(), stderr.String()}
 	}()
 
@@ -161,10 +161,10 @@ func TestRun_ContextCancelledAfterStepFinishedKeepsLogAndPrintsError(t *testing.
 	body := "version: \"1\"\npipeline:\n  name: interrupt\nsteps:\n  - id: bad\n    run: " +
 		yamlSingle(helperCmd("exit", "3")) + "\n  - id: later\n    run: " +
 		yamlSingle(helperCmd("exit", "0")) + "\n"
-	if err := os.WriteFile(filepath.Join(dir, "truss.yaml"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "pipeline.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	logPath := filepath.Join(dir, ".truss", "run.log")
+	logPath := filepath.Join(dir, ".truss", "state", "pipeline", "run.log")
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestRun_ContextCancelledAfterStepFinishedKeepsLogAndPrintsError(t *testing.
 	stdout := &cancelOnFinishedLine{cancel: cancel}
 	var stderr bytes.Buffer
 
-	code := Run(ctx, []string{"run"}, dir, os.Environ(), stdout, &stderr)
+	code := Run(ctx, []string{"run", "pipeline.yaml"}, dir, os.Environ(), stdout, &stderr)
 
 	if code != 1 {
 		t.Fatalf("exit = %d, want 1", code)

@@ -45,8 +45,8 @@ Reject before any Step command starts, with no new run log, when any v1 rejectio
 
 The cycle names every Step in that cycle once. It starts with the member written earliest in the file, then follows `needs`.
 
-Existing structural errors are unchanged and are reported before a `needs` error. The CLI prints the diagnostic as `error: <diagnostic>` on standard error, as in `specs/002-local-run-log/contracts/cli.md`. An existing `.truss/run.log` is unchanged.
+Existing structural errors are unchanged and are reported before a `needs` error. The CLI prints the diagnostic as `error: <diagnostic>` on standard error, as in `specs/002-local-run-log/contracts/cli.md`. An existing `.truss/run.log` is unchanged. *Changed by [spec 016](../../016-project-layout/spec.md): The file is `.truss/state/<flow>/run.log`.*
 
 ## Filename
 
-Unchanged. The document may use any filename. `truss.yaml` is only the default lookup when `truss run` is given no path.
+Unchanged. The document may use any filename. *Changed by [spec 016](../../016-project-layout/spec.md): `truss.yaml` is project metadata and is never a pipeline file. Bare `truss run` exits 1.*

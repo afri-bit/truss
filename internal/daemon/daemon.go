@@ -26,6 +26,7 @@ import (
 	"github.com/afri-bit/truss/internal/home"
 	"github.com/afri-bit/truss/internal/metrics"
 	"github.com/afri-bit/truss/internal/pipeline"
+	"github.com/afri-bit/truss/internal/project"
 	"github.com/afri-bit/truss/internal/registry"
 	"github.com/afri-bit/truss/internal/runs"
 	"github.com/afri-bit/truss/internal/scheduler"
@@ -344,8 +345,17 @@ func resolver(reg *registry.Registry) runs.Resolver {
 			return pipeline.Pipeline{}, "", fmt.Errorf("%w: %q", registry.ErrNotFound, name)
 		}
 		def, _, err := readDefinition(e.Path)
-		return def, filepath.Dir(e.Path), err
+		return def, workingDir(e.Path), err
 	}
+}
+
+// workingDir is where the steps of a registered file run: the project root
+// for a flow in <root>/.truss/flows/, else the file's own folder.
+func workingDir(path string) string {
+	if root, ok := project.RootOf(path); ok {
+		return root
+	}
+	return filepath.Dir(path)
 }
 
 func readDefinition(path string) (pipeline.Pipeline, pipeline.ExecutionPlan, error) {
@@ -362,6 +372,9 @@ func readDefinition(path string) (pipeline.Pipeline, pipeline.ExecutionPlan, err
 	def, err := pipeline.ParseFile(context.Background(), path)
 	if err != nil {
 		return def, pipeline.ExecutionPlan{}, err
+	}
+	if def.Name == "" {
+		def.Name = project.FileStem(path) // spec 016 FR-008
 	}
 	if err := pipeline.Validate(def); err != nil {
 		return def, pipeline.ExecutionPlan{}, err
@@ -396,7 +409,7 @@ func (d *Daemon) submit(name, trigger string, scheduledFor time.Time) (api.Run, 
 	return d.runs.Submit(runs.Request{
 		Pipeline:     name,
 		Definition:   cur.def,
-		Dir:          filepath.Dir(e.Path),
+		Dir:          workingDir(e.Path),
 		DataDir:      data,
 		CacheDir:     cache,
 		Trigger:      trigger,

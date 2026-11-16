@@ -10,7 +10,7 @@ If `truss run` receives SIGINT (Ctrl-C) or SIGTERM while a Pipeline Run is in pr
 - no further Step starts;
 - every running Step's whole process tree is ended immediately and forcefully;
 - `truss` prints `error: context canceled` on standard error and exits 1;
-- the temporary log is discarded and an existing `.truss/run.log` is unchanged;
+- the temporary log is discarded and an existing `.truss/run.log` is unchanged; *Changed by [spec 016](../../016-project-layout/spec.md): The file is `.truss/state/<flow>/run.log`.*
 - no `cancelled` status is reported.
 
 ## Exit codes

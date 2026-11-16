@@ -35,7 +35,13 @@ Thumbs.db
 # .vscode/
 
 bin/
-.truss/
+
+# Generated run state (logs, data, cache). The project's own .truss/flows/ and
+# .truss/.gitignore are tracked. TRUSS also writes .truss/.gitignore itself.
+.truss/state/
+# Older builds wrote these. TRUSS ignores them and never deletes them.
+.truss/run.log
+.truss/data/
 
 # Claude Code local settings and worktrees
 .claude/settings.local.json
@@ -63,4 +69,5 @@ node_modules/
 # graphify-out/graphify-cache/
 # graphify-out/20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
 
+# Local knowledge-graph output (graphify)
 graphify-out/

@@ -28,7 +28,7 @@ func TestRun_LogHasTheUsualNewFileMode(t *testing.T) {
 	if code, _, errOut := invoke(t, dir, []string{"run", path}); code != 0 {
 		t.Fatalf("exit = %d, stderr = %s", code, errOut)
 	}
-	info, err := os.Stat(filepath.Join(dir, ".truss", "run.log"))
+	info, err := os.Stat(filepath.Join(dir, ".truss", "state", "pipeline", "run.log"))
 	if err != nil {
 		t.Fatal(err)
 	}
