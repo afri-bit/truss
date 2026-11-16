@@ -10,12 +10,16 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // killSelf ends the helper process by SIGKILL, so its shell reports a signal
-// death: no Exit Code, only a diagnostic.
+// death: no Exit Code, only a diagnostic. kill(2) on the own pid may return
+// before the signal is delivered to the process, so the helper waits to be
+// killed instead of racing it with a normal exit.
 func killSelf() int {
 	_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
+	time.Sleep(time.Minute)
 	return 2
 }
 
