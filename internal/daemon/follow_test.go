@@ -46,6 +46,23 @@ func awaitPipeline(t *testing.T, c *api.Client, what string, ok func(api.Pipelin
 	}
 }
 
+// replaceFile puts content at path with one rename, so no reader sees it half written.
+func replaceFile(t *testing.T, path, content string) {
+	t.Helper()
+	tmp := path + ".new"
+	if err := os.WriteFile(tmp, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var err error
+	for i := 0; i < 50; i++ { // on Windows a rename can briefly fail while the file is being read
+		if err = os.Rename(tmp, path); err == nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal(err)
+}
+
 func mustTrigger(t *testing.T, c *api.Client, name string) api.Run {
 	t.Helper()
 	run, err := c.Trigger(context.Background(), name)
@@ -627,7 +644,8 @@ func TestDaemon_AFileThatCouldNotBeReadHealsWithoutAnotherEdit(t *testing.T) {
 	if err := os.WriteFile(path, []byte(namedDefinition("alpha", "a", "b")), 0o000); err != nil {
 		t.Fatal(err)
 	}
-	awaitPipeline(t, c, "unreadable", func(p api.Pipeline) bool { return !p.Valid })
+	// The unreadable state must be seen before it heals, or the retry is not what healed it.
+	awaitPipeline(t, c, "unreadable", func(p api.Pipeline) bool { return !p.Valid && strings.Contains(p.Error, "permission denied") })
 	if err := os.Chmod(path, 0o600); err != nil { // size and time stay as they were
 		t.Fatal(err)
 	}
@@ -643,10 +661,10 @@ func TestDaemon_AFileThatFailsOnItsContentIsNotParsedAgain(t *testing.T) {
 	if _, err := c.Register(ctx, api.RegisterRequest{Path: path}); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("version: \"1\"\nsteps: [broken: yaml\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	awaitPipeline(t, c, "invalid", func(p api.Pipeline) bool { return !p.Valid })
+	// Replace the file in one step: a write in place can be seen half done, with the size of
+	// one moment and the content of the next, and the daemon rightly reads that again.
+	replaceFile(t, path, "version: \"1\"\nsteps: [broken: yaml\n")
+	awaitPipeline(t, c, "invalid", func(p api.Pipeline) bool { return !p.Valid && strings.Contains(p.Error, "invalid YAML") })
 	reading := func() *definition {
 		d.mu.Lock()
 		defer d.mu.Unlock()

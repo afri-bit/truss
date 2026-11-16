@@ -88,12 +88,15 @@ type definition struct {
 
 // Daemon is one running TRUSS service.
 type Daemon struct {
-	opts     Options
-	registry *registry.Registry
-	runs     *runs.Manager
-	metrics  *metrics.Sampler
-	listener net.Listener
-	endpoint api.Endpoint
+	// lastFresh is when a lookup last looked at every file without the throttle;
+	// the caller holds mu.
+	lastFresh time.Time
+	opts      Options
+	registry  *registry.Registry
+	runs      *runs.Manager
+	metrics   *metrics.Sampler
+	listener  net.Listener
+	endpoint  api.Endpoint
 
 	mu    sync.Mutex // guards sched and defs
 	sched *scheduler.Scheduler

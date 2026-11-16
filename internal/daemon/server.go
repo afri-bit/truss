@@ -230,12 +230,17 @@ func (d *Daemon) registerPipeline(w http.ResponseWriter, r *http.Request) error 
 	if req.Name != "" {
 		add = d.registry.AddChosen
 	}
-	e, err := add(name, path, d.opts.Now())
+	now := d.opts.Now()
+	e, err := add(name, path, now)
 	if err != nil {
 		return err
 	}
-	d.refresh(d.opts.Now())
-	d.logf("pipeline %s: registered %s", e.Name, e.Path)
+	// Two requests for one file can both get here; only the one that created
+	// the registration says so.
+	if e.Name == name && e.RegisteredAt.Equal(now) {
+		d.refresh(d.opts.Now())
+		d.logf("pipeline %s: registered %s", e.Name, e.Path)
+	}
 	return writeJSON(w, http.StatusCreated, d.view(e))
 }
 

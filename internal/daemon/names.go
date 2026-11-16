@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/afri-bit/truss/internal/api"
 	"github.com/afri-bit/truss/internal/registry"
@@ -24,9 +25,11 @@ func (d *Daemon) shownNames(entries []registry.Entry, fresh bool) map[string]str
 	for _, e := range entries {
 		claims[e.Name]++
 		// A file that stopped loading keeps the name it was last read with.
-		cur := d.check(e)
+		var cur *definition
 		if fresh {
 			cur = d.load(e, d.opts.Now(), false)
+		} else {
+			cur = d.check(e)
 		}
 		if !e.Chosen && cur.named != "" && cur.named != e.Name && registry.CheckName(cur.named) == nil {
 			want[e.Name] = cur.named
@@ -62,6 +65,15 @@ func (d *Daemon) lookup(name string) (registry.Entry, bool) {
 	entries := d.registry.List()
 	for _, fresh := range []bool{false, true} {
 		d.mu.Lock()
+		if fresh {
+			// The fresh look is for a name a file took a moment ago. However many
+			// unknown names are asked for, it runs at most once per checkEvery.
+			if time.Since(d.lastFresh) < checkEvery {
+				d.mu.Unlock()
+				break
+			}
+			d.lastFresh = time.Now()
+		}
 		shown := d.shownNames(entries, fresh)
 		d.mu.Unlock()
 		for _, e := range entries {
