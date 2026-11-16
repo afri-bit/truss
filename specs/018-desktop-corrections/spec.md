@@ -20,7 +20,8 @@ implementation (constitution 2.0.0, principle I).
 
 - **FR-001** On a run's Resources chart, every plotted value is drawn inside the plot area. CPU
   and memory share one axis (percent, from 0 to a ceiling set by the CPU peak). The memory line is
-  scaled into that axis from its own peak, and a value outside the axis is drawn on its edge.
+  scaled to fit that axis (against its peak, or 64 MiB if that is more, plus some headroom), and a
+  value outside the axis is drawn on its edge.
 - **FR-002** The memory legend reads *mem, scaled*. The figures above the chart (CPU percent, RSS
   in MiB) are unchanged and stay the real numbers.
 - **FR-003** The sidebar item, the page heading, the breadcrumbs and the *Jump to…* page entry
@@ -33,7 +34,13 @@ implementation (constitution 2.0.0, principle I).
 ## Out of scope
 
 Renaming other uses of "pipeline" in Desktop text (the dashboard tile, the register form, empty
-states), in the CLI, the API or the docs; a second axis for memory in MiB.
+states), in the CLI, the API or the docs; a second axis for memory in MiB; retaking the screenshots
+under `docs/images/`, which still show the old sidebar name.
+
+## Glossary
+
+[`docs/GLOSSARY.md`](../../docs/GLOSSARY.md) gains **Flow**: Desktop's label for a registered
+pipeline, not a separate kind of thing. Whether Flow stays a glossary term is the maintainer's call.
 
 ## Compatibility
 
@@ -42,7 +49,10 @@ Text and drawing only. No API, file format, address or CLI change.
 ## Verification
 
 Browser tests in `tests/ui/`: the memory and CPU lines of a live run stay within the chart's
-height (this failed before the change, with the memory line 348 units above it); the sidebar
-link is named *Flows* and no *Pipelines* link remains; the run page's *Re-run* button starts a run.
-Not verified: macOS and Windows (the browser tests run on Linux in CI; the chart test is skipped
-where the daemon reports no resource figures).
+height (this failed before the change, with the memory line about 348 units above it) and the
+legend reads *mem, scaled*; the sidebar link, the page heading, the breadcrumbs and the *Jump to…*
+page entry and group say *Flows* and no *Pipelines* link remains; the run page's *Re-run* button
+starts a run. The affected tests passed on macOS.
+Not verified: Windows; the browser tests run on Linux in CI, and the chart test reports a skip
+where the daemon gives no resource figures. No test shows *Re-run* absent for a run tracked from a
+shell (as before this change).

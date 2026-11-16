@@ -11,7 +11,7 @@ Dates below are when a release was made. 0.1.0 is the first release.
 
 ### Changed
 
-- TRUSS Desktop: the sidebar item, page heading, breadcrumbs and *Jump to…* entry that list registered pipelines now say *Flows* (the addresses and the API are unchanged), and the run page's *Run again* button is now *Re-run* (specs/018-desktop-corrections).
+- TRUSS Desktop: the sidebar item, page heading, breadcrumbs and *Jump to…* entry and group that list registered pipelines now say *Flows* (the addresses and the API are unchanged), and the run page's *Run again* button is now *Re-run* (specs/018-desktop-corrections).
 
 ### Fixed
 

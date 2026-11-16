@@ -26,7 +26,7 @@ Written alongside the implementation (constitution 2.0.0, principle I).
   valid token the page explains how to open it.
 - **FR-004** Dashboard: counters (registered, running, queued, and today's succeeded, failed,
   skipped), active runs, the next scheduled time per pipeline, recent runs.
-- **FR-005** Pipelines: state (`ready`, `running`, `paused`, `invalid` with the reason), file
+- **FR-005** Flows (the registered pipelines): state (`ready`, `running`, `paused`, `invalid` with the reason), file
   path, schedules with the next time, last run; register form; run now, pause or resume,
   unregister (with confirmation).
 - **FR-006** Run: status, trigger, times, reason; step graph by dependency depth; per-step

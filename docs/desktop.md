@@ -31,14 +31,14 @@ theme toggle, settings menu) and the content.
 | **Monitor** | Health checks, CPU and memory, cores, the daemon's process and every live step. | Open the run behind a process. |
 | **Settings** | Theme, density, sidebar, motion, refresh interval, log options, daemon facts. | Change them (kept in this browser), forget the access token. |
 
-![Pipelines](images/desktop-pipelines.png)
+![Flows](images/desktop-pipelines.png)
 
 ![A live run](images/desktop-run.png)
 
 **Resource figures** (CPU, memory, step processes) come from the daemon, which measures them on
 Linux, macOS and Windows. On any other system the page says the daemon does not collect them. A run's own chart
 starts when you open its page; the machine's charts show the last ten minutes. On a run's chart
-the memory line is drawn relative to its own peak, so only its shape compares with CPU; the
+the memory line is scaled to fit the chart, so only its shape compares with CPU; the
 figures above the chart give the real numbers. See [spec 015](../specs/015-resource-metrics/spec.md).
 
 ![Monitor](images/desktop-monitor.png)

@@ -28,8 +28,10 @@ steps:
 
 ### Flow
 
-A pipeline file in a project's `.truss/flows/` folder. TRUSS Desktop calls its list of registered
-pipelines **Flows**; the address of that page and the daemon API still say `pipelines`.
+TRUSS Desktop's label for a registered pipeline, and for the page that lists them. It is not a
+separate kind of thing: a Flow is a Pipeline. A project keeps its pipeline files in
+`.truss/flows/`, but any registered file shows up under Flows. The address of that page and the
+daemon API still say `pipelines`.
 
 ### Pipeline Run
 

@@ -947,7 +947,7 @@ function runResources(run) {
   return h("div", { style: "display:grid;gap:14px" },
     h("div", { class: "metric-head" }, h("span", { class: "big" }, u.cpu.toFixed(1)), h("span", { class: "unit" }, "% CPU"),
       h("span", { class: "big", style: "margin-left:18px" }, u.mem.toFixed(0)), h("span", { class: "unit" }, "MiB RSS"),
-      h("span", { class: "legend" }, h("span", null, h("i"), "cpu %"), h("span", { title: "Memory is drawn relative to its own peak, so only its shape is comparable to CPU" }, h("i", { class: "s2" }), "mem, scaled"))),
+      h("span", { class: "legend" }, h("span", null, h("i"), "cpu %"), h("span", { title: "Memory is scaled to fit the chart, so only its shape is comparable to CPU" }, h("i", { class: "s2" }), "mem, scaled"))),
     ser.cpu.length > 1
       ? lineChart([{ values: ser.cpu, area: true }, { values: ser.mem.map((m) => (m / memMax) * cpuMax), cls: "s2" }], { height: 130, max: cpuMax, fmt: (v) => v.toFixed(0) + "%", ticks: ticksFor((ser.cpu.length - 1) * (res.m.interval_seconds || 2)), label: "Run CPU and memory" })
       : h("div", { class: "empty", style: "padding:18px" }, "Collecting samples…"),

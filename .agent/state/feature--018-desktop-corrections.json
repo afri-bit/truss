@@ -4,17 +4,25 @@
   "tier": 1,
   "branch": "feature/018-desktop-corrections",
   "status": "in_progress",
-  "step": "implemented and verified (verify.sh pass, 29 UI tests); next: independent review, PR. Open question: stale flow after yaml edit not reproduced",
+  "step": "review fixes applied; delta review, verify, then PR",
   "steps_done": [],
   "requirements": [
     "specs/018-desktop-corrections/spec.md"
   ],
-  "specs": [],
+  "specs": [
+    "specs/018-desktop-corrections/spec.md"
+  ],
   "owner_agent": "main-session",
   "blockers": [],
-  "open_questions": [],
-  "next_actions": [],
+  "open_questions": [
+    "Is Flow a glossary term, or only Desktop's label for a registered pipeline? (docs/GLOSSARY.md)",
+    "A flow showed stale content after a YAML edit; not reproduced here (current code re-reads on edit and on every run). Need the exact steps and file path."
+  ],
+  "next_actions": [
+    "Retake docs/images/desktop-*.png (they show the old Pipelines sidebar name)",
+    "Optionally fix the daemon's raw error when registering truss.yaml (CLI says project metadata)"
+  ],
   "pr": null,
   "created": "2026-11-16T15:58:40Z",
-  "updated": "2026-11-16T15:58:40Z"
+  "updated": "2026-11-16T16:03:58Z"
 }
