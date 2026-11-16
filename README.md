@@ -308,6 +308,7 @@ The full map is in [docs/architecture.md](docs/architecture.md).
 
 | Read this | When you want to |
 |---|---|
+| [Getting started](docs/getting-started.md) | Go from install to a scheduled pipeline in five minutes |
 | [Pipeline file reference](docs/pipeline-reference.md) | Know every field, cron syntax, and recipes |
 | [Command line reference](docs/cli.md) | Look up a command or an exit code |
 | [The daemon](docs/daemon.md) | Understand registration, schedules, missed runs, concurrency, the HTTP API |
@@ -317,6 +318,9 @@ The full map is in [docs/architecture.md](docs/architecture.md).
 | [Milestone](docs/MILESTONE.md) | See what v0.1.0 includes and what waits |
 | [Decisions](docs/decisions/) | Learn why something is the way it is |
 | [Specifications](specs/) | Read the requirements behind each feature |
+
+The same docs are also a website with search and a home page, built from `docs/` by [`site/`](site/)
+(`cd site && npm ci && npm run dev`).
 
 ## Roadmap
 

@@ -1,0 +1,20 @@
+---
+// The step list of a run: what a phone shows in place of the graph, and what Desktop shows beside it.
+import { STEPS, duration } from '../lib/run';
+---
+
+<ol class="steps" aria-label="Steps of the run">
+  {
+    STEPS.map((s) => (
+      <li class="step-row s-ok" data-id={s.id}>
+        <svg class="ico" viewBox="-12 -12 24 24" aria-hidden="true">
+          <circle class="ring" r="9" />
+          <path class="tick" d="M-4.2 0.6 -1.4 3.4 4.4 -3" />
+          <path class="spin" d="M0 -9A9 9 0 0 1 9 0" />
+        </svg>
+        <span class="step-row__name">{s.id}</span>
+        <span class="step-row__time" data-time>{duration(s)}</span>
+      </li>
+    ))
+  }
+</ol>

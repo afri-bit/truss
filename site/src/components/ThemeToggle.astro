@@ -1,0 +1,107 @@
+---
+// A dark and light toggle for the docs, in place of Starlight's three-way theme select. It uses
+// Starlight's own storage key and `data-theme` attribute, so its ThemeProvider applies the choice
+// before first paint on every page (no flash) and the choice follows the reader across pages.
+// Until the reader clicks, the docs follow the system scheme.
+---
+
+<theme-toggle>
+  <button class="theme-toggle" type="button" aria-label="Switch to light theme" title="Switch to light theme">
+    <svg class="theme-toggle__sun" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6" />
+    </svg>
+    <svg class="theme-toggle__moon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z" />
+    </svg>
+  </button>
+</theme-toggle>
+
+<style>
+  .theme-toggle {
+    display: inline-grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--sl-color-gray-2);
+    cursor: pointer;
+    transition:
+      background-color 150ms,
+      color 150ms,
+      border-color 150ms;
+  }
+  .theme-toggle:hover {
+    background: var(--sl-color-gray-5);
+    color: var(--sl-color-white);
+  }
+  .theme-toggle:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 2px;
+  }
+  svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  /* Shows the theme a click leads to: the sun in the dark theme, the moon in the light one. */
+  .theme-toggle__moon {
+    display: none;
+  }
+  :global([data-theme='light']) .theme-toggle__sun {
+    display: none;
+  }
+  :global([data-theme='light']) .theme-toggle__moon {
+    display: block;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .theme-toggle {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  const storageKey = 'starlight-theme';
+
+  class ThemeToggle extends HTMLElement {
+    connectedCallback() {
+      const button = this.querySelector('button')!;
+      const render = () => {
+        const next = this.current() === 'dark' ? 'light' : 'dark';
+        const label = `Switch to ${next} theme`;
+        button.setAttribute('aria-label', label);
+        button.title = label;
+      };
+      button.addEventListener('click', () => {
+        const next = this.current() === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        try {
+          localStorage.setItem(storageKey, next);
+        } catch {
+          // Storage can be blocked; the choice then lasts for this page only.
+        }
+        render();
+      });
+      // Another toggle on the page (the mobile menu has one) or the system scheme may change it.
+      new MutationObserver(render).observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-theme'],
+      });
+      render();
+    }
+
+    current(): 'dark' | 'light' {
+      return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+    }
+  }
+
+  customElements.define('theme-toggle', ThemeToggle);
+</script>

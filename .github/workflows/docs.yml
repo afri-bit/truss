@@ -1,0 +1,94 @@
+name: Docs site
+
+# Builds the documentation site (site/, Astro and Starlight) when the site or the docs it is made
+# from change, and publishes it to GitHub Pages from main. Publishing uploads the built site as a
+# Pages package and deploys that: there is no gh-pages branch. A link in docs/ to a file that does
+# not exist fails the build. ADR 0016, specs/017-docs-site.
+#
+# One-time setting (the repository's, not this file's): Settings > Pages > Build and deployment >
+# Source: "GitHub Actions". Until it is set the deploy job fails and the build still runs.
+#
+# Every action is pinned to a commit; the comment names the version.
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - docs/**
+      - internal/webui/assets/fonts/**
+      - .github/workflows/docs.yml
+  pull_request:
+    paths:
+      - site/**
+      - docs/**
+      - internal/webui/assets/fonts/**
+      - .github/workflows/docs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build the site (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: site
+    env:
+      ASTRO_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      # --ignore-scripts: nothing in the tree needs an install script on Linux, and a later
+      # lockfile change must not be able to run code on the runner.
+      - name: Install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Test the docs sync
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          SYNC_STRICT: "1"
+
+      # The package GitHub Pages serves. Hidden files are included on purpose: dist/.nojekyll
+      # (from site/public) must stay in it. Not uploaded for a pull request.
+      - name: Upload the Pages package
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: site/dist
+          include-hidden-files: true
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5

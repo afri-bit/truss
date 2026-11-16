@@ -1,0 +1,56 @@
+---
+import '../styles/tokens.css';
+import '../styles/fonts.css';
+import '../styles/home.css';
+import Nav from '../components/Nav.astro';
+import Hero from '../components/Hero.astro';
+import Moment from '../components/Moment.astro';
+import Ways from '../components/Ways.astro';
+import Schedule from '../components/Schedule.astro';
+import DesktopSection from '../components/DesktopSection.astro';
+import Install from '../components/Install.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { url } from '../lib/url';
+import sans400 from '../assets/fonts/ibm-plex-sans-latin-400-normal.woff2?url';
+import sans600 from '../assets/fonts/ibm-plex-sans-latin-600-normal.woff2?url';
+
+const title = 'TRUSS: local pipeline runner for developers';
+const description =
+  'TRUSS runs pipelines from one YAML file on your own machine, by hand or on a schedule, with a command line, a local daemon and TRUSS Desktop. One binary for Linux, macOS and Windows.';
+const canonical = new URL(url(), Astro.site ?? 'https://afri-bit.github.io').href;
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#0c0e12" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href={url('favicon.svg')} />
+    <link rel="preload" href={sans600} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={sans400} as="font" type="font/woff2" crossorigin />
+  </head>
+  <body>
+    <Nav />
+    <main id="main">
+      <Hero />
+      <Moment />
+      <Ways />
+      <Schedule />
+      <DesktopSection />
+      <Install />
+    </main>
+    <SiteFooter />
+    <script>
+      import '../scripts/home.ts';
+    </script>
+  </body>
+</html>

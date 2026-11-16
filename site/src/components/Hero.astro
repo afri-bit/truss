@@ -1,0 +1,45 @@
+---
+import { url } from '../lib/url';
+import RunGraph from './RunGraph.astro';
+import RunSteps from './RunSteps.astro';
+import RunLog from './RunLog.astro';
+---
+
+<section class="hero" aria-labelledby="hero-h" data-enter>
+  <div class="wrap hero__in">
+    <div class="hero__copy">
+      <p class="pill" data-e style="--i:0">Open source, Apache 2.0</p>
+      <h1 id="hero-h">
+        <span class="l"><span>Local pipeline runner</span></span>{' '}
+        <span class="l"><span>for developers</span></span>
+      </h1>
+      <p class="lead" data-e style="--i:1">
+        Write one YAML file. Run it by hand or on a schedule, and watch it from the terminal or TRUSS
+        Desktop. One binary for Linux, macOS and Windows.
+      </p>
+      <div class="btn-row" data-e style="--i:2">
+        <a class="btn btn--primary" href={url('docs/getting-started/')}>Get TRUSS</a>
+        <a class="btn btn--secondary" href={url('docs/pipeline-reference/')}>Read the pipeline reference</a>
+      </div>
+      <p class="fact" data-e style="--i:3">Go standard library and one YAML parser. No remote server, no account.</p>
+    </div>
+
+    <div class="hero__visual">
+      <div class="win" data-run data-speed="1" data-visual role="group" aria-label="Run view of the release pipeline">
+        <div class="win__bar">
+          <span class="win__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="win__title">release</span>
+          <span class="chip chip--ok" data-status>succeeded</span>
+          <span class="win__meta" data-elapsed>6.7s</span>
+        </div>
+        <div class="win__graph run__graph"><RunGraph /></div>
+        <div class="run__steps"><RunSteps /></div>
+        <RunLog />
+        <button class="pause" type="button" data-pause aria-label="Pause the animation" aria-pressed="false">
+          <svg class="pause__a" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9M11 3.5v9" /></svg>
+          <svg class="pause__b" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5v9l7-4.5z" /></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>

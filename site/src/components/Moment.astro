@@ -1,0 +1,118 @@
+---
+// The page's dealt moment: scrolling through this section reads a pipeline file top to bottom and
+// builds the graph TRUSS draws from it (src/scripts/home.ts). Server side, and without script,
+// under reduced motion and on a phone, the finished picture stands and nothing is hidden.
+const lines: [number, string][] = [
+  [0, 'version: "1"'],
+  [0, ''],
+  [0, 'pipeline:'],
+  [0, '  name: ci'],
+  [0, '  concurrency: 2'],
+  [1, ''],
+  [1, 'on:'],
+  [1, '  schedule:'],
+  [1, '    - cron: "30 1 * * *"'],
+  [1, '      missed: run'],
+  [2, ''],
+  [2, 'jobs:'],
+  [2, '  lint:'],
+  [2, '    steps:'],
+  [2, '      - id: vet'],
+  [2, '        run: go vet ./...'],
+  [3, '  test:'],
+  [3, '    steps:'],
+  [3, '      - id: unit'],
+  [3, '        run: go test ./...'],
+  [3, '        timeout: 10m'],
+  [4, '  release:'],
+  [4, '    needs: [lint, test]'],
+  [4, '    steps:'],
+  [4, '      - id: build'],
+  [4, '        run: go build ./cmd/app'],
+];
+
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// Light YAML colouring: keys, strings, and the words that make the graph (needs, id).
+const paint = (line: string): string => {
+  const m = line.match(/^(\s*(?:- )?)([A-Za-z_-]+)(:)(.*)$/);
+  if (!m) return esc(line);
+  const [, indent, key, colon, rest] = m;
+  const cls = key === 'needs' || key === 'id' ? 'k k--g' : 'k';
+  const value = esc(rest).replace(/(&quot;|")([^"]*)(")/g, '<span class="s">"$2"</span>');
+  return `${esc(indent)}<span class="${cls}">${key}</span>${colon}${value}`;
+};
+---
+
+<section class="moment" id="pipelines" data-moment="yaml" aria-labelledby="pipelines-h">
+  <div class="moment__stick">
+    <div class="wrap moment__in">
+      <div class="moment__text">
+        <h2 id="pipelines-h">Pipelines are files in your repository</h2>
+        <p class="lead">
+          Each pipeline is a file in <code>.truss/flows/</code>. TRUSS reads it and builds the graph: jobs run
+          side by side, and a job with <code>needs</code> waits.
+        </p>
+        <ol class="code" data-code aria-label=".truss/flows/ci.yaml">
+          {
+            lines.map(([s, text]) => (
+              <li class="cl" data-s={s}>
+                <Fragment set:html={text === '' ? '&nbsp;' : paint(text)} />
+              </li>
+            ))
+          }
+        </ol>
+      </div>
+
+      <div class="moment__visual">
+        <div class="win win--tall" role="group" aria-label="The graph TRUSS builds from ci.yaml">
+          <div class="win__bar">
+            <span class="win__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="win__title">truss validate</span>
+          </div>
+          <div class="chips">
+            <span class="chip" data-at="0">concurrency 2</span>
+            <span class="chip chip--accent" data-at="1">schedule 30 1 * * * · missed: run</span>
+          </div>
+          <div class="win__graph">
+            <svg class="graph" viewBox="0 0 416 190" role="img" aria-label="lint/vet and test/unit feed release/build.">
+              <rect class="ghost" x="8" y="14" width="176" height="52" rx="4" />
+              <rect class="ghost" x="8" y="96" width="176" height="52" rx="4" />
+              <rect class="ghost" x="232" y="55" width="176" height="52" rx="4" />
+              <path class="edge" data-at="4" d="M184 40H208V81H232" />
+              <path class="edge" data-at="4" d="M184 122H208V81H232" />
+              <g class="node s-queued" data-at="2" transform="translate(8 14)">
+                <rect class="box" width="176" height="52" rx="4" />
+                <g class="ico" transform="translate(24 26)"><circle class="ring" r="9" /></g>
+                <text class="job" x="46" y="22">lint</text>
+                <text class="step" x="46" y="40">vet</text>
+              </g>
+              <g class="node s-queued" data-at="3" transform="translate(8 96)">
+                <rect class="box" width="176" height="52" rx="4" />
+                <g class="ico" transform="translate(24 26)"><circle class="ring" r="9" /></g>
+                <text class="job" x="46" y="22">test</text>
+                <text class="step" x="46" y="40">unit</text>
+                <text class="time" x="166" y="40" text-anchor="end">timeout 10m</text>
+              </g>
+              <g class="node s-queued" data-at="4" transform="translate(232 55)">
+                <rect class="box" width="176" height="52" rx="4" />
+                <g class="ico" transform="translate(24 26)"><circle class="ring" r="9" /></g>
+                <text class="job" x="46" y="22">release</text>
+                <text class="step" x="46" y="40">build</text>
+                <text class="time" x="166" y="40" text-anchor="end">needs 2</text>
+              </g>
+            </svg>
+          </div>
+          <div class="term" data-at="5" role="group" aria-label="Output of truss validate">
+            <p><span class="term__p">$</span> truss validate</p>
+            <p>truss.yaml is valid: project demo</p>
+            <p>.truss/flows/ci.yaml is valid: pipeline ci, 3 steps, concurrency 2</p>
+            <p class="term__d">schedule 30 1 * * * (local time, missed: run)</p>
+            <p class="term__d">step lint/vet</p>
+            <p class="term__d">step test/unit</p>
+            <p class="term__d">step release/build needs lint/vet, test/unit</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

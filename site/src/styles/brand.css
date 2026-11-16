@@ -1,0 +1,112 @@
+/* The TRUSS brand on Starlight: this file replaces the default blue-and-purple theme.
+   Starlight's variables are mapped onto the tokens in tokens.css. */
+@import './tokens.css';
+
+:root {
+  --sl-font: var(--tr-sans);
+  --sl-font-mono: var(--tr-mono);
+
+  /* Starlight's greys, dark scheme: Desktop's graphite ramp. */
+  --sl-color-white: var(--tr-ink);
+  --sl-color-gray-1: var(--tr-text);
+  --sl-color-gray-2: var(--tr-text-2);
+  --sl-color-gray-3: var(--tr-text-3);
+  --sl-color-gray-4: #4a535f;
+  --sl-color-gray-5: var(--tr-line);
+  --sl-color-gray-6: var(--tr-surface);
+  --sl-color-black: var(--tr-bg);
+
+  /* The accent is amber. In the dark scheme a link is amber text; a filled control is amber with ink. */
+  --sl-color-accent-low: var(--tr-accent-soft);
+  --sl-color-accent: var(--tr-accent);
+  --sl-color-accent-high: var(--tr-accent-text);
+
+  /* No violet anywhere: Starlight's purple (used by tips) becomes teal, its blue the run blue. */
+  --sl-hue-purple: 178;
+  --sl-hue-blue: 214;
+
+  --sl-color-bg-nav: var(--tr-surface);
+  --sl-color-bg-sidebar: var(--tr-surface);
+  --sl-color-bg-inline-code: var(--tr-surface-3);
+  --sl-color-hairline: var(--tr-line);
+  --sl-color-hairline-light: var(--tr-line-2);
+  --sl-color-hairline-shade: var(--tr-bg);
+  --sl-color-backdrop-overlay: rgba(6, 8, 11, 0.7);
+
+  --sl-line-height-headings: 1.15;
+}
+
+:root[data-theme='light'] {
+  --sl-color-white: var(--tr-ink);
+  --sl-color-gray-1: var(--tr-text);
+  --sl-color-gray-2: var(--tr-text-2);
+  --sl-color-gray-3: var(--tr-text-3);
+  --sl-color-gray-4: #8a93a0;
+  --sl-color-gray-5: var(--tr-line-2);
+  --sl-color-gray-6: var(--tr-line);
+  --sl-color-gray-7: var(--tr-surface-2);
+  --sl-color-black: var(--tr-surface);
+
+  /* Amber text on white needs the darker amber: 5.6:1 and more. */
+  --sl-color-accent-low: var(--tr-accent-soft);
+  --sl-color-accent: var(--tr-accent-text);
+  --sl-color-accent-high: #6e4004;
+
+  --sl-color-bg: var(--tr-bg);
+  --sl-color-bg-nav: var(--tr-surface);
+  --sl-color-bg-sidebar: var(--tr-surface);
+  --sl-color-bg-inline-code: var(--tr-surface-3);
+  --sl-color-hairline: var(--tr-line);
+  --sl-color-hairline-light: var(--tr-line);
+  --sl-color-hairline-shade: var(--tr-line);
+}
+
+/* Type: tight headings, regular body. */
+.sl-markdown-content :is(h1, h2, h3, h4) {
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+h1#_top,
+.content-panel h1 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.sl-markdown-content code {
+  font-feature-settings: 'zero' 1;
+}
+
+/* Sharp, small radii like Desktop: controls and code blocks 6px, inline code 4px. */
+.sl-markdown-content :not(pre) > code {
+  border-radius: 4px;
+}
+.sl-markdown-content table {
+  border-collapse: collapse;
+}
+.sl-markdown-content th {
+  font-weight: 600;
+}
+
+/* The one accent in navigation: the current page gets an amber bar, not a filled pill. */
+nav.sidebar a[aria-current='page'] {
+  background: transparent;
+  color: var(--sl-color-text-accent);
+  box-shadow: inset 2px 0 0 var(--tr-accent);
+}
+
+/* Diagrams (Mermaid) sit on a surface like a Desktop card. */
+pre.mermaid {
+  background: var(--tr-surface);
+  border: 1px solid var(--tr-line);
+  border-radius: 6px;
+  padding: 1rem;
+  overflow-x: auto;
+  text-align: center;
+  font-family: var(--tr-sans);
+}
+pre.mermaid:not([data-processed]) {
+  color: var(--tr-text-3);
+  white-space: pre;
+  text-align: left;
+  font-family: var(--tr-mono);
+  font-size: 0.8125rem;
+}

@@ -1,0 +1,68 @@
+---
+// Time axis 08:00 to 12:00, 140 px an hour from x=40. The machine is off from 08:40 and wakes at
+// 11:02; a pulse travels from the planned 09:00 to the catch-up run (missed: run).
+---
+
+<section class="sec schedule" id="schedules" aria-labelledby="schedule-h">
+  <div class="wrap schedule__in">
+    <div class="schedule__text">
+      <h2 id="schedule-h">Schedules with a catch-up run</h2>
+      <p class="lead">
+        A laptop sleeps. By default TRUSS skips a time that passed while it was off, and the history says so. Set
+        <code>missed: run</code> and it runs once, as soon as the machine is back.
+      </p>
+      <pre class="snip snip--yaml"><code><span class="k">on</span>:
+  <span class="k">schedule</span>:
+    - <span class="k">cron</span>: <span class="s">"0 9 * * 1-5"</span>
+      <span class="k k--g">missed</span>: run</code></pre>
+    </div>
+
+    <div class="schedule__visual card card--still" data-visual>
+      <svg class="tl" viewBox="0 0 640 250" role="img" aria-label="Timeline from 08:00 to 12:00. The machine is off from 08:40 to 11:02. The run planned for 09:00 is missed, and one catch-up run starts at 11:02.">
+        <defs>
+          <pattern id="off-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <path d="M0 0V8" stroke="var(--tr-line-2)" stroke-width="1.5" />
+          </pattern>
+        </defs>
+
+        <rect class="tl__off" x="133" y="96" width="332" height="48" fill="url(#off-hatch)" />
+        <text class="tl__txt tl__txt--dim" x="299" y="136" text-anchor="middle">machine off</text>
+
+        <line class="tl__axis" x1="40" y1="120" x2="600" y2="120" />
+        {
+          [['08:00', 40], ['09:00', 180], ['10:00', 320], ['11:00', 460], ['12:00', 600]].map(([t, x]) => (
+            <>
+              <line class="tl__tick" x1={x} y1="114" x2={x} y2="126" />
+              <text class="tl__txt tl__txt--dim" x={x} y="150" text-anchor="middle">{t}</text>
+            </>
+          ))
+        }
+
+        <circle class="tl__planned" cx="180" cy="120" r="7" />
+        <text class="tl__txt" x="180" y="78" text-anchor="middle">09:00 planned</text>
+        <text class="tl__txt tl__txt--dim" x="180" y="96" text-anchor="middle">missed</text>
+
+        <path id="tl-arc" class="tl__arc" d="M180 108C250 40 395 40 465 108" />
+        <circle class="tl__pulse" r="5" />
+
+        <circle class="tl__catch" cx="465" cy="120" r="7" />
+        <circle class="tl__ring" cx="465" cy="120" r="7" />
+        <text class="tl__txt tl__txt--acc" x="494" y="78" text-anchor="middle">11:02 catch-up run</text>
+        <text class="tl__txt tl__txt--dim" x="494" y="96" text-anchor="middle">runs once</text>
+
+        <rect class="tl__runbar-bg" x="465" y="176" width="135" height="10" rx="2" />
+        <rect class="tl__runbar" x="465" y="176" width="135" height="10" rx="2" />
+        <text class="tl__txt tl__txt--dim" x="465" y="210">release · 6.7s</text>
+      </svg>
+      <ol class="tl-list">
+        <li><b>09:00</b> planned, missed while the machine was off</li>
+        <li><b>11:02</b> the machine is back: one catch-up run starts</li>
+        <li><b>missed: run</b> runs it once, however many times were missed</li>
+      </ol>
+      <button class="pause pause--card" type="button" data-pause aria-label="Pause the animation" aria-pressed="false">
+        <svg class="pause__a" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9M11 3.5v9" /></svg>
+        <svg class="pause__b" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5v9l7-4.5z" /></svg>
+      </button>
+    </div>
+  </div>
+</section>
