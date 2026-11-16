@@ -3,7 +3,8 @@
 //   - docs/*.md          -> src/content/docs/docs/*.md  (frontmatter added, links made relative)
 //   - docs/images/*      -> src/content/docs/images/*  (Astro optimizes and hashes them)
 //   - docs/images/logo.svg -> src/assets/logo.svg and public/favicon.svg
-//   - Desktop's fonts    -> public/fonts/*  (IBM Plex, SIL OFL 1.1; the site and Desktop share them)
+//   - Desktop's fonts    -> src/assets/fonts/*.woff2 (IBM Plex, SIL OFL 1.1; the site and Desktop share them),
+//                           and the licence to public/fonts/OFL.txt
 // Everything it writes is ignored by git. Run by `npm run dev` and `npm run build`.
 //
 // Environment: SYNC_STRICT=1 fails on a problem the docs have (CI sets it); SYNC_REPO and SYNC_SITE
@@ -223,10 +224,15 @@ await copyRegular(join(docsDir, 'images', 'logo.svg'), join(site, 'public', 'fav
 
 // Desktop's fonts (IBM Plex Sans and Mono, SIL OFL 1.1, licence included).
 const fontsSrc = join(repo, 'internal', 'webui', 'assets', 'fonts');
-const fontsOut = join(site, 'public', 'fonts');
+const fontsOut = join(site, 'src', 'assets', 'fonts'); // imported by fonts.css, so Vite adds the base path
+const licenceOut = join(site, 'public', 'fonts');
 await rm(fontsOut, { recursive: true, force: true });
+await rm(licenceOut, { recursive: true, force: true });
 await mkdir(fontsOut, { recursive: true });
-for (const name of await readdir(fontsSrc)) await copyRegular(join(fontsSrc, name), join(fontsOut, name));
+for (const name of await readdir(fontsSrc)) {
+  if (name.endsWith('.woff2')) await copyRegular(join(fontsSrc, name), join(fontsOut, name));
+  else if (name === 'OFL.txt') await copyRegular(join(fontsSrc, name), join(licenceOut, name));
+}
 
 console.log(`sync: ${pages.length} pages, images, logo and fonts`);
 if (warnings.length && process.env.SYNC_STRICT === '1') {

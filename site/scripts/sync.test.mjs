@@ -27,6 +27,7 @@ function fixture(page) {
   write('docs/images/shot.png', 'png');
   write('README.md', '# r\n');
   write('internal/webui/assets/fonts/a.woff2', 'font');
+  write('internal/webui/assets/fonts/OFL.txt', 'licence');
   mkdirSync(site, { recursive: true });
   cleanup.push(root);
   return { repo, site };
@@ -145,4 +146,13 @@ test('a branch name with link characters is refused', () => {
   const r = run(fixture('# T\n\nBody.\n'), { TRUSS_DOCS_BRANCH: 'main) [x](evil' });
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /not a branch name/);
+});
+
+test('fonts are bundled assets (so the base path applies in dev too); the licence is a public file', () => {
+  const f = fixture('# T\n\nBody.\n');
+  const r = run(f);
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(existsSync(join(f.site, 'src', 'assets', 'fonts', 'a.woff2')));
+  assert.ok(!existsSync(join(f.site, 'public', 'fonts', 'a.woff2')), 'not as a public path');
+  assert.ok(existsSync(join(f.site, 'public', 'fonts', 'OFL.txt')));
 });
