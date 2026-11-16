@@ -51,10 +51,14 @@ const (
 // Run is one execution of a registered pipeline, or the record of one that
 // was skipped.
 type Run struct {
-	ID       string `json:"id"`
-	Pipeline string `json:"pipeline"`
-	Trigger  string `json:"trigger"`
-	Status   string `json:"status"`
+	ID string `json:"id"`
+	// Pipeline is the name shown for the run's pipeline. RegisteredPipeline is
+	// the name of the registration it belongs to, present only when that
+	// differs; use it to act on the registration, since a shown name can move.
+	Pipeline           string `json:"pipeline"`
+	RegisteredPipeline string `json:"registered_pipeline,omitempty"`
+	Trigger            string `json:"trigger"`
+	Status             string `json:"status"`
 	// Reason explains a skipped or cancelled run, or carries the failure line.
 	Reason string `json:"reason,omitempty"`
 	// ScheduledFor is the time a schedule named, for scheduled runs.

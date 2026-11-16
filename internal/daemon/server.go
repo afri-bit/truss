@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -176,6 +177,7 @@ func (d *Daemon) listPipelines(w http.ResponseWriter, _ *http.Request) error {
 	for _, e := range d.registry.List() {
 		list = append(list, d.viewAs(e, shown))
 	}
+	sort.Slice(list, func(i, j int) bool { return list[i].Name < list[j].Name })
 	return writeJSON(w, http.StatusOK, list)
 }
 
@@ -206,6 +208,14 @@ func (d *Daemon) registerPipeline(w http.ResponseWriter, r *http.Request) error 
 	if held, ok := d.lookup(name); ok {
 		if held.Path != path {
 			return fmt.Errorf("%w: %q is %s", registry.ErrExists, name, held.Path)
+		}
+		// Registering again under the registered name, with --name, keeps that
+		// name from now on (a registration made before names followed files).
+		if req.Name != "" && held.Name == req.Name && !held.Chosen {
+			var err error
+			if held, err = d.registry.SetChosen(held.Name); err != nil {
+				return err
+			}
 		}
 		return writeJSON(w, http.StatusCreated, d.view(held))
 	}

@@ -96,6 +96,16 @@ func (r *Registry) add(name, path string, now time.Time, chosen bool) (Entry, er
 		}
 		return Entry{}, fmt.Errorf("%w: %q is %s", ErrExists, name, old.Path)
 	}
+	if !chosen {
+		// A file registered again without a chosen name is the registration it
+		// already has, whatever name that carries now. Only --name makes
+		// another registration of the same file.
+		for _, old := range r.sorted() {
+			if old.Path == path {
+				return old, nil
+			}
+		}
+	}
 	e := Entry{Name: name, Path: path, RegisteredAt: now, Chosen: chosen}
 	r.entries[name] = e
 	if err := r.save(); err != nil {
@@ -131,6 +141,25 @@ func (r *Registry) SetPaused(name string, paused bool) (Entry, error) {
 	}
 	e := old
 	e.Paused = paused
+	r.entries[name] = e
+	if err := r.save(); err != nil {
+		r.entries[name] = old
+		return Entry{}, err
+	}
+	return e, nil
+}
+
+// SetChosen marks the name of a registration as chosen by the user, so the
+// name in its file never replaces it on screen.
+func (r *Registry) SetChosen(name string) (Entry, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	old, ok := r.entries[name]
+	if !ok {
+		return Entry{}, fmt.Errorf("%w: %q", ErrNotFound, name)
+	}
+	e := old
+	e.Chosen = true
 	r.entries[name] = e
 	if err := r.save(); err != nil {
 		r.entries[name] = old

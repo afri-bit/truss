@@ -16,16 +16,18 @@ import (
 // holds d.mu. A file's own name is used only when it is a valid registration
 // name that no other registration holds or claims; otherwise the registered
 // name stays, so one name never points at two pipelines. A name chosen at
-// registration is never replaced.
+// registration is never replaced. A file that stops loading keeps the name it
+// was last read with, so the name does not move while someone fixes the file.
 func (d *Daemon) shownNames(entries []registry.Entry) map[string]string {
 	claims := make(map[string]int, len(entries))
 	want := make(map[string]string, len(entries))
 	for _, e := range entries {
 		claims[e.Name]++
-		cur := d.load(e, d.opts.Now(), false)
-		if !e.Chosen && cur.err == nil && cur.def.Name != e.Name && registry.CheckName(cur.def.Name) == nil {
-			want[e.Name] = cur.def.Name
-			claims[cur.def.Name]++
+		// A file that stopped loading keeps the name it was last read with.
+		cur := d.check(e)
+		if !e.Chosen && cur.named != "" && cur.named != e.Name && registry.CheckName(cur.named) == nil {
+			want[e.Name] = cur.named
+			claims[cur.named]++
 		}
 	}
 	shown := make(map[string]string, len(entries))
@@ -70,11 +72,11 @@ func (d *Daemon) find(name string) (registry.Entry, error) {
 	return e, nil
 }
 
-// showRun gives a run the name shown for its pipeline. A run's record keeps
-// the registered name it ran under.
+// showRun gives a run the name shown for its pipeline and, when that differs,
+// names the registration too. A run's record keeps the registered name it ran under.
 func showRun(shown map[string]string, run api.Run) api.Run {
-	if n, ok := shown[run.Pipeline]; ok {
-		run.Pipeline = n
+	if n, ok := shown[run.Pipeline]; ok && n != run.Pipeline {
+		run.RegisteredPipeline, run.Pipeline = run.Pipeline, n
 	}
 	return run
 }

@@ -68,6 +68,15 @@ type definition struct {
 	def     pipeline.Pipeline
 	plan    pipeline.ExecutionPlan
 	err     error
+	// retry is set when the file exists but did not load: it is read again at
+	// every check, so a read that failed for a passing reason (a file another
+	// program held at that moment) heals without another edit.
+	retry bool
+	// named is pipeline.name from the last reading that got that far. It
+	// survives a file that stops loading, so the name shown does not jump back.
+	named string
+	// checked is when the file was last looked at, by the clock of this machine.
+	checked time.Time
 	// armed holds the schedules given to the scheduler: those of the last
 	// definition that was valid. A file that turns invalid keeps them, so a
 	// fire time that passes is recorded as a failed run (FR-021).
@@ -299,27 +308,33 @@ func (d *Daemon) load(e registry.Entry, since time.Time, force bool) *definition
 	old := d.defs[e.Name]
 	info, statErr := os.Stat(e.Path)
 	// A file is read again only when it changed; a missing file only when it appears.
-	unchanged := old != nil && statErr == nil && !old.modTime.IsZero() && info.ModTime().Equal(old.modTime) && info.Size() == old.size
-	missingStill := old != nil && statErr != nil && old.modTime.IsZero()
+	unchanged := old != nil && statErr == nil && !old.retry && !old.modTime.IsZero() && info.ModTime().Equal(old.modTime) && info.Size() == old.size
+	missingStill := old != nil && statErr != nil && !old.retry && old.modTime.IsZero()
 	cur := old
 	if force || (!unchanged && !missingStill) {
-		cur = &definition{}
+		cur = &definition{checked: time.Now()}
 		if old != nil {
-			cur.armed, cur.scheduled = old.armed, old.scheduled
+			cur.armed, cur.scheduled, cur.named = old.armed, old.scheduled, old.named
 		}
 		if statErr != nil {
 			cur.err = fmt.Errorf("read pipeline definition: %w", statErr)
 		} else {
 			cur.modTime, cur.size = info.ModTime(), info.Size()
 			cur.def, cur.plan, cur.err = readDefinition(e.Path)
+			cur.retry = cur.err != nil
+			if cur.def.Name != "" {
+				cur.named = cur.def.Name
+			}
 		}
 		if cur.err == nil {
 			cur.armed = cur.def.Schedules
 		}
 		d.defs[e.Name] = cur
-		if old != nil && !force {
-			d.logChanged(e, cur)
+		if old != nil && !unchanged {
+			d.logChanged(e, old, cur)
 		}
+	} else {
+		cur.checked = time.Now()
 	}
 	// The scheduler is told again only when the schedules really changed (or
 	// were switched on or off). Reloading an unchanged file, as a manual
@@ -336,9 +351,26 @@ func (d *Daemon) load(e registry.Entry, since time.Time, force bool) *definition
 	return cur
 }
 
+// checkEvery is how long a request trusts the last look at a file. The tick
+// looks every second regardless, so this only spares the file system when
+// Desktop and scripts ask often.
+const checkEvery = 250 * time.Millisecond
+
+// check is load for a request that shows or uses a pipeline: it looks at the
+// file unless it was looked at a moment ago. The caller holds d.mu.
+func (d *Daemon) check(e registry.Entry) *definition {
+	if cur := d.defs[e.Name]; cur != nil && time.Since(cur.checked) < checkEvery {
+		return cur
+	}
+	return d.load(e, d.opts.Now(), false)
+}
+
 // logChanged records that a registered file was read again because it changed.
-func (d *Daemon) logChanged(e registry.Entry, cur *definition) {
+// A file that stays broken is logged once, not at every check.
+func (d *Daemon) logChanged(e registry.Entry, old, cur *definition) {
 	switch {
+	case cur.err != nil && old.err != nil && cur.err.Error() == old.err.Error():
+		return
 	case cur.err != nil:
 		d.logf("pipeline %s: file changed and does not load: %v", e.Name, cur.err)
 	case cur.def.Name != e.Name:
@@ -455,7 +487,7 @@ func (d *Daemon) viewAs(e registry.Entry, shown map[string]string) api.Pipeline 
 	d.mu.Lock()
 	// The file is checked on every read, so a view never lags an edit; the
 	// check reads the file only when its size or time changed.
-	cur := d.load(e, d.opts.Now(), false)
+	cur := d.check(e)
 	next := d.sched.Next(e.Name)
 	d.mu.Unlock()
 

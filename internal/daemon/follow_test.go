@@ -1,9 +1,13 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -214,5 +218,260 @@ func TestDaemon_ANameChosenAtRegistrationIsKept(t *testing.T) {
 	}
 	if _, err := c.Trigger(ctx, "beta"); err == nil {
 		t.Fatal("the file's name must not answer for a flow registered under a chosen name")
+	}
+}
+
+// A file that stops loading after a rename keeps the name it was shown under,
+// so the name on screen and in scripts does not jump back (FR-001, FR-003).
+func TestDaemon_ABrokenFileKeepsItsShownNameAndHistory(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	path := writeDefinition(t, t.TempDir(), "flow.yaml", namedDefinition("alpha", "one"))
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	old, _ := c.Trigger(ctx, "alpha")
+	awaitRuns(t, c, "alpha", 1)
+	if err := os.WriteFile(path, []byte(namedDefinition("beta", "a")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	awaitPipeline(t, c, "renamed", func(p api.Pipeline) bool { return p.Name == "beta" })
+
+	if err := os.WriteFile(path, []byte("version: \"1\"\npipeline:\n  name: beta\nsteps: [this is: not valid\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := awaitPipeline(t, c, "invalid", func(p api.Pipeline) bool { return !p.Valid })
+	if p.Name != "beta" || p.RegisteredName != "alpha" || p.Error == "" {
+		t.Fatalf("pipeline = %+v, want beta shown as invalid with the reason", p)
+	}
+	if list, err := c.Runs(ctx, "beta", 0); err != nil || len(list) != 1 || list[0].ID != old.ID {
+		t.Fatalf("history = %+v, %v; want it kept while the file is broken", list, err)
+	}
+}
+
+// Registering a file again without --name never makes a second registration,
+// whatever name its file gives (FR-008).
+func TestDaemon_RegisteringTheSameFileAgainMakesNoSecondRegistration(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	path := writeDefinition(t, t.TempDir(), "flow.yaml", namedDefinition("alpha", "one"))
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: path, Name: "mine"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(namedDefinition("beta", "a", "b")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	awaitPipeline(t, c, "edited", func(p api.Pipeline) bool { return stepIDs(p) == "a,b" })
+	again, err := c.Register(ctx, api.RegisterRequest{Path: path})
+	if err != nil || again.Name != "mine" {
+		t.Fatalf("register again = %+v, %v; want the existing registration", again, err)
+	}
+	if list, _ := c.Pipelines(ctx); len(list) != 1 {
+		t.Fatalf("pipelines = %d, want 1", len(list))
+	}
+	// A name chosen for another entry is still allowed: the same file may have several.
+	if second, err := c.Register(ctx, api.RegisterRequest{Path: path, Name: "second"}); err != nil || second.Name != "second" {
+		t.Fatalf("second name = %+v, %v", second, err)
+	}
+}
+
+// The same holds when two files claim one new name and neither shows it.
+func TestDaemon_ATieOverANewNameKeepsBothRegisteredNamesAndMakesNoDuplicate(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	a := writeDefinition(t, t.TempDir(), "a.yaml", namedDefinition("alpha", "x"))
+	g := writeDefinition(t, t.TempDir(), "g.yaml", namedDefinition("gamma", "x"))
+	for _, path := range []string{a, g} {
+		if _, err := c.Register(ctx, api.RegisterRequest{Path: path}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, path := range []string{a, g} {
+		if err := os.WriteFile(path, []byte(namedDefinition("beta", "x", "y")), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		list, _ := c.Pipelines(ctx)
+		if len(list) == 2 && stepIDs(list[0]) == "x,y" && stepIDs(list[1]) == "x,y" {
+			if list[0].Name != "alpha" || list[1].Name != "gamma" {
+				t.Fatalf("pipelines = %+v; a contested name belongs to neither", list)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("pipelines = %+v", list)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if _, err := c.Trigger(ctx, "beta"); err == nil {
+		t.Fatal("a contested name must answer for nothing")
+	}
+	if again, err := c.Register(ctx, api.RegisterRequest{Path: a}); err != nil || again.Name != "alpha" {
+		t.Fatalf("register a again = %+v, %v", again, err)
+	}
+	if list, _ := c.Pipelines(ctx); len(list) != 2 {
+		t.Fatalf("pipelines = %d, want 2: the same file must not register twice", len(list))
+	}
+}
+
+// Registering again with --name keeps that name from then on (the remedy for
+// a registration made before names followed files).
+func TestDaemon_RegisteringAgainWithItsNameKeepsTheName(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	path := writeDefinition(t, t.TempDir(), "flow.yaml", namedDefinition("alpha", "one"))
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: path, Name: "alpha"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(namedDefinition("beta", "a", "b")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := awaitPipeline(t, c, "edited", func(p api.Pipeline) bool { return stepIDs(p) == "a,b" })
+	if p.Name != "alpha" || p.RegisteredName != "" {
+		t.Fatalf("pipeline = %+v; the name chosen again must stay", p)
+	}
+}
+
+// A name a flow shows is held: unregister works by it, and another file cannot take it (409).
+func TestDaemon_AShownNameIsHeldAndWorksToUnregister(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	path := writeDefinition(t, t.TempDir(), "flow.yaml", namedDefinition("alpha", "one"))
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(namedDefinition("beta", "a", "b")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	awaitPipeline(t, c, "renamed", func(p api.Pipeline) bool { return p.Name == "beta" })
+
+	other := writeDefinition(t, t.TempDir(), "other.yaml", namedDefinition("other", "x"))
+	var apiErr *api.StatusError
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: other, Name: "beta"}); !errors.As(err, &apiErr) || apiErr.Code != http.StatusConflict {
+		t.Fatalf("register under a shown name: %v, want 409", err)
+	}
+	if err := c.Unregister(ctx, "beta"); err != nil {
+		t.Fatalf("unregister by the shown name: %v", err)
+	}
+	if list, _ := c.Pipelines(ctx); len(list) != 0 {
+		t.Fatalf("pipelines = %+v, want none", list)
+	}
+	if _, err := c.Trigger(ctx, "alpha"); !errors.As(err, &apiErr) || apiErr.Code != http.StatusNotFound {
+		t.Fatalf("trigger after unregister: %v, want 404", err)
+	}
+}
+
+// A run names the registration it belongs to as well as the name shown, so a
+// client can act on the registration even if a shown name moves (security 019).
+func TestDaemon_RunsNameTheirRegistrationAndTrackedRunsJoinTheHistory(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	path := writeDefinition(t, t.TempDir(), "flow.yaml", namedDefinition("alpha", "one"))
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := c.Trigger(ctx, "alpha")
+	awaitRuns(t, c, "alpha", 1)
+	if first.RegisteredPipeline != "" {
+		t.Fatalf("registered pipeline = %q, want none while the names match", first.RegisteredPipeline)
+	}
+	if err := os.WriteFile(path, []byte(namedDefinition("beta", "a", "b")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	awaitPipeline(t, c, "renamed", func(p api.Pipeline) bool { return p.Name == "beta" })
+
+	got, err := c.Run(ctx, first.ID)
+	if err != nil || got.Pipeline != "beta" || got.RegisteredPipeline != "alpha" {
+		t.Fatalf("run = %+v, %v; want beta, registered as alpha", got, err)
+	}
+	tracked, err := c.CreateRun(ctx, api.CreateRunRequest{Pipeline: "beta", Steps: []api.PlanStep{{ID: "a"}}})
+	if err != nil || tracked.Pipeline != "beta" || tracked.RegisteredPipeline != "" {
+		t.Fatalf("tracked run = %+v, %v; a local run is not registered", tracked, err)
+	}
+	list, err := c.Runs(ctx, "beta", 0)
+	if err != nil || len(list) != 2 {
+		t.Fatalf("history = %+v, %v; want the run and the tracked run", list, err)
+	}
+	if p := awaitPipeline(t, c, "summary", func(p api.Pipeline) bool { return p.ActiveRuns == 1 }); p.LastRun == nil {
+		t.Fatalf("pipeline = %+v; the tracked run is active and counts", p)
+	}
+}
+
+// The daemon log says when it read a changed file again (FR-009), also when a
+// run trigger is the first to see the edit, and does not repeat itself for a
+// file that stays broken.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func TestDaemon_LogsAChangedFileOnceUntilItChangesAgain(t *testing.T) {
+	ctx := context.Background()
+	var log lockedBuffer
+	h := home.Dir(t.TempDir())
+	d, err := Start(ctx, Options{Home: h, Address: "127.0.0.1:0", Version: "test", Env: os.Environ(), Tick: 5 * time.Millisecond, Log: &log})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- d.Serve(ctx) }()
+	t.Cleanup(func() {
+		d.Stop()
+		if err := <-done; err != nil {
+			t.Errorf("Serve: %v", err)
+		}
+	})
+	c, err := api.Dial(ctx, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := writeDefinition(t, t.TempDir(), "flow.yaml", namedDefinition("alpha", "one"))
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: path}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(path, []byte(namedDefinition("beta", "a", "b")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A trigger right after the edit reads the file with force; the change is still logged.
+	if _, err := c.Trigger(ctx, "alpha"); err != nil {
+		t.Fatal(err)
+	}
+	waitLog := func(want string, n int) {
+		t.Helper()
+		deadline := time.Now().Add(10 * time.Second)
+		for strings.Count(log.String(), want) < n {
+			if time.Now().After(deadline) {
+				t.Fatalf("log has %d of %q, want %d:\n%s", strings.Count(log.String(), want), want, n, log.String())
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	waitLog("pipeline alpha: file changed, read again (it is named beta)", 1)
+
+	if err := os.WriteFile(path, []byte("version: \"1\"\nsteps: [broken: yaml\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	waitLog("pipeline alpha: file changed and does not load", 1)
+	time.Sleep(200 * time.Millisecond) // many ticks pass with the file still broken
+	if n := strings.Count(log.String(), "does not load"); n != 1 {
+		t.Fatalf("a file that stays broken was logged %d times:\n%s", n, log.String())
 	}
 }
