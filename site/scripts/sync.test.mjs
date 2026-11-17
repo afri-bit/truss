@@ -9,7 +9,7 @@ import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'sync.mjs');
-const PAGES = ['getting-started', 'pipeline-reference', 'cli', 'daemon', 'desktop', 'architecture', 'GLOSSARY'];
+const PAGES = ['getting-started', 'pipeline-reference', 'cli-guide', 'cli', 'daemon', 'desktop', 'architecture', 'GLOSSARY'];
 
 // A repository with the files sync reads. `page` is the body of docs/getting-started.md.
 function fixture(page) {

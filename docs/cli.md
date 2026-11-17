@@ -7,8 +7,51 @@
 truss <command> [arguments]
 ```
 
+New to the command line? [Using the command line](cli-guide.md) is a tour with recipes. This page is
+the reference.
+
 Every command exits `0` on success and `1` on any error. Errors are one line on standard error
 that starts with `error:`. An unknown command or wrong arguments print the usage text and exit `1`.
+
+## Look around
+
+Read-only commands that answer "what is going on?". They change nothing and never start or stop the
+daemon. Most take `--json` for scripts ([Using the command line](cli-guide.md#scripting)).
+
+| Command | What it does | Daemon |
+|---|---|---|
+| `truss status [--json]` | One screen: project, daemon, registered flows by state, latest run. Exits `0` whether or not a daemon runs. Never prints the Desktop token. | optional |
+| `truss dashboard [--once]` | An ASCII dashboard of the daemon, load, flows and latest runs. See [the dashboard](cli-guide.md#the-dashboard). | optional |
+| `truss project [show] [--json]` | The project of this folder: name, description, root, flows, how many are registered. | optional |
+| `truss projects [list] [--json]` | The projects the daemon knows, from the files it has registered, with counts of flows, running, paused and invalid. | needed |
+| `truss flows [list] [--json]` | The flows of this project with steps, schedules and whether the daemon has them (`registered`, `paused`, `not-registered`, or `unknown` without a daemon). A flow that does not load is listed with its error. | optional |
+| `truss flows show <name\|path> [--json]` | One flow: concurrency, overlap, the **names** of environment variables and secrets (never values), schedules, and a table of its steps. | optional |
+| `truss flows graph <name\|path>` | The steps in stages; steps in one stage can run together. | no |
+| `truss pipelines show <name> [--json]` | One registered pipeline: state, file, project, schedules with next run, steps, latest runs. | needed |
+| `truss schedules [list] [--json]` | Every schedule of every registered pipeline, soonest first. | needed |
+| `truss env` | The TRUSS home and where it comes from, the registry, secrets file and daemon log paths, the project, and whether a daemon runs. No secret name or value. | optional |
+
+`flows` reads files and `pipelines` asks the daemon: a flow is a file in `.truss/flows/`, a pipeline
+is a file the daemon has registered ([glossary](GLOSSARY.md)).
+
+```console
+$ truss status
+TRUSS      0.1.0 (linux/amd64)
+Project    demo, 3 flows in .truss/flows/
+Daemon     running, pid 4121, up 2h 5m, 127.0.0.1:7878
+Desktop    http://127.0.0.1:7878/ (open it with: truss desktop)
+Runs       1 running, 0 queued (limit 4 at once)
+Flows      3 registered: 2 ready, 1 running, 0 paused, 0 invalid
+Last run   build running just now (truss runs show 20261117-091500-a1b2c3)
+Home       /home/me/.truss
+```
+
+## Help
+
+`truss help` prints all commands. `truss help <command>` or `truss <command> --help` explains one
+(for example `truss help flows`). `truss run --help` is not help: an argument of `run` is a flow
+name or a path, so a file may be named like a flag. `truss help <unknown>` prints the usage and
+exits `1`.
 
 ## Without the daemon
 
@@ -89,7 +132,8 @@ through [`secrets`](pipeline-reference.md#secrets).
 |---|---|
 | `truss daemon start` | Starts the background service and returns. |
 | `truss daemon stop` | Stops it. Active runs are cancelled. |
-| `truss daemon status` | Says whether it runs, where, how busy it is, and whether it starts at login. Exits `1` when it does not run. |
+| `truss daemon status [--json]` | Says whether it runs, where, how busy it is, and whether it starts at login. Exits `1` when it does not run. `--json` prints `{"running": ..., "daemon": ...}` and keeps the exit code. |
+| `truss daemon logs [-n <lines>] [--follow]` | Prints the last 50 lines (or `-n`) of the daemon's own log, and with `--follow` keeps printing until Ctrl-C. Reads a file, so it works when the daemon is stopped. |
 | `truss daemon run` | Runs the service in the terminal, logging to standard error. For debugging and for service managers. |
 | `truss daemon install` | Makes the daemon start at login: a systemd user unit (Linux), a launchd agent (macOS) or a Task Scheduler task (Windows). Needs no root or administrator rights. Refuses a binary in a temporary directory. See [Starting at login](daemon.md#starting-at-login). |
 | `truss daemon uninstall` | Removes what `install` created, and nothing else. |
@@ -136,7 +180,7 @@ pipelines](daemon.md#registering-pipelines)).
 |---|---|
 | `truss register <name> [--name <name>]`, `truss register <path> [--name <name>]`, `truss register --all` | Tells the daemon about a pipeline. The name defaults to `pipeline.name`, or the file name. `--all` registers every pipeline in the project, each under its pipeline name; `--name` is not allowed with `--all`. With no argument it is an error that lists the pipelines. When every pipeline registered, `--all` prints `registered N pipelines (M with schedules)` (`registered 1 pipeline (M with schedules)` for one). It prints no summary when a pipeline failed. |
 | `truss unregister <name>` | Forgets it. The file and the run history stay. |
-| `truss pipelines` | Lists registrations with state, next scheduled run and last run. |
+| `truss pipelines [list] [--json]` | Lists registrations with state, next scheduled run and last run. `--json` prints the daemon's objects. See also `pipelines show`, above. |
 | `truss pause <name>` | Stops the pipeline's schedules. Manual runs still work. |
 | `truss resume <name>` | Restarts them, counting from now. |
 
@@ -147,9 +191,14 @@ pipelines](daemon.md#registering-pipelines)).
 | `truss trigger <name>` | Requests a run and prints its id. |
 | `truss trigger <name> --follow` | Requests a run, prints its log live, and exits `0` only if it succeeded. |
 | `truss runs [<name>]` | Lists the newest runs, optionally of one pipeline. |
+| `truss runs [<name>] --status <s> --active --limit <n> --json` | Filters the list. `<s>` is `queued`, `running`, `succeeded`, `failed`, `cancelled` or `skipped`; `--active` means queued or running; the default limit is 30. |
+| `truss runs show <run-id\|last> [--pipeline <name>] [--json]` | One run: status, reason, trigger, times, each step's status, exit code, time and attempt, and a timeline. `last` is the newest run (of `--pipeline` if given). Exits `0` even for a failed run: it answers a question. |
 | `truss logs <run-id>` | Prints a run log. `--follow` keeps printing until the run ends. |
 | `truss cancel <run-id>` | Ends a queued or running run. |
 | `truss cache clear <name>` | Empties the pipeline's cache folder. Needs no daemon. For a daemon run, see [the daemon page](daemon.md#data-and-cache-folders). |
+
+A pipeline may be called `show`: `truss runs show` alone still lists its runs, and only `truss runs show <something>`
+shows a run.
 
 `-f` is short for `--follow`. Interrupting a followed log stops the printing, not the run.
 
