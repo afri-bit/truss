@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/afri-bit/truss/internal/api"
@@ -127,31 +125,6 @@ func (in invocation) unregister(ctx context.Context) int {
 	return 0
 }
 
-func (in invocation) pipelines(ctx context.Context) int {
-	if len(in.args) != 0 {
-		return in.usage()
-	}
-	c, err := in.dial(ctx)
-	if err != nil {
-		return in.fail(err)
-	}
-	list, err := c.Pipelines(ctx)
-	if err != nil {
-		return in.fail(err)
-	}
-	if len(list) == 0 {
-		fmt.Fprintln(in.stdout, "no pipelines registered (add one with: truss register <path>)")
-		return 0
-	}
-	w := tabwriter.NewWriter(in.stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tSTATE\tNEXT RUN\tLAST RUN\tFILE")
-	for _, p := range list {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", p.Name, pipelineState(p), nextRun(p), lastRun(p), p.Path)
-	}
-	_ = w.Flush()
-	return 0
-}
-
 func pipelineState(p api.Pipeline) string {
 	switch {
 	case !p.Valid:
@@ -233,32 +206,6 @@ func (in invocation) trigger(ctx context.Context) int {
 		return 0
 	}
 	return in.follow(ctx, c, run.ID)
-}
-
-func (in invocation) runs(ctx context.Context) int {
-	if len(in.args) > 1 {
-		return in.usage()
-	}
-	c, err := in.dial(ctx)
-	if err != nil {
-		return in.fail(err)
-	}
-	name := strings.Join(in.args, "")
-	list, err := c.Runs(ctx, name, 30)
-	if err != nil {
-		return in.fail(err)
-	}
-	if len(list) == 0 {
-		fmt.Fprintln(in.stdout, "no runs yet")
-		return 0
-	}
-	w := tabwriter.NewWriter(in.stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "RUN\tPIPELINE\tSTATUS\tTRIGGER\tCREATED\tDURATION\tNOTE")
-	for _, r := range list {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.ID, r.Pipeline, r.Status, r.Trigger, local(&r.CreatedAt), duration(r), r.Reason)
-	}
-	_ = w.Flush()
-	return 0
 }
 
 func duration(r api.Run) string {

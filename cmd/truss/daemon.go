@@ -22,6 +22,12 @@ func (in invocation) daemon(ctx context.Context) int {
 		return in.usage()
 	}
 	sub := in.args[0]
+	switch {
+	case sub == "logs":
+		return in.daemonLogs(ctx, in.args[1:])
+	case sub == "status" && len(in.args) == 2 && in.args[1] == "--json":
+		return in.daemonStatusJSON(ctx)
+	}
 	pos, flags, err := options(in.args[1:], []string{"address", "max-runs"}, nil)
 	if err != nil || len(pos) != 0 {
 		return in.usage()

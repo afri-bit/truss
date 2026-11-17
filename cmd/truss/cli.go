@@ -15,6 +15,19 @@ const usageText = `TRUSS runs pipelines on your machine.
 
 usage: truss <command> [arguments]
 
+Look around (read-only; most take --json):
+  status                              one screen: project, daemon, flows, latest run
+  dashboard [--once]                  ASCII dashboard, live on a terminal
+  project                             the project of this folder
+  projects                            projects known to the daemon (needs it)
+  flows [list]                        the flows of the project, and whether the daemon has them
+  flows show <name|path>              one flow: schedules, environment names, steps
+  flows graph <name|path>             the stages a flow runs its steps in
+  pipelines show <name>               one registered pipeline with its latest runs
+  schedules                           every schedule, soonest first (needs the daemon)
+  runs show <run-id|last>             one run: steps, exit codes, timeline
+  env                                 where TRUSS keeps its files; what it sees
+
 Run here, without the daemon:
   run <name|path> [--track]           run a pipeline: a name from .truss/flows/ or a file path;
                                       --track also reports it to the daemon (needs it)
@@ -23,7 +36,8 @@ Run here, without the daemon:
 
 The daemon:
   daemon start [--address <host:port>] [--max-runs <n>]
-  daemon stop | status                manage the background service
+  daemon stop | status [--json]       manage the background service
+  daemon logs [-n <lines>] [--follow] the daemon's own log file
   daemon run                          run the service in this terminal
   daemon install [--address <host:port>] [--max-runs <n>]
   daemon uninstall                    start the daemon at login, or stop doing so
@@ -42,14 +56,15 @@ Registered pipelines (these need the daemon):
   pipelines                           list registered pipelines
   pause <name> | resume <name>        stop or restart a pipeline's schedules
   trigger <name> [--follow]           start a run now
-  runs [<name>]                       list runs, newest first
+  runs [<name>] [--status <s>] [--active] [--limit <n>]
+                                      list runs, newest first
   logs <run-id> [--follow]            show a run log
   cancel <run-id>                     end a queued or running run
 
 Files only (no daemon needed):
   cache clear <name>                  remove a pipeline's cache folder; the next run recreates it
 
-  help | version
+  help [<command>] | version          truss help <command> explains one command
 `
 
 // invocation is everything one CLI call may use. Commands write only to
@@ -86,6 +101,10 @@ func RunWithInput(ctx context.Context, args []string, cwd string, env []string, 
 	case isHelp(args):
 		fmt.Fprint(stdout, usageText)
 		return 0
+	case len(args) >= 2 && args[0] == "help":
+		return in.help(args[1:])
+	case wantsHelp(args):
+		return in.help(args[:1])
 	case isVersion(args):
 		fmt.Fprintln(stdout, Version)
 		return 0
@@ -138,6 +157,20 @@ func RunWithInput(ctx context.Context, args []string, cwd string, env []string, 
 		return in.cancel(ctx)
 	case "cache":
 		return in.cache()
+	case "status":
+		return in.status(ctx)
+	case "dashboard":
+		return in.dashboard(ctx)
+	case "project":
+		return in.projectCmd(ctx)
+	case "projects":
+		return in.projects(ctx)
+	case "flows":
+		return in.flows(ctx)
+	case "schedules":
+		return in.schedules(ctx)
+	case "env":
+		return in.environment(ctx)
 	}
 	return in.usage()
 }
