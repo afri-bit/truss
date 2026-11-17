@@ -131,7 +131,7 @@ func openLog(path string) (*os.File, error) {
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s is not a regular file", path)
 	}
-	f, err := os.Open(path) // #nosec G304 -- the daemon log inside the TRUSS home, checked above
+	f, err := os.OpenFile(path, os.O_RDONLY|openNoBlock, 0) // #nosec G304 -- the daemon log inside the TRUSS home, checked above
 	if err != nil {
 		return nil, err
 	}

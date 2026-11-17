@@ -211,11 +211,11 @@ func (in invocation) flowsShow(ctx context.Context, args []string) int {
 	}
 	d := describeFlow(ctx, file, reg, up)
 	if flags["json"] != "" {
-		writeJSON(in.stdout, d)
+		code := writeJSON(in.stdout, d)
 		if !d.Valid { // the document says why; the exit code says it too
 			return 1
 		}
-		return 0
+		return code
 	}
 	if !d.Valid {
 		return in.fail(fmt.Errorf("%s: %s", d.File, d.Error))

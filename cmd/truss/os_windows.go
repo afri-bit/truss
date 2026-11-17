@@ -7,6 +7,9 @@ import (
 	"syscall"
 )
 
+// openNoBlock is zero here: opening a file never blocks on Windows.
+const openNoBlock = 0
+
 const (
 	createNewProcessGroup = 0x00000200
 	detachedProcess       = 0x00000008

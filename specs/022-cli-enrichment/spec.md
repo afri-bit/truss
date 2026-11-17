@@ -66,7 +66,7 @@ working with the same output, flags and exit codes (see Compatibility).
 - **FR-005** `truss pipelines [list] [--json]` lists registered pipelines as before; `--json` prints
   the daemon's pipeline objects. `truss pipelines show <name> [--json]` prints one: its state, file,
   project, concurrency, overlap, registration time, active runs, schedules with their next run,
-  steps and its five latest runs. Either name of a renamed flow finds it. An unknown name is an error.
+  steps and its five latest runs. Either name of a renamed flow finds it; when one pipeline's name is another's registered name, the exact name wins. An unknown name is an error.
 - **FR-006** `truss schedules [list] [--json]` lists every schedule of every registered pipeline,
   soonest next run first (schedules with no next run last), with zone, missed policy and whether the
   pipeline is paused.
@@ -101,7 +101,8 @@ working with the same output, flags and exit codes (see Compatibility).
   The CLI never starts or stops the daemon, and never changes a file.
 
 - **FR-014** A text screen never passes a control character from a file or the daemon to the
-  terminal (an escape, bell or carriage return, or a C1 code): each becomes `?`, a tab becomes a
+  terminal (an escape, bell or carriage return, a C1 code, or an invisible format character such as a
+  bidirectional override): each becomes `?`, a tab becomes a
   space. This covers the pipeline name, step ids, `needs`, `run` text, project description and
   errors, in the new commands and in `validate`. JSON output is not changed: it escapes. `daemon
   logs` reads only a regular file (never a named pipe, which would block for good), and `--follow`

@@ -181,6 +181,9 @@ func (in invocation) status(ctx context.Context) int {
 	// daemon that does not answer is part of the answer, not a failure.
 	proj, _, projErr := in.currentProject()
 	snap, daemonErr := in.gather(ctx, 5, false)
+	if daemonErr != nil { // half an answer is no answer: show the daemon as not answering
+		snap = snapshot{Now: snap.Now}
+	}
 	h, err := home.Resolve(in.env)
 	if err != nil {
 		return in.fail(err)

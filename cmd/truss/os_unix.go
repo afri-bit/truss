@@ -8,6 +8,10 @@ import (
 	"syscall"
 )
 
+// openNoBlock is the open flag that keeps opening a named pipe from blocking.
+// It does nothing to a regular file.
+const openNoBlock = syscall.O_NONBLOCK
+
 // detach makes cmd survive the terminal that started it.
 func detach(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}

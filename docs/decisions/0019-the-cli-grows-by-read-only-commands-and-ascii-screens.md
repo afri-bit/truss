@@ -35,8 +35,9 @@ a public contract (constitution V), and v0.1.0's flat commands exist in scripts 
 7. **Screens are safe to read.** The new commands exist to inspect files that may come from someone
    else, so a control character from a file (an escape sequence that retitles the window, or a
    carriage return that hides the rest of a `run` line) is shown as `?`. A multi-line `run` is marked
-   `(+N lines)`. `daemon logs` reads regular files only. The older `pipelines` and `runs` tables are
-   not changed here; that is a follow-up.
+   `(+N lines)`. `daemon logs` reads regular files only (and prints the file as it is, like `tail`). Invisible
+   format characters (bidirectional overrides, zero-width marks) are cleaned too. The paths and
+   reasons in the older `pipelines` and `runs` tables are cleaned the same way.
 8. **No new dependency.** Rendering is a few small functions in `cmd/truss`.
 
 ## Consequences

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -65,7 +66,12 @@ func clean(s string) string {
 	}, s)
 }
 
-func isControl(r rune) bool { return r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) }
+// isControl reports a control character, or an invisible format character
+// (category Cf: bidirectional overrides, zero-width marks) that could make a
+// screen show text in another order than it will run.
+func isControl(r rune) bool {
+	return r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) || unicode.Is(unicode.Cf, r)
+}
 
 // firstLine is s up to its first line break.
 func firstLine(s string) string {

@@ -554,15 +554,18 @@ func TestStatus_AProblemIsReportedNotFatal(t *testing.T) {
 	if doc := decode[statusDoc](t, raw); code != 0 || doc.Project != nil || !strings.Contains(doc.ProjectError, "invalid YAML") {
 		t.Fatalf("status --json: %d %+v", code, doc)
 	}
-	// A "daemon" that is not one: an endpoint file pointing at a closed port.
+	// A daemon whose endpoint file cannot be read is not "not running": it is
+	// a problem, and status says so and still exits 0.
 	dead := newSession(t, false)
-	ep := api.Endpoint{Address: "127.0.0.1:1", Token: "x", PID: os.Getpid(), StartedAt: time.Now(), Version: Version}
-	data, _ := json.Marshal(ep)
-	if err := os.WriteFile(filepath.Join(dead.home, "daemon.json"), data, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dead.home, "daemon.json"), []byte("{bad"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if code, out, _ := dead.truss("status"); code != 0 || !strings.Contains(out, "Daemon") {
+	if code, out, _ := dead.truss("status"); code != 0 || !strings.Contains(out, "Daemon     not answering: ") {
 		t.Fatalf("unanswering daemon: %d %q", code, out)
+	}
+	code, raw, _ = dead.truss("status", "--json")
+	if doc := decode[statusDoc](t, raw); code != 0 || doc.Daemon != nil || doc.DesktopURL != nil || doc.DaemonError == "" {
+		t.Fatalf("status --json: %d %+v", code, doc)
 	}
 }
 
@@ -687,7 +690,7 @@ func TestScreens_CleanControlCharacters(t *testing.T) {
 }
 
 func TestClean(t *testing.T) {
-	for in, want := range map[string]string{"plain": "plain", "a\x1b[2Jb": "a?[2Jb", "x\ry\a": "x?y?", "t\tt": "t t", "c1\u009b": "c1?", "héllo": "héllo"} {
+	for in, want := range map[string]string{"plain": "plain", "a\x1b[2Jb": "a?[2Jb", "x\ry\a": "x?y?", "t\tt": "t t", "c1\u009b": "c1?", "héllo": "héllo", "a\u202eb": "a?b", "z\u200bw": "z?w"} {
 		if got := clean(in); got != want {
 			t.Errorf("clean(%q) = %q, want %q", in, got, want)
 		}
@@ -726,4 +729,17 @@ func TestDaemonLogs_FollowsAReplacedFile(t *testing.T) {
 	}
 	cancel()
 	<-done
+}
+
+// An exact name wins over another pipeline's registered name (--name).
+func TestPipelines_ShowPrefersTheExactName(t *testing.T) {
+	s := newSession(t, true)
+	s.write("a.yaml", "version: \"1\"\npipeline: {name: first}\nsteps: [{id: a, run: echo}]\n")
+	s.write("b.yaml", "version: \"1\"\npipeline: {name: alias}\nsteps: [{id: b, run: echo}]\n")
+	s.ok("register", "a.yaml", "--name", "alias2")
+	s.ok("register", "b.yaml")
+	s.ok("register", "a.yaml", "--name", "other") // a second registration of a.yaml under another name
+	if p := decode[api.Pipeline](t, s.ok("pipelines", "show", "alias", "--json")); p.Name != "alias" || len(p.Steps) != 1 || p.Steps[0].ID != "b" {
+		t.Fatalf("pipelines show alias = %+v", p)
+	}
 }

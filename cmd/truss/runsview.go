@@ -62,7 +62,7 @@ func (in invocation) pipelines(ctx context.Context) int {
 	w := tabwriter.NewWriter(in.stdout, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(w, "NAME\tSTATE\tNEXT RUN\tLAST RUN\tFILE")
 	for _, p := range list {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", p.Name, pipelineState(p), nextRun(p), lastRun(p), p.Path)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", p.Name, pipelineState(p), nextRun(p), lastRun(p), clean(p.Path))
 	}
 	_ = w.Flush()
 	return 0
@@ -210,7 +210,7 @@ func (in invocation) runs(ctx context.Context) int {
 	w := tabwriter.NewWriter(in.stdout, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(w, "RUN\tPIPELINE\tSTATUS\tTRIGGER\tCREATED\tDURATION\tNOTE")
 	for _, r := range list {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.ID, r.Pipeline, r.Status, r.Trigger, local(&r.CreatedAt), duration(r), r.Reason)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.ID, r.Pipeline, r.Status, r.Trigger, local(&r.CreatedAt), duration(r), clean(r.Reason))
 	}
 	_ = w.Flush()
 	return 0
