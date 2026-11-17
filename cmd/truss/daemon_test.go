@@ -15,15 +15,16 @@ import (
 
 // session is a TRUSS home with a daemon serving it inside the test process.
 type session struct {
-	t   *testing.T
-	env []string
-	dir string
+	t    *testing.T
+	env  []string
+	dir  string
+	home string // the TRUSS home of this session
 }
 
 func newSession(t *testing.T, withDaemon bool) *session {
 	t.Helper()
 	h := home.Dir(t.TempDir())
-	s := &session{t: t, env: append(os.Environ(), home.EnvVar+"="+string(h)), dir: t.TempDir()}
+	s := &session{t: t, env: append(cleanEnv(os.Environ()), home.EnvVar+"="+string(h)), dir: t.TempDir(), home: string(h)}
 	if !withDaemon {
 		return s
 	}
@@ -40,6 +41,20 @@ func newSession(t *testing.T, withDaemon bool) *session {
 		}
 	})
 	return s
+}
+
+// cleanEnv drops the variables a developer's shell may export and that change
+// what the CLI does: the TRUSS home (home.Resolve takes the first match) and
+// the screen width.
+func cleanEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		if strings.HasPrefix(kv, home.EnvVar+"=") || strings.HasPrefix(kv, "COLUMNS=") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
 }
 
 // truss runs one CLI invocation in the session.

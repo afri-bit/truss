@@ -11,6 +11,8 @@ Dates below are when a release was made. 0.1.0 is the first release.
 
 ### Added
 
+- A layered command line: ask TRUSS what is going on  
+  New read-only commands answer the questions the CLI could not: `truss status` (project, daemon, flows, latest run), `truss dashboard` (an ASCII dashboard, live on a terminal), `truss project` and `truss projects`, `truss flows` with `show` and `graph` (schedules, environment and secret **names**, steps, the stages a flow runs in), `truss pipelines show`, `truss schedules`, `truss runs show <run-id|last>` (steps, exit codes, a timeline), `truss daemon logs`, `truss env`, and `truss help <command>`. `truss runs` gains `--status`, `--active` and `--limit`, and most commands gain `--json` for scripts. Every command of v0.1.0 keeps its name, output and exit codes. New words are taken only where the old command printed usage; `truss runs show` alone still lists the runs of a pipeline named `show`. The docs gain a page, [Using the command line](docs/cli-guide.md) (specs/022-cli-enrichment, ADR 0019).
 - TRUSS Desktop: toggle between cards and a list on the Flows page  
   The Flows page can show the flows as cards (as before) or as a list, one row per flow with its state, schedule, next and last run, duration, step graph and actions. A switch beside the filter changes the view, and the choice is kept in the browser. No API change (specs/021-flows-view-toggle).
 

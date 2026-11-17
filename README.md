@@ -316,6 +316,7 @@ The full map is in [docs/architecture.md](docs/architecture.md).
 |---|---|
 | [Getting started](docs/getting-started.md) | Go from install to a scheduled pipeline in five minutes |
 | [Pipeline file reference](docs/pipeline-reference.md) | Know every field, cron syntax, and recipes |
+| [Using the command line](docs/cli-guide.md) | Tour the commands: status, dashboard, flows, runs, scripting with `--json` |
 | [Command line reference](docs/cli.md) | Look up a command or an exit code |
 | [The daemon](docs/daemon.md) | Understand registration, schedules, missed runs, concurrency, the HTTP API |
 | [TRUSS Desktop](docs/desktop.md) | See what the UI offers |

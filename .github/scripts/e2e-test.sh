@@ -715,6 +715,36 @@ if [ "$code" -ne 1 ] || [[ "$err" != *"looks temporary"* ]]; then
 else
 	pass "daemon install refuses a temporary binary"
 fi
+
+# Spec 022: the read-only commands of the layered CLI, on the built binary.
+mkdir -p "$work/look/.truss/flows" "$work/lookhome"
+printf 'version: "1"\nproject:\n  name: look\n' >"$work/look/truss.yaml"
+printf 'version: "1"\npipeline: {name: hello}\nsteps:\n  - {id: a, run: "echo a"}\n  - {id: b, run: "echo b", needs: [a]}\n' >"$work/look/.truss/flows/hello.yaml"
+export TRUSS_HOME="$work/lookhome"
+run_truss "$work/look" status
+if [ "$code" -ne 0 ] || [[ "$out" != *"Project    look, 1 flow in .truss/flows/"* ]] || [[ "$out" != *"Daemon     not running"* ]]; then
+	fail "status without a daemon" "want exit 0, the project and 'not running'; got $code: $out"
+else
+	pass "status without a daemon"
+fi
+run_truss "$work/look" flows graph hello
+if [ "$code" -ne 0 ] || [[ "$out" != *"hello: 2 steps in 2 stages"* ]] || [[ "$out" != *"[b]  <- a"* ]]; then
+	fail "flows graph" "want two stages; got $code: $out"
+else
+	pass "flows graph"
+fi
+run_truss "$work/look" daemon status --json
+if [ "$code" -ne 1 ] || [[ "$out" != *'"running": false'* ]]; then
+	fail "daemon status --json when stopped" "want exit 1 and running false; got $code: $out"
+else
+	pass "daemon status --json when stopped"
+fi
+run_truss "$work/look" help flows
+if [ "$code" -ne 0 ] || [[ "$out" != "truss flows"* ]]; then
+	fail "help <command>" "want exit 0 and the flows help; got $code: $out"
+else
+	pass "help <command>"
+fi
 unset TRUSS_HOME
 rm -rf "$work"
 

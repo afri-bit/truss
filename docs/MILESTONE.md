@@ -32,6 +32,7 @@ that matches it, and the checklist below is done. `go.mod`, `cmd/truss` and Desk
 | Flows follow their files | A registered file is the source of truth: the daemon notices an edit, shows a renamed flow under its new name and keeps its history (added by the maintainer, 2026-11-16) | `019-flows-follow-their-files` | Implemented |
 | A readable run log | The run log has headings for the setup, each step and the summary, and TRUSS Desktop shows it as one card per step (added by the maintainer, 2026-11-16) | `020-readable-run-log` | Implemented |
 | Project layout | `truss.yaml` is project metadata; pipelines are files in `.truss/flows/`; generated files in `.truss/state/` (added by the maintainer, 2026-11-15) | `016-project-layout` | Implemented |
+| A richer command line | Read-only `status`, `dashboard`, `flows`, `project(s)`, `schedules`, `runs show`, `daemon logs`, `env`, `help <command>` and `--json`; ASCII screens (added by the maintainer, 2026-11-17) | `022-cli-enrichment` | Implemented |
 | Documentation site | A site with the docs (search, sidebar, light and dark) and a home page, built from `docs/` (added by the maintainer, 2026-11-16) | `017-docs-site` | Implemented (the first deploy needs the repository's Pages setting) |
 
 **Operating systems.** Linux, macOS and Windows. A `run` string is a command for that host's

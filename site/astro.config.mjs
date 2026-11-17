@@ -38,6 +38,7 @@ export default defineConfig({
           label: 'Reference',
           items: [
             { slug: 'docs/pipeline-reference' },
+            { slug: 'docs/cli-guide' },
             { slug: 'docs/cli' },
             { slug: 'docs/daemon' },
             { slug: 'docs/desktop' },
