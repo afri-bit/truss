@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -286,10 +287,14 @@ func TestRuns_ShowFilterAndLimit(t *testing.T) {
 	}
 	failedID := runID.FindString(s.ok("runs", "demo"))
 	failed := s.ok("runs", "show", failedID)
-	for _, want := range []string{"Status     failed: demo failed at test", "Steps      3 (2 succeeded, 1 failed)", "failed     3     0s    2"} {
+	for _, want := range []string{"Status     failed: demo failed at test", "Steps      3 (2 succeeded, 1 failed)"} {
 		if !strings.Contains(failed, want) {
 			t.Errorf("runs show lacks %q:\n%s", want, failed)
 		}
+	}
+	// The step's duration varies with the machine, so the row is matched without it.
+	if row := regexp.MustCompile(`(?m)^test +failed +3 +\S+ +2 `); !row.MatchString(failed) {
+		t.Errorf("runs show lacks the failed test step row (exit 3, 2 tries):\n%s", failed)
 	}
 	if r := decode[api.Run](t, s.ok("runs", "show", "last", "--pipeline", "demo", "--json")); r.ID != failedID {
 		t.Fatalf("last of demo = %s, want %s", r.ID, failedID)
