@@ -17,7 +17,7 @@ truss
 ├── flows  list | show | graph  the pipeline files of this project
 ├── pipelines  list | show      what the daemon has registered
 ├── schedules                   what runs when
-├── runs  list | show           what ran, and how it went
+├── runs  [<pipeline>] | show   what ran, and how it went
 ├── daemon  start | stop | status | logs | install | uninstall | run
 ├── desktop                     open TRUSS Desktop
 ├── run / validate              run or check a pipeline here, without the daemon
@@ -32,7 +32,7 @@ Three questions decide which command to use:
 | You want to know about | Ask | Needs the daemon |
 |---|---|---|
 | The files in this project | `truss flows`, `truss project`, `truss validate` | no |
-| What the daemon is doing | `truss status`, `truss pipelines`, `truss schedules`, `truss runs` | yes |
+| What the daemon is doing | `truss pipelines`, `truss schedules`, `truss runs`, `truss projects` (`truss status` and `truss dashboard` also work without one) | yes |
 | Where TRUSS keeps things | `truss env`, `truss daemon logs` | no |
 
 Commands that can answer without a daemon do, and say `unknown` for what only the daemon knows. The
@@ -199,6 +199,8 @@ fails, use `truss trigger <name> --follow`, which exits `1` unless the run succe
 | `--active` | Queued or running runs. |
 | `--limit <n>` | At most `n` runs (default 30). |
 
+`--status` and `--active` look at the newest 1000 runs.
+
 ## The daemon and its log
 
 ```console
@@ -229,17 +231,17 @@ truss pipelines --json | jq -r '.[] | select(.last_run.status == "failed") | .na
 # the newest failed run of one pipeline
 truss runs nightly --status failed --limit 1 --json | jq -r '.[0].id'
 
-# registered flows that wait for nothing
+# flows of this project the daemon does not have yet
 truss flows --json | jq -r '.[] | select(.daemon == "not-registered") | .name'
 ```
 
 | Command | JSON |
 |---|---|
-| `status` | `{version, project, daemon, desktop_url, pipelines: {registered, ready, running, paused, invalid}, recent_runs, home}`. `project` is `null` outside a project and `daemon` is `null` without a daemon. |
+| `status` | `{version, project, daemon, desktop_url, pipelines: {registered, ready, running, paused, invalid}, recent_runs, home}`. `project`, `daemon` and `desktop_url` are `null` outside a project or without a daemon; `project_error` and `daemon_error` appear when the cause is a problem (an unreadable `truss.yaml`, a daemon that does not answer), and `status` still exits `0`. |
 | `daemon status` | `{running, daemon}`. Exit `1` when not running. |
 | `project` | `{name, description, root, flows, registered}`. `registered` is absent without a daemon. |
 | `projects` | `[{name, root, registered, running, paused, invalid}]`. |
-| `flows`, `flows show` | `{name, file, path, valid, error, pipeline, daemon, concurrency, overlap, jobs, schedules, env, secrets, steps}`; `env` and `secrets` are names only, `daemon` is one of `registered`, `paused`, `not-registered`, `unknown`. |
+| `flows` (a list of these), `flows show` | `{name, file, path, valid, error, pipeline, daemon, concurrency, overlap, jobs, schedules, env, secrets, steps}`; `env` and `secrets` are names only, `daemon` is one of `registered`, `paused`, `not-registered`, `unknown`. |
 | `schedules` | `[{pipeline, cron, timezone, missed, next, paused}]`. |
 | `pipelines`, `pipelines show`, `runs`, `runs show` | The objects of the [daemon API](daemon.md). |
 
@@ -253,8 +255,15 @@ to standard error.
 - A command that needs the daemon says `start it with: truss daemon start` when none runs.
 - A command that needs a project and finds no `truss.yaml` names the folder it looked in. Run TRUSS
   from the project folder.
-- A name that is not found lists the names that exist.
-- `truss run --help` is not help. An argument of `run` is a flow name or a path.
+- A flow name that is not found lists the flows that exist; an unknown pipeline or run id points to the command that lists them.
+- `truss run --help` and `truss validate --help` are not help. Their argument is a flow name or a path.
+
+## Safe to read
+
+These commands are made for looking at flows before you run them, including flows you did not
+write. A control character in a file (an escape sequence, a bell, a carriage return) is shown as `?`
+instead of reaching your terminal, and a `run` of several lines shows `(+N lines)` after its first
+line. `--json` has the exact text, escaped. Wide characters (CJK, emoji) can still misalign a frame.
 
 ## Compatibility
 

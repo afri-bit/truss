@@ -3,7 +3,7 @@ package main
 import "fmt"
 
 // helpTopics holds `truss help <command>`. A command also prints its topic
-// for `truss <command> --help`, except run, where any argument is a file name.
+// for `truss <command> --help`, except run and validate, whose argument is a file name.
 var helpTopics = map[string]string{
 	"status": `truss status [--json]
 
@@ -141,9 +141,10 @@ func (in invocation) help(topic []string) int {
 }
 
 // wantsHelp reports whether args are "<command> --help" for a command that has
-// a topic. run is excluded: any argument after it is a file name.
+// a topic. run and validate are excluded: their argument is a flow name or a
+// path, and `--help` has always been read as one (spec 001, spec 016).
 func wantsHelp(args []string) bool {
-	if len(args) != 2 || args[0] == "run" || (args[1] != "--help" && args[1] != "-h") {
+	if len(args) != 2 || args[0] == "run" || args[0] == "validate" || (args[1] != "--help" && args[1] != "-h") {
 		return false
 	}
 	if a, ok := helpAliases[args[0]]; ok {

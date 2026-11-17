@@ -159,10 +159,14 @@ type statusDoc struct {
 	Project *projectDoc `json:"project"`
 	// Daemon is null when no daemon runs.
 	Daemon     *api.Status `json:"daemon"`
-	DesktopURL string      `json:"desktop_url,omitempty"`
-	Pipelines  flowCounts  `json:"pipelines"`
-	RecentRuns []api.Run   `json:"recent_runs"`
-	Home       string      `json:"home"`
+	DesktopURL *string     `json:"desktop_url"`
+	// ProjectError and DaemonError say why Project or Daemon is null when the
+	// cause is a problem rather than absence.
+	ProjectError string     `json:"project_error,omitempty"`
+	DaemonError  string     `json:"daemon_error,omitempty"`
+	Pipelines    flowCounts `json:"pipelines"`
+	RecentRuns   []api.Run  `json:"recent_runs"`
+	Home         string     `json:"home"`
 }
 
 // status prints the one-screen answer to "is everything fine?": the project,
@@ -173,14 +177,10 @@ func (in invocation) status(ctx context.Context) int {
 	if err != nil || len(pos) != 0 {
 		return in.usage()
 	}
-	proj, _, err := in.currentProject()
-	if err != nil {
-		return in.fail(err)
-	}
-	snap, err := in.gather(ctx, 5, false)
-	if err != nil {
-		return in.fail(err)
-	}
+	// status answers "is everything fine?", so a broken project file or a
+	// daemon that does not answer is part of the answer, not a failure.
+	proj, _, projErr := in.currentProject()
+	snap, daemonErr := in.gather(ctx, 5, false)
 	h, err := home.Resolve(in.env)
 	if err != nil {
 		return in.fail(err)
@@ -188,20 +188,35 @@ func (in invocation) status(ctx context.Context) int {
 	if flags["json"] != "" {
 		doc := statusDoc{Version: Version, Project: proj, Daemon: snap.Status, Pipelines: countFlows(snap.Pipelines),
 			RecentRuns: snap.Runs, Home: string(h)}
+		if projErr != nil {
+			doc.ProjectError = firstLine(projErr.Error())
+		}
+		if daemonErr != nil {
+			doc.DaemonError = firstLine(daemonErr.Error())
+		}
 		if doc.RecentRuns == nil {
 			doc.RecentRuns = []api.Run{}
 		}
 		if snap.Status != nil {
-			doc.DesktopURL = "http://" + snap.Status.Address + "/"
+			url := "http://" + snap.Status.Address + "/"
+			doc.DesktopURL = &url
 		}
 		return writeJSON(in.stdout, doc)
 	}
-	line := func(label, text string) { fmt.Fprintf(in.stdout, "%-9s  %s\n", label, text) }
+	line := func(label, text string) { fmt.Fprintf(in.stdout, "%-9s  %s\n", label, clean(text)) }
 	line("TRUSS", Version+" ("+runtime.GOOS+"/"+runtime.GOARCH+")")
-	if proj == nil {
+	switch {
+	case projErr != nil:
+		line("Project", "unreadable: "+firstLine(projErr.Error()))
+	case proj == nil:
 		line("Project", "none here (no truss.yaml in "+workingRoot(in.cwd)+")")
-	} else {
+	default:
 		line("Project", fmt.Sprintf("%s, %d %s in .truss/flows/", proj.Name, proj.Flows, plural(proj.Flows, "flow", "flows")))
+	}
+	if daemonErr != nil {
+		line("Daemon", "not answering: "+firstLine(daemonErr.Error()))
+		line("Home", string(h))
+		return 0
 	}
 	if snap.Status == nil {
 		line("Daemon", "not running (start it with: truss daemon start)")
@@ -289,7 +304,7 @@ func renderDashboard(snap snapshot, projectFlows []project.Flow, width int) stri
 			for _, f := range projectFlows {
 				l = append(l, f.Name)
 			}
-			b.WriteString(box(fmt.Sprintf("Flows in this project (%d, not registered)", len(l)), l, width))
+			b.WriteString(box(fmt.Sprintf("Flows in this project (%d)", len(l)), l, width))
 		}
 		return b.String()
 	}
@@ -366,7 +381,7 @@ func (in invocation) environment(ctx context.Context) int {
 		}
 		return ""
 	}
-	line := func(label, text string) { fmt.Fprintf(in.stdout, "%-12s  %s\n", label, strings.TrimSpace(text)) }
+	line := func(label, text string) { fmt.Fprintf(in.stdout, "%-12s  %s\n", label, clean(strings.TrimSpace(text))) }
 	line("TRUSS", Version)
 	line("System", runtime.GOOS+"/"+runtime.GOARCH+", "+runtime.Version())
 	line("Home", fmt.Sprintf("%s (%s)", h, source))
@@ -423,7 +438,7 @@ func (in invocation) projectCmd(ctx context.Context) int {
 			Registered *int `json:"registered,omitempty"`
 		}{*proj, daemonCount(snap, registered)})
 	}
-	line := func(label, text string) { fmt.Fprintf(in.stdout, "%-12s  %s\n", label, text) }
+	line := func(label, text string) { fmt.Fprintf(in.stdout, "%-12s  %s\n", label, clean(text)) }
 	line("Project", proj.Name)
 	if proj.Description != "" {
 		line("Description", proj.Description)
@@ -447,13 +462,32 @@ func daemonCount(snap snapshot, n int) *int {
 
 // findRegistered finds the registration of a pipeline file.
 func findRegistered(list []api.Pipeline, path string) (api.Pipeline, bool) {
-	want := sameFileKey(path)
 	for _, p := range list {
-		if sameFileKey(p.Path) == want {
+		if samePath(p.Path, path) {
 			return p, true
 		}
 	}
 	return api.Pipeline{}, false
+}
+
+// samePath reports whether two spellings name one file: the same cleaned and
+// link-resolved path, the same file on disk (which covers case-insensitive
+// file systems and short names), or, when a file is gone, the same name up to
+// case on Windows and macOS, whose default file systems ignore case.
+func samePath(a, b string) bool {
+	a, b = sameFileKey(a), sameFileKey(b)
+	if a == b {
+		return true
+	}
+	if ia, err := os.Stat(a); err == nil {
+		if ib, err := os.Stat(b); err == nil {
+			return os.SameFile(ia, ib)
+		}
+	}
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return strings.EqualFold(a, b)
+	}
+	return false
 }
 
 // sameFileKey makes two spellings of one path comparable.

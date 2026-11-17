@@ -46,6 +46,27 @@ func fit(s string, n int) string {
 	return string([]rune(s)[:n-3]) + "..."
 }
 
+// clean makes a string from a file or a daemon safe for a screen: a control
+// character (an escape, a bell, a carriage return, a C1 code) becomes "?", so
+// a pipeline file cannot move the cursor, retitle the window or hide text on
+// the screens that exist to inspect it. JSON output is not cleaned: it escapes.
+func clean(s string) string {
+	if !strings.ContainsFunc(s, isControl) {
+		return s
+	}
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\t':
+			return ' '
+		case isControl(r):
+			return '?'
+		}
+		return r
+	}, s)
+}
+
+func isControl(r rune) bool { return r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) }
+
 // firstLine is s up to its first line break.
 func firstLine(s string) string {
 	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
@@ -69,6 +90,7 @@ func columns(rows [][]string, width int) []string {
 	w := make([]int, n)
 	for _, r := range rows {
 		for i := 0; i < n && i < len(r); i++ {
+			r[i] = clean(r[i])
 			w[i] = max(w[i], utf8.RuneCountInString(r[i]))
 		}
 	}
@@ -105,10 +127,10 @@ func columns(rows [][]string, width int) []string {
 func box(title string, lines []string, width int) string {
 	inner := width - 4
 	var b strings.Builder
-	head := "+- " + fit(title, inner-2) + " "
+	head := "+- " + fit(clean(title), inner-2) + " "
 	b.WriteString(head + strings.Repeat("-", max(width-1-utf8.RuneCountInString(head), 0)) + "+\n")
 	for _, l := range lines {
-		b.WriteString("| " + padRight(fit(l, inner), inner) + " |\n")
+		b.WriteString("| " + padRight(fit(clean(l), inner), inner) + " |\n")
 	}
 	b.WriteString("+" + strings.Repeat("-", width-2) + "+\n")
 	return b.String()

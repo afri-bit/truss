@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"text/tabwriter"
@@ -72,7 +73,11 @@ func (in invocation) pipelines(ctx context.Context) int {
 func (in invocation) pipelineShow(ctx context.Context, c *api.Client, list []api.Pipeline, name string, asJSON bool) int {
 	var p *api.Pipeline
 	for i := range list {
-		if list[i].Name == name || list[i].RegisteredName == name {
+		if list[i].Name == name {
+			p = &list[i]
+			break
+		}
+		if list[i].RegisteredName == name && p == nil {
 			p = &list[i]
 		}
 	}
@@ -87,7 +92,7 @@ func (in invocation) pipelineShow(ctx context.Context, c *api.Client, list []api
 		return in.fail(err)
 	}
 	now := time.Now()
-	line := func(label, text string) { fmt.Fprintf(in.stdout, "%-12s  %s\n", label, text) }
+	line := func(label, text string) { fmt.Fprintf(in.stdout, "%-12s  %s\n", label, clean(text)) }
 	line("Pipeline", p.Name)
 	if p.RegisteredName != "" {
 		line("Registered as", p.RegisteredName)
@@ -122,7 +127,7 @@ func (in invocation) pipelineShow(ctx context.Context, c *api.Client, list []api
 			if len(s.Needs) > 0 {
 				text += "  <- " + strings.Join(s.Needs, ", ")
 			}
-			fmt.Fprintln(in.stdout, text)
+			fmt.Fprintln(in.stdout, clean(text))
 		}
 	}
 	if len(runs) > 0 {
@@ -270,8 +275,8 @@ func (in invocation) runShow(ctx context.Context, args []string) int {
 }
 
 // writeRun prints one run for `runs show`.
-func writeRun(w interface{ Write([]byte) (int, error) }, r api.Run, now time.Time, width int) {
-	line := func(label, text string) { fmt.Fprintf(w, "%-9s  %s\n", label, text) }
+func writeRun(w io.Writer, r api.Run, now time.Time, width int) {
+	line := func(label, text string) { fmt.Fprintf(w, "%-9s  %s\n", label, clean(text)) }
 	line("Run", r.ID)
 	line("Pipeline", r.Pipeline)
 	status := r.Status
@@ -327,9 +332,9 @@ func writeRun(w interface{ Write([]byte) (int, error) }, r api.Run, now time.Tim
 	for _, s := range r.Steps {
 		switch {
 		case s.Error != "":
-			notes = append(notes, fmt.Sprintf("  %s: %s", s.ID, firstLine(s.Error)))
+			notes = append(notes, clean(fmt.Sprintf("  %s: %s", s.ID, firstLine(s.Error))))
 		case s.Reason != "":
-			notes = append(notes, fmt.Sprintf("  %s: %s", s.ID, firstLine(s.Reason)))
+			notes = append(notes, clean(fmt.Sprintf("  %s: %s", s.ID, firstLine(s.Reason))))
 		}
 	}
 	if len(notes) > 0 {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/afri-bit/truss/internal/api"
 	"github.com/afri-bit/truss/internal/pipeline"
@@ -210,12 +211,16 @@ func (in invocation) flowsShow(ctx context.Context, args []string) int {
 	}
 	d := describeFlow(ctx, file, reg, up)
 	if flags["json"] != "" {
-		return writeJSON(in.stdout, d)
+		writeJSON(in.stdout, d)
+		if !d.Valid { // the document says why; the exit code says it too
+			return 1
+		}
+		return 0
 	}
 	if !d.Valid {
 		return in.fail(fmt.Errorf("%s: %s", d.File, d.Error))
 	}
-	line := func(label, text string) { fmt.Fprintf(in.stdout, "%-12s  %s\n", label, text) }
+	line := func(label, text string) { fmt.Fprintf(in.stdout, "%-12s  %s\n", label, clean(text)) }
 	list := func(names []string) string {
 		if len(names) == 0 {
 			return "none"
@@ -252,7 +257,7 @@ func (in invocation) flowsShow(ctx context.Context, args []string) int {
 		if s.Retries > 0 {
 			retries = fmt.Sprint(s.Retries)
 		}
-		rows = append(rows, []string{s.ID, dash(strings.Join(s.Needs, ",")), timeout, retries, cond, firstLine(s.Run)})
+		rows = append(rows, []string{s.ID, dash(strings.Join(s.Needs, ",")), timeout, retries, cond, runCell(s.Run)})
 	}
 	for _, l := range columns(rows, screenWidth(in.env)) {
 		fmt.Fprintln(in.stdout, l)
@@ -311,20 +316,33 @@ func stages(plan pipeline.ExecutionPlan) [][]pipeline.Step {
 
 func writeStages(w io.Writer, plan pipeline.ExecutionPlan) {
 	st := stages(plan)
-	fmt.Fprintf(w, "%s: %d %s in %d %s, at most %d at once\n", plan.Name,
+	fmt.Fprintf(w, "%s: %d %s in %d %s, at most %d at once\n", clean(plan.Name),
 		len(plan.Graph), plural(len(plan.Graph), "step", "steps"), len(st), plural(len(st), "stage", "stages"), plan.Concurrency)
 	for i, group := range st {
 		fmt.Fprintf(w, "\nstage %d\n", i+1)
 		width := 0
 		for _, s := range group {
-			width = max(width, len(s.ID))
+			width = max(width, utf8.RuneCountInString(clean(s.ID)))
 		}
 		for _, s := range group {
+			id := clean(s.ID)
 			if len(s.Needs) == 0 {
-				fmt.Fprintf(w, "  [%s]\n", s.ID)
+				fmt.Fprintf(w, "  [%s]\n", id)
 				continue
 			}
-			fmt.Fprintf(w, "  [%s]%s  <- %s\n", s.ID, strings.Repeat(" ", width-len(s.ID)), strings.Join(s.Needs, ", "))
+			fmt.Fprintf(w, "  [%s]%s  <- %s\n", id, strings.Repeat(" ", width-utf8.RuneCountInString(id)), clean(strings.Join(s.Needs, ", ")))
 		}
 	}
+}
+
+// runCell is the first line of a run string for a table cell, marked when the
+// command has more lines, so the table never hides that something follows.
+// --json has the whole text.
+func runCell(run string) string {
+	text := strings.TrimSpace(run)
+	first := firstLine(text)
+	if more := strings.Count(text, "\n"); more > 0 {
+		return fmt.Sprintf("%s (+%d %s)", first, more, plural(more, "line", "lines"))
+	}
+	return first
 }

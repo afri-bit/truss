@@ -32,7 +32,12 @@ a public contract (constitution V), and v0.1.0's flat commands exist in scripts 
    console draws it once, because enabling virtual-terminal mode is not worth a platform file here.
 6. **Names, not values.** `flows show` lists environment variable and secret names; values are never
    printed. `status` never prints the Desktop token; `truss desktop` does, as before.
-7. **No new dependency.** Rendering is a few small functions in `cmd/truss`.
+7. **Screens are safe to read.** The new commands exist to inspect files that may come from someone
+   else, so a control character from a file (an escape sequence that retitles the window, or a
+   carriage return that hides the rest of a `run` line) is shown as `?`. A multi-line `run` is marked
+   `(+N lines)`. `daemon logs` reads regular files only. The older `pipelines` and `runs` tables are
+   not changed here; that is a follow-up.
+8. **No new dependency.** Rendering is a few small functions in `cmd/truss`.
 
 ## Consequences
 

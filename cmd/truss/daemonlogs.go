@@ -29,14 +29,19 @@ type daemonStatusDoc struct {
 // daemonStatusJSON is `daemon status` for scripts. Like the text form it exits
 // 1 when the daemon does not run.
 func (in invocation) daemonStatusJSON(ctx context.Context) int {
-	snap, err := in.gather(ctx, 1, false)
+	c, err := in.dial(ctx)
+	if errors.Is(err, api.ErrNotRunning) {
+		writeJSON(in.stdout, daemonStatusDoc{})
+		return 1
+	}
 	if err != nil {
 		return in.fail(err)
 	}
-	writeJSON(in.stdout, daemonStatusDoc{Running: snap.Status != nil, Daemon: snap.Status})
-	if snap.Status == nil {
-		return 1
+	st, err := c.Status(ctx)
+	if err != nil {
+		return in.fail(err)
 	}
+	writeJSON(in.stdout, daemonStatusDoc{Running: true, Daemon: &st})
 	return 0
 }
 
@@ -62,7 +67,7 @@ func (in invocation) daemonLogs(ctx context.Context, args []string) int {
 		return in.fail(err)
 	}
 	follow := flags["follow"] != "" || flags["f"] != ""
-	f, err := os.Open(h.DaemonLog()) // #nosec G304 -- the daemon log inside the TRUSS home
+	f, err := openLog(h.DaemonLog())
 	if errors.Is(err, os.ErrNotExist) {
 		if !follow {
 			fmt.Fprintf(in.stdout, "no daemon log yet (%s)\n", h.DaemonLog())
@@ -84,6 +89,16 @@ func (in invocation) daemonLogs(ctx context.Context, args []string) int {
 			return 0
 		case <-time.After(followEvery):
 		}
+		if now, err := os.Stat(h.DaemonLog()); err == nil {
+			if open, err := f.Stat(); err == nil && !os.SameFile(open, now) { // the log was replaced
+				next, err := openLog(h.DaemonLog())
+				if err != nil {
+					return in.fail(err)
+				}
+				_ = f.Close()
+				f, offset = next, 0
+			}
+		}
 		info, err := f.Stat()
 		if err != nil {
 			return in.fail(err)
@@ -104,6 +119,27 @@ func (in invocation) daemonLogs(ctx context.Context, args []string) int {
 		offset += n
 	}
 	return 0
+}
+
+// openLog opens the daemon log, which must be a regular file. Opening a named
+// pipe would block for good, and Ctrl-C cannot reach a process stuck in open.
+func openLog(path string) (*os.File, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	f, err := os.Open(path) // #nosec G304 -- the daemon log inside the TRUSS home, checked above
+	if err != nil {
+		return nil, err
+	}
+	if info, err := f.Stat(); err != nil || !info.Mode().IsRegular() {
+		_ = f.Close()
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	return f, nil
 }
 
 // printTail writes the last n lines of f and returns the offset it read to.

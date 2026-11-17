@@ -1,15 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/afri-bit/truss/internal/api"
+	"github.com/afri-bit/truss/internal/project"
 )
 
 // Spec 022: the read-only commands that answer "what is going on?".
@@ -60,7 +63,7 @@ func TestStatus_WithoutADaemon(t *testing.T) {
 		}
 	}
 	doc := decode[statusDoc](t, s.ok("status", "--json"))
-	if doc.Daemon != nil || doc.Project == nil || doc.Project.Flows != 2 || doc.RecentRuns == nil {
+	if doc.Daemon != nil || doc.DesktopURL != nil || doc.Project == nil || doc.Project.Flows != 2 || doc.RecentRuns == nil {
 		t.Fatalf("status json = %+v", doc)
 	}
 }
@@ -86,7 +89,7 @@ func TestStatus_WithADaemonAndARun(t *testing.T) {
 		t.Errorf("status shows the Desktop token:\n%s", out)
 	}
 	doc := decode[statusDoc](t, s.ok("status", "--json"))
-	if doc.Daemon == nil || doc.Pipelines.Registered != 2 || len(doc.RecentRuns) != 1 || !strings.HasPrefix(doc.DesktopURL, "http://127.0.0.1:") {
+	if doc.Daemon == nil || doc.Pipelines.Registered != 2 || len(doc.RecentRuns) != 1 || doc.DesktopURL == nil || !strings.HasPrefix(*doc.DesktopURL, "http://127.0.0.1:") {
 		t.Fatalf("status json = %+v", doc)
 	}
 }
@@ -143,6 +146,11 @@ func TestFlows_ABrokenFlowDoesNotHideTheOthers(t *testing.T) {
 	}
 	if code, _, errOut := s.truss("flows", "show", "bad"); code != 1 || !strings.Contains(errOut, "bad.yaml: pipeline must contain") {
 		t.Fatalf("show bad: %d %q", code, errOut)
+	}
+	// The JSON says why and the exit code says it too.
+	code, out, _ := s.truss("flows", "show", "bad", "--json")
+	if d := decode[flowDoc](t, out); code != 1 || d.Valid || !strings.Contains(d.Error, "one or more steps") {
+		t.Fatalf("show bad --json: %d %+v", code, d)
 	}
 }
 
@@ -344,7 +352,7 @@ func TestPipelines_ShowAndJSON(t *testing.T) {
 func TestDashboard_OnceWithAndWithoutADaemon(t *testing.T) {
 	s := projectSession(t, false)
 	out := s.ok("dashboard", "--once")
-	if !strings.Contains(out, "Daemon   not running") || !strings.Contains(out, "Flows in this project (2, not registered)") {
+	if !strings.Contains(out, "Daemon   not running") || !strings.Contains(out, "Flows in this project (2)") {
 		t.Fatalf("dashboard =\n%s", out)
 	}
 	live := projectSession(t, true)
@@ -399,13 +407,8 @@ func TestDaemonLogs(t *testing.T) {
 	if code, _, errOut := s.truss("daemon", "logs", "--follow"); code != 1 || !strings.Contains(errOut, "no daemon log yet") {
 		t.Fatalf("follow, no log: %d %q", code, errOut)
 	}
-	var b strings.Builder
-	for i := 1; i <= 120; i++ {
-		b.WriteString("line " + strings.Repeat("x", i%7) + string(rune('A'+i%26)) + "\n")
-	}
-	s.write("log/daemon.log", b.String())
-	home := strings.TrimPrefix(s.env[len(s.env)-1], "TRUSS_HOME=")
-	if err := os.WriteFile(home+"/daemon.log", []byte("one\ntwo\nthree\nfour\n"), 0o600); err != nil {
+	logPath := filepath.Join(s.home, "daemon.log")
+	if err := os.WriteFile(logPath, []byte("one\ntwo\nthree\nfour\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if out := s.ok("daemon", "logs", "-n", "2"); out != "three\nfour\n" {
@@ -424,8 +427,7 @@ func TestDaemonLogs(t *testing.T) {
 
 func TestDaemonLogs_FollowPrintsWhatIsAppended(t *testing.T) {
 	s := newSession(t, false)
-	home := strings.TrimPrefix(s.env[len(s.env)-1], "TRUSS_HOME=")
-	path := home + "/daemon.log"
+	path := filepath.Join(s.home, "daemon.log")
 	if err := os.WriteFile(path, []byte("first\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -462,7 +464,7 @@ func TestHelp_Topics(t *testing.T) {
 	s := newSession(t, false)
 	for topic := range helpTopics {
 		out := s.ok("help", topic)
-		if !strings.HasPrefix(out, "truss "+topic) && !strings.HasPrefix(out, "truss ") {
+		if !strings.HasPrefix(out, "truss ") || !strings.Contains(strings.SplitN(out, "\n", 2)[0], topic) {
 			t.Errorf("help %s = %q", topic, out)
 		}
 	}
@@ -537,4 +539,191 @@ func TestWriteRun_ListsReasonsAndErrorsAsNotes(t *testing.T) {
 	if strings.Contains(out, "second line") {
 		t.Errorf("a note runs over one line:\n%s", out)
 	}
+}
+
+// A broken project file or a daemon that does not answer is part of the answer
+// of `status`, not a reason to fail (spec 022 FR-001).
+func TestStatus_AProblemIsReportedNotFatal(t *testing.T) {
+	s := newSession(t, false)
+	s.write("truss.yaml", "version: [oops\n")
+	code, out, _ := s.truss("status")
+	if code != 0 || !strings.Contains(out, "Project    unreadable: truss.yaml: invalid YAML") || !strings.Contains(out, "Daemon     not running") {
+		t.Fatalf("status: %d\n%s", code, out)
+	}
+	code, raw, _ := s.truss("status", "--json")
+	if doc := decode[statusDoc](t, raw); code != 0 || doc.Project != nil || !strings.Contains(doc.ProjectError, "invalid YAML") {
+		t.Fatalf("status --json: %d %+v", code, doc)
+	}
+	// A "daemon" that is not one: an endpoint file pointing at a closed port.
+	dead := newSession(t, false)
+	ep := api.Endpoint{Address: "127.0.0.1:1", Token: "x", PID: os.Getpid(), StartedAt: time.Now(), Version: Version}
+	data, _ := json.Marshal(ep)
+	if err := os.WriteFile(filepath.Join(dead.home, "daemon.json"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, _ := dead.truss("status"); code != 0 || !strings.Contains(out, "Daemon") {
+		t.Fatalf("unanswering daemon: %d %q", code, out)
+	}
+}
+
+// Every line of a frame is as wide as the screen, with metrics, many flows and
+// long names, at the smallest, the default and the largest width.
+func TestRenderDashboard_LinesKeepTheScreenWidth(t *testing.T) {
+	now := time.Date(2026, 11, 17, 9, 0, 0, 0, time.UTC)
+	long := strings.Repeat("very-long-flow-name-", 6)
+	snap := snapshot{Now: now, Status: &api.Status{PID: 1, Address: "127.0.0.1:7878", StartedAt: now.Add(-3 * time.Hour),
+		RunningRuns: 9, MaxParallelRuns: 4, Home: strings.Repeat("h", 200)},
+		Metrics: &api.Metrics{Supported: true, Host: &api.HostMetrics{CPUPercent: 250, MemoryTotalBytes: 16 << 30, MemoryUsedBytes: 20 << 30}}}
+	for i := 0; i < 12; i++ {
+		snap.Pipelines = append(snap.Pipelines, api.Pipeline{Name: long, Path: "/x", Valid: true, LastRun: &api.Run{Status: "failed", CreatedAt: now}})
+		snap.Runs = append(snap.Runs, api.Run{ID: "20261117-090000-abcdef", Pipeline: long, Status: "running", CreatedAt: now, StartedAt: &now})
+	}
+	for _, width := range []int{minWidth, defaultWidth, maxWidth} {
+		for _, name := range []string{"with a daemon", "without"} {
+			s := snap
+			if name == "without" {
+				s = snapshot{Now: now}
+			}
+			frame := renderDashboard(s, []project.Flow{{Name: long}}, width)
+			for _, l := range strings.Split(strings.TrimRight(frame, "\n"), "\n") {
+				if n := len([]rune(l)); n != width {
+					t.Errorf("%s, width %d: a line is %d wide: %q", name, width, n, l)
+				}
+			}
+		}
+	}
+	if !strings.Contains(renderDashboard(snap, nil, 80), "... and 4 more") {
+		t.Error("a long flow list is not cut")
+	}
+}
+
+func TestCanRedraw_OnlyForATerminalFile(t *testing.T) {
+	if canRedraw(&bytes.Buffer{}) {
+		t.Error("a buffer is not a terminal")
+	}
+	f, err := os.CreateTemp(t.TempDir(), "out")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if canRedraw(f) {
+		t.Error("a file is not a terminal")
+	}
+}
+
+func TestSamePath(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.yaml")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !samePath(file, filepath.Join(dir, ".", "x", "..", "a.yaml")) {
+		t.Error("two spellings of one path differ")
+	}
+	if samePath(file, filepath.Join(dir, "b.yaml")) {
+		t.Error("two files compare equal")
+	}
+	link := filepath.Join(dir, "link.yaml")
+	if err := os.Symlink(file, link); err == nil && !samePath(file, link) {
+		t.Error("a link and its target differ")
+	}
+}
+
+// The daemon log may have CRLF line ends and may be larger than what is read
+// to find its end.
+func TestDaemonLogs_CRLFAndLargeFiles(t *testing.T) {
+	s := newSession(t, false)
+	path := filepath.Join(s.home, "daemon.log")
+	if err := os.WriteFile(path, []byte("one\r\ntwo\r\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out := s.ok("daemon", "logs", "-n", "1"); out != "two\r\n" {
+		t.Fatalf("crlf tail = %q", out)
+	}
+	big := strings.Repeat("0123456789abcdef\n", maxTailBytes/17+1000) + "last-1\nlast-2\n"
+	if err := os.WriteFile(path, []byte(big), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out := s.ok("daemon", "logs", "-n", "2"); out != "last-1\nlast-2\n" {
+		t.Fatalf("big tail = %q", out)
+	}
+	if out := s.ok("daemon", "logs", "-n", "100000"); len(out) > maxTailBytes+64 || strings.HasPrefix(out, "\n") || !strings.HasSuffix(out, "last-2\n") {
+		t.Fatalf("whole big log: %d bytes", len(out))
+	}
+}
+
+// validate takes a path like run does, so `validate --help` is still read as a
+// file name and not as help.
+func TestHelp_ValidateKeepsTreatingFlagsAsFiles(t *testing.T) {
+	s := newSession(t, false)
+	s.write("truss.yaml", projectFile)
+	code, out, errOut := s.truss("validate", "--help")
+	if code != 1 || out != "" || !strings.Contains(errOut, "--help") {
+		t.Fatalf("validate --help: %d %q %q", code, out, errOut)
+	}
+}
+
+// Text screens never pass a control character from a pipeline file to the
+// terminal; JSON escapes it.
+func TestScreens_CleanControlCharacters(t *testing.T) {
+	s := newSession(t, false)
+	s.write("truss.yaml", "version: \"1\"\nproject:\n  name: demo\n  description: \"nice\\e]0;pwned\\a\"\n")
+	s.write(".truss/flows/evil.yaml", "version: \"1\"\npipeline: {name: \"evil\\e[2J\"}\nsteps:\n"+
+		"  - {id: \"a\\e[8m\", run: \"echo safe\\r\\e[8mhidden\"}\n"+
+		"  - {id: b, run: \"echo one\\necho two\\necho three\", needs: [\"a\\e[8m\"]}\n")
+	for _, args := range [][]string{{"flows", "show", "evil"}, {"flows", "graph", "evil"}, {"flows"}, {"project"}, {"status"}, {"dashboard"}, {"validate", "evil"}} {
+		out := s.ok(args...)
+		if i := strings.IndexFunc(out, func(r rune) bool { return isControl(r) && r != '\n' }); i >= 0 {
+			t.Errorf("truss %v prints a control character at %d: %q", args, i, out)
+		}
+	}
+	if out := s.ok("flows", "show", "evil"); !strings.Contains(out, "echo one (+2 lines)") || !strings.Contains(out, "echo safe?") {
+		t.Errorf("flows show =\n%s", out)
+	}
+	raw := s.ok("flows", "show", "evil", "--json")
+	if strings.ContainsFunc(raw, func(r rune) bool { return isControl(r) && r != '\n' }) {
+		t.Errorf("json has a raw control character: %q", raw)
+	}
+}
+
+func TestClean(t *testing.T) {
+	for in, want := range map[string]string{"plain": "plain", "a\x1b[2Jb": "a?[2Jb", "x\ry\a": "x?y?", "t\tt": "t t", "c1\u009b": "c1?", "héllo": "héllo"} {
+		if got := clean(in); got != want {
+			t.Errorf("clean(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestDaemonLogs_FollowsAReplacedFile(t *testing.T) {
+	s := newSession(t, false)
+	path := filepath.Join(s.home, "daemon.log")
+	if err := os.WriteFile(path, []byte("old\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	out := &lockedBuffer{}
+	done := make(chan int, 1)
+	go func() { done <- Run(ctx, []string{"daemon", "logs", "-f"}, s.dir, s.env, out, &lockedBuffer{}) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(out.String(), "old") && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	// Replace the file: a new file with a longer content, so only the file
+	// identity tells it from the old one.
+	next := path + ".new"
+	if err := os.WriteFile(next, []byte("brand new content\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(next, path); err != nil {
+		t.Skipf("cannot replace an open file here: %v", err)
+	}
+	for !strings.Contains(out.String(), "brand new content") {
+		if time.Now().After(deadline.Add(5 * time.Second)) {
+			t.Fatalf("never saw the replacement: %q", out.String())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	cancel()
+	<-done
 }

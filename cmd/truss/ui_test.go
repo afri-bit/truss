@@ -104,8 +104,6 @@ func TestElapsedAndBytes(t *testing.T) {
 
 func TestColumns_AlignAndShortenTheLastColumn(t *testing.T) {
 	got := columns([][]string{{"A", "BB", "LAST"}, {"aaa", "b", strings.Repeat("z", 50)}}, 30)
-	want := []string{"A    BB  LAST", "aaa  b   " + strings.Repeat("z", 15) + "..."}
-	_ = want
 	if got[0] != "A    BB  LAST" || len(got[1]) != 30 || !strings.HasSuffix(got[1], "...") {
 		t.Fatalf("columns = %q", got)
 	}

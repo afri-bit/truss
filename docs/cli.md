@@ -49,8 +49,8 @@ Home       /home/me/.truss
 ## Help
 
 `truss help` prints all commands. `truss help <command>` or `truss <command> --help` explains one
-(for example `truss help flows`). `truss run --help` is not help: an argument of `run` is a flow
-name or a path, so a file may be named like a flag. `truss help <unknown>` prints the usage and
+(for example `truss help flows`). `truss run --help` and `truss validate --help` are not
+help: their argument is a flow name or a path, so a file may be named like a flag. `truss help <unknown>` prints the usage and
 exits `1`.
 
 ## Without the daemon

@@ -293,9 +293,9 @@ func (in invocation) validateFile(ctx context.Context, file pipelineFile) error 
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(in.stdout, "%s is valid: pipeline %s, %d steps, concurrency %d\n", file.display, plan.Name, len(plan.Graph), plan.Concurrency)
+	fmt.Fprintf(in.stdout, "%s is valid: pipeline %s, %d steps, concurrency %d\n", clean(file.display), clean(plan.Name), len(plan.Graph), plan.Concurrency)
 	if l.declared != "" && l.declared != file.stem {
-		fmt.Fprintf(in.stdout, "note: %s declares the pipeline name %q, not %q; the run log and the daemon use %q\n", file.display, l.declared, file.stem, l.declared)
+		fmt.Fprintf(in.stdout, "note: %s declares the pipeline name %q, not %q; the run log and the daemon use %q\n", clean(file.display), l.declared, file.stem, l.declared)
 	}
 	for _, s := range l.def.Schedules {
 		zone := "local time"
@@ -312,7 +312,7 @@ func (in invocation) validateFile(ctx context.Context, file pipelineFile) error 
 		if len(s.Secrets) > 0 {
 			line += " uses secrets " + strings.Join(s.Secrets, ", ")
 		}
-		fmt.Fprintln(in.stdout, line)
+		fmt.Fprintln(in.stdout, clean(line))
 	}
 	return nil
 }

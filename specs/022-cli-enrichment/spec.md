@@ -36,8 +36,11 @@ working with the same output, flags and exit codes (see Compatibility).
   runs running and queued, the limit), or not running. With a daemon it also prints the registered
   flows by state (ready, running, paused, invalid) and the latest run. It exits `0` with or without a
   daemon. It never prints the Desktop token. `--json` prints `version`, `project` (or `null`),
-  `daemon` (the daemon status or `null`), `desktop_url`, `pipelines` (counts), `recent_runs`
-  (at most 5) and `home`.
+  `daemon` (the daemon status or `null`), `desktop_url` (`null` without a daemon), `pipelines` (counts),
+  `recent_runs` (at most 5) and `home`. A problem is part of the answer, not a failure: a
+  `truss.yaml` that cannot be read shows as `Project    unreadable: <reason>` (JSON: `project` is
+  `null` and `project_error` says why), and a daemon that is registered but does not answer shows
+  as `not answering: <reason>` (`daemon_error`). `status` still exits `0`.
 - **FR-002** `truss dashboard [--once]` draws frames of plain ASCII: daemon, runs against the limit,
   host CPU and memory when the daemon reports them, the registered flows (state, next run, last run)
   and the latest runs. Every line of a frame has the same width: `COLUMNS` limited to 60 to 120,
@@ -57,7 +60,9 @@ working with the same output, flags and exit codes (see Compatibility).
   name, file, project, registration, concurrency, overlap, the **names** of the environment
   variables and secrets its steps receive (never their values), its schedules, and a table of its
   steps (needs, timeout, retries, `if`, first line of `run`). `truss flows graph <name|path>` prints the steps in stages: a step is in
-  the stage after the latest of the steps it needs, and each step lists what it needs. `show` of a flow that does not load is an error.
+  the stage after the latest of the steps it needs, and each step lists what it needs. `show` of a flow that does not load is an error: exit `1`, and with `--json` the document
+  (`valid: false`, `error`) is printed first. A `run` of more than one line shows its first line and
+  `(+N lines)`, so a table never hides that more follows; `--json` has the whole text.
 - **FR-005** `truss pipelines [list] [--json]` lists registered pipelines as before; `--json` prints
   the daemon's pipeline objects. `truss pipelines show <name> [--json]` prints one: its state, file,
   project, concurrency, overlap, registration time, active runs, schedules with their next run,
@@ -69,7 +74,7 @@ working with the same output, flags and exit codes (see Compatibility).
   `cancelled`, `skipped`), `--active` (queued or running), `--limit <n>` (default 30) and `--json`,
   with or without a pipeline name. `--status` and `--active` together, a status that is not one of
   those, and a limit that is not a whole number of at least 1 are errors. A filter that matches
-  nothing prints `no runs match`.
+  nothing prints `no runs match`. A filter looks at the newest 1000 runs.
 - **FR-008** `truss runs show <run-id|last> [--pipeline <name>] [--json]` prints one run: id,
   pipeline, status and reason, trigger, created time, duration, a count of steps by status, and a
   table of steps (status, exit code, time, attempt) with a timeline of when each ran inside the run.
@@ -85,8 +90,8 @@ working with the same output, flags and exit codes (see Compatibility).
   it, the paths of the registry, the secrets file and the daemon log (and whether they exist yet),
   the project of the working directory and whether a daemon runs. It prints no secret name or value.
 - **FR-011** `truss help <command>` prints that command's help on standard output and exits `0`;
-  so does `truss <command> --help` or `-h`, except for `run`, where any argument is a flow name
-  (spec 001, spec 016). `unregister`, `pause` and `resume` show the help of `register`. An unknown
+  so does `truss <command> --help` or `-h`, except for `run` and `validate`, whose argument is a
+  flow name or a path, so `--help` is still read as one (spec 001, spec 016). `unregister`, `pause` and `resume` show the help of `register`. An unknown
   topic, or more than one word after `help`, is the usage error it always was.
 - **FR-012** `--json` writes one JSON document, indented, on standard output. Daemon objects keep
   the field names of [the API](../../docs/daemon.md); the shapes of the new documents are in
@@ -94,6 +99,13 @@ working with the same output, flags and exit codes (see Compatibility).
 - **FR-013** Every new command works on Linux, macOS and Windows. The screens use ASCII only,
   no colour and no cursor movement, except the live dashboard's redraw on a Linux or macOS terminal.
   The CLI never starts or stops the daemon, and never changes a file.
+
+- **FR-014** A text screen never passes a control character from a file or the daemon to the
+  terminal (an escape, bell or carriage return, or a C1 code): each becomes `?`, a tab becomes a
+  space. This covers the pipeline name, step ids, `needs`, `run` text, project description and
+  errors, in the new commands and in `validate`. JSON output is not changed: it escapes. `daemon
+  logs` reads only a regular file (never a named pipe, which would block for good), and `--follow`
+  follows a log file that was replaced.
 
 ## Not in this spec
 
