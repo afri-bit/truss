@@ -25,7 +25,7 @@
   <a href="docs/architecture.md">Architecture</a>
 </p>
 
-> **Status:** [v0.1.0](docs/MILESTONE.md) is the first release. The pipeline file, the CLI and the daemon API may still change before 1.0.
+> **Status:** [v0.2.0](docs/MILESTONE.md) is the latest release (v0.1.0 was the first). The pipeline file, the CLI and the daemon API may still change before 1.0.
 
 <p align="center">
   <img src="docs/images/desktop-dashboard.png" alt="TRUSS Desktop dashboard" width="900">
@@ -324,7 +324,7 @@ The full map is in [docs/architecture.md](docs/architecture.md).
 | [TRUSS Desktop](docs/desktop.md) | See what the UI offers |
 | [Architecture](docs/architecture.md) | Find your way around the code |
 | [Glossary](docs/GLOSSARY.md) | Check what a word means here |
-| [Milestone](docs/MILESTONE.md) | See what v0.1.0 includes and what waits |
+| [Milestone](docs/MILESTONE.md) | See what each release includes and what waits |
 | [Decisions](docs/decisions/) | Learn why something is the way it is |
 | [Specifications](specs/) | Read the requirements behind each feature |
 

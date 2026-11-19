@@ -9,6 +9,10 @@ Dates below are when a release was made. 0.1.0 is the first release.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-19
+
+Debug a flow: look at one step and run just that step. Alongside it come a layered command line, a readable run log, flows that follow their files and Desktop corrections.
+
 ### Added
 
 - Debug a flow: look at one step and run just that step  
@@ -105,5 +109,6 @@ The first release: run a pipeline file by hand, or let the daemon run it on a sc
 
 - `truss run` no longer writes through symbolic links a repository can carry in `.truss`. A link planted at `.truss/run.log.tmp` used to receive the run log, overwriting a file outside the folder. A `.truss`, `.truss/data` or `.truss/data/cache` that is a link is now refused before any step starts; before, the run log, data and cache went into the folder the link pointed to (specs/002-local-run-log FR-018).
 
-[Unreleased]: https://github.com/afri-bit/truss/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/afri-bit/truss/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/afri-bit/truss/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/afri-bit/truss/releases/tag/v0.1.0
