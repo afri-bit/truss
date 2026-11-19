@@ -6,7 +6,7 @@ Agents and contributors read it before choosing or expanding a feature. `main` i
 
 ## v0.1.0: the MVP
 
-v0.1.0 is the first tagged release and the first version worth using every day on your own
+v0.1.0 was tagged on 2026-11-16. It is the first tagged release and the first version worth using every day on your own
 machine: write a pipeline file, run it by hand, or hand it to the daemon and let it run on a
 schedule, and watch all of it from the terminal or from TRUSS Desktop.
 
@@ -29,10 +29,7 @@ that matches it, and the checklist below is done. `go.mod`, `cmd/truss` and Desk
 | TRUSS Desktop | Dashboard, pipeline control, run view with graph and live log, file picker, browser tests | `007-truss-desktop`, `013-desktop-polish`, `014-desktop-redesign` | Implemented |
 | Resource figures | `GET /metrics`: host, daemon and step CPU and memory on Linux, macOS and Windows; step process ids; Desktop shows them (added by the maintainer, 2026-11-13) | `015-resource-metrics` | Implemented |
 | Retries and conditions | `retries`, `retry_delay`, `continue-on-error`, `if` on steps, `if` on jobs | `009-retries-and-conditions` | Implemented |
-| Flows follow their files | A registered file is the source of truth: the daemon notices an edit, shows a renamed flow under its new name and keeps its history (added by the maintainer, 2026-11-16) | `019-flows-follow-their-files` | Implemented |
-| A readable run log | The run log has headings for the setup, each step and the summary, and TRUSS Desktop shows it as one card per step (added by the maintainer, 2026-11-16) | `020-readable-run-log` | Implemented |
 | Project layout | `truss.yaml` is project metadata; pipelines are files in `.truss/flows/`; generated files in `.truss/state/` (added by the maintainer, 2026-11-15) | `016-project-layout` | Implemented |
-| A richer command line | Read-only `status`, `dashboard`, `flows`, `project(s)`, `schedules`, `runs show`, `daemon logs`, `env`, `help <command>` and `--json`; ASCII screens (added by the maintainer, 2026-11-17) | `022-cli-enrichment` | Implemented |
 | Documentation site | A site with the docs (search, sidebar, light and dark) and a home page, built from `docs/` (added by the maintainer, 2026-11-16) | `017-docs-site` | Implemented (the first deploy needs the repository's Pages setting) |
 
 **Operating systems.** Linux, macOS and Windows. A `run` string is a command for that host's
@@ -60,6 +57,29 @@ What is left before the tag. Items marked "you" cannot be done from code.
 - A packaged desktop window, tray icon and notifications
 - SDKs and CI-provider plugins
 - A pipeline file that is portable across host shells
+
+## v0.2.0: debug a flow, and a richer terminal
+
+v0.2.0 adds what makes TRUSS useful when a flow fails: look at one step, see everything it needs,
+and run just that step with inputs of your choice. Alongside it come the changes made after
+v0.1.0 was tagged (the table in v0.1.0 listed three of them before; they belong here).
+
+### In this release
+
+| Capability | What it means | Spec | State |
+|---|---|---|---|
+| Debug a step | `truss flows show <flow> <step>` shows a step's command, its neighbours and the environment it can use, with values (secrets as set or missing); `truss run <flow> --step <id>` (`--with-needs`, `--from`, `--env`) runs part of a flow without replacing the saved run log. The headline of the release (added by the maintainer, 2026-11-19) | `023-step-debugging` | In progress |
+| Flows follow their files | A registered file is the source of truth: the daemon notices an edit, shows a renamed flow under its new name and keeps its history (added by the maintainer, 2026-11-16) | `019-flows-follow-their-files` | Implemented |
+| A readable run log | The run log has headings for the setup, each step and the summary, and TRUSS Desktop shows it as one card per step (added by the maintainer, 2026-11-16) | `020-readable-run-log` | Implemented |
+| A richer command line | Read-only `status`, `dashboard`, `flows`, `project(s)`, `schedules`, `runs show`, `daemon logs`, `env`, `help <command>` and `--json`; ASCII screens (added by the maintainer, 2026-11-17) | `022-cli-enrichment` | Implemented |
+| Desktop corrections | Flows page naming, Re-run, the Resources chart (added by the maintainer, 2026-11-16) | `018-desktop-corrections` | Implemented |
+| Flows view toggle | The Flows page as cards or as a list (added by the maintainer, 2026-11-17) | `021-flows-view-toggle` | Implemented |
+
+### Not in v0.2.0
+
+An interactive shell in a step's environment, step-by-step stepping, resuming from the last
+failure, event triggers (hooks), a daemon reachable beyond localhost, per-step runners (container,
+other shells) and AI integration (an MCP server). Each needs its own decision and spec.
 
 ## How to change this file
 
