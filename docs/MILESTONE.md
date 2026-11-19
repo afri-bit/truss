@@ -67,7 +67,7 @@ v0.1.0 was tagged (the table in v0.1.0 listed three of them before; they belong 
 
 | Capability | What it means | Spec | State |
 |---|---|---|---|
-| Debug a step | `truss flows show <flow> <step>` shows a step's command, its neighbours and the environment it can use, with values (secrets as set or missing); `truss run <flow> --step <id>` (`--with-needs`, `--from`, `--env`) runs part of a flow without replacing the saved run log. The headline of the release (added by the maintainer, 2026-11-19) | `023-step-debugging` | In progress |
+| Debug a step | `truss flows show <flow> <step>` shows a step's command, its neighbours and the environment it can use, with values (secrets as set or missing); `truss run <flow> --step <id>` (`--with-needs`, `--from`, `--env`) runs part of a flow without replacing the saved run log. The headline of the release (added by the maintainer, 2026-11-19) | `023-step-debugging` | Implemented |
 | Flows follow their files | A registered file is the source of truth: the daemon notices an edit, shows a renamed flow under its new name and keeps its history (added by the maintainer, 2026-11-16) | `019-flows-follow-their-files` | Implemented |
 | A readable run log | The run log has headings for the setup, each step and the summary, and TRUSS Desktop shows it as one card per step (added by the maintainer, 2026-11-16) | `020-readable-run-log` | Implemented |
 | A richer command line | Read-only `status`, `dashboard`, `flows`, `project(s)`, `schedules`, `runs show`, `daemon logs`, `env`, `help <command>` and `--json`; ASCII screens (added by the maintainer, 2026-11-17) | `022-cli-enrichment` | Implemented |

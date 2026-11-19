@@ -1,6 +1,6 @@
 # Feature Specification: Step debugging
 
-**Spec**: `023-step-debugging` | **Created**: 2026-11-19 | **Status**: Draft
+**Spec**: `023-step-debugging` | **Created**: 2026-11-19 | **Status**: Implemented
 
 Extends [`022-cli-enrichment`](../022-cli-enrichment/spec.md) (`flows show`),
 [`001-host-pipeline-engine`](../001-host-pipeline-engine/spec.md) and
