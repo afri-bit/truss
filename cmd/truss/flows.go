@@ -197,13 +197,16 @@ func (in invocation) flowsList(ctx context.Context, args []string) int {
 }
 
 func (in invocation) flowsShow(ctx context.Context, args []string) int {
-	pos, flags, err := options(args, nil, []string{"json"})
-	if err != nil || len(pos) != 1 {
+	pos, flags, err := options(args, nil, []string{"json", "values"})
+	if err != nil || len(pos) < 1 || len(pos) > 2 || (flags["values"] != "" && len(pos) != 2) {
 		return in.usage()
 	}
 	file, err := resolveFile(in.cwd, pos[0])
 	if err != nil {
 		return in.fail(err)
+	}
+	if len(pos) == 2 { // one step of the flow (spec 023)
+		return in.stepShow(ctx, file, pos[1], flags)
 	}
 	reg, up, err := in.daemonFlows(ctx)
 	if err != nil {

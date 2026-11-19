@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/afri-bit/truss/internal/api"
@@ -21,11 +22,21 @@ import (
 	"github.com/afri-bit/truss/internal/runlog"
 )
 
+// runSpec says what one local run does beyond running the whole flow.
+type runSpec struct {
+	// flow is the flow as the user wrote it, for the hint after a failure.
+	flow string
+	// debug marks a run of a slice of the flow: its log is printed and not saved
+	// (spec 023).
+	debug bool
+}
+
 // runLocal runs a pipeline definition in this process, without the daemon.
 // pos holds the flow name or path (spec 016). It writes the run log to stdout
-// and to .truss/state/<flow>/run.log. With track set it also reports the run
-// to the daemon, which must be running (spec 010).
-func runLocal(ctx context.Context, pos []string, track bool, cwd string, env []string, stdout, stderr io.Writer) int {
+// and to .truss/state/<flow>/run.log. With opts.track it also reports the run
+// to the daemon, which must be running (spec 010). With opts.step or
+// opts.from it runs only part of the flow and saves no run log (spec 023).
+func runLocal(ctx context.Context, pos []string, opts runOptions, cwd string, env []string, stdout, stderr io.Writer) int {
 	if len(pos) == 0 {
 		fmt.Fprintf(stderr, "error: %s\n", needFlowError(cwd, "run").Error())
 		return 1
@@ -41,18 +52,38 @@ func runLocal(ctx context.Context, pos []string, track bool, cwd string, env []s
 		return 1
 	}
 	def := l.def
+	spec := runSpec{flow: pos[0], debug: opts.debug()}
+	if opts.debug() || len(opts.env) > 0 {
+		sliced, err := pipeline.Slice(def, opts.selection())
+		if err != nil {
+			fmt.Fprintf(stderr, "error: %s\n", clean(err.Error()))
+			return 1
+		}
+		if spec.debug {
+			ids := make([]string, len(sliced.Steps))
+			for i, s := range sliced.Steps {
+				ids[i] = clean(s.ID)
+			}
+			total := len(def.Steps)
+			if plan, err := pipeline.Plan(def); err == nil {
+				total = len(plan.Graph)
+			}
+			fmt.Fprintf(stderr, "debug run: %d of %d steps (%s); the run log is not saved\n", len(ids), total, strings.Join(ids, ", "))
+		}
+		def = sliced
+	}
 
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
 	var tr *tracker
-	if track {
+	if opts.track {
 		tr, err = startTracking(ctx, def, env, stderr, cancelRun)
 		if err != nil {
 			fmt.Fprintf(stderr, "error: %s\n", err.Error())
 			return 1
 		}
 	}
-	code, status, reason := execute(ctx, runCtx, def, file.stem, cwd, env, stdout, stderr, tr)
+	code, status, reason := execute(ctx, runCtx, def, file.stem, cwd, env, stdout, stderr, tr, spec)
 	if tr != nil {
 		tr.finish(status, reason)
 	}
@@ -88,7 +119,7 @@ func startTracking(ctx context.Context, def pipeline.Pipeline, env []string, std
 // execute runs the pipeline and returns the exit code and how the run ended
 // (an api run status and reason) for the tracker. ctx is the caller's;
 // runCtx also ends when the daemon cancels a tracked run.
-func execute(ctx, runCtx context.Context, def pipeline.Pipeline, stem, cwd string, env []string, stdout, stderr io.Writer, tr *tracker) (int, string, string) {
+func execute(ctx, runCtx context.Context, def pipeline.Pipeline, stem, cwd string, env []string, stdout, stderr io.Writer, tr *tracker, spec runSpec) (int, string, string) {
 	// Generated files live in .truss/state/<flow>/ under the working directory;
 	// steps get its data folder, the counterpart of the daemon's per-pipeline
 	// one (specs/008-workspace-and-cache, specs/016-project-layout).
@@ -104,10 +135,29 @@ func execute(ctx, runCtx context.Context, def pipeline.Pipeline, stem, cwd strin
 	if tr != nil {
 		extra = tr
 	}
-	log, tmp, tmpPath, dest, err := openRunLog(st.Dir, stdout, extra)
-	if err != nil {
+	// A debug run prints its log and keeps the last real run's saved log.
+	var (
+		log     *runlog.Log
+		tmp     *os.File
+		tmpPath string
+		dest    string
+	)
+	if spec.debug {
+		log = runlog.New(stdout, time.Now)
+	} else if log, tmp, tmpPath, dest, err = openRunLog(st.Dir, stdout, extra); err != nil {
 		fmt.Fprintf(stderr, "error: %s\n", err.Error())
 		return 1, api.RunFailed, err.Error()
+	}
+	discard := func() {
+		if tmp != nil {
+			discardRunLog(tmp, tmpPath)
+		}
+	}
+	commit := func() error {
+		if tmp == nil {
+			return nil
+		}
+		return commitRunLog(tmp, tmpPath, dest)
 	}
 	log.Setup(runlog.OSName(runtime.GOOS), runtime.GOARCH, executor.Shell(), abs)
 	var events engine.StepEvents = log
@@ -116,24 +166,27 @@ func execute(ctx, runCtx context.Context, def pipeline.Pipeline, stem, cwd strin
 	}
 	run, err := engine.Run(runCtx, def, cwd, env, events, engine.WithSecrets(secretLoader(env)))
 	if err != nil {
-		discardRunLog(tmp, tmpPath)
+		discard()
 		return interrupted(ctx, tr, err, stderr)
 	}
 	if err := ctx.Err(); err != nil {
 		// A cancel from the daemon that arrives after the run ended does not
 		// change its outcome. FR-017: an interrupted run never saves a run log.
-		discardRunLog(tmp, tmpPath)
+		discard()
 		return interrupted(ctx, tr, err, stderr)
 	}
 	if run.Status != pipeline.StatusSucceeded {
 		log.SummaryFailed(len(run.Steps), run.Failure())
-		if err := commitRunLog(tmp, tmpPath, dest); err != nil {
+		if err := commit(); err != nil {
 			fmt.Fprintf(stderr, "error: %s\n", err.Error())
+		}
+		if run.FailedStep != "" && !spec.debug {
+			fmt.Fprintf(stderr, "to run only this step again: truss run %s --step %s\n", clean(shellWord(spec.flow)), clean(shellWord(run.FailedStep)))
 		}
 		return 1, api.RunFailed, run.Failure()
 	}
 	log.SummarySucceeded(len(run.Steps))
-	if err := commitRunLog(tmp, tmpPath, dest); err != nil {
+	if err := commit(); err != nil {
 		fmt.Fprintf(stderr, "error: %s\n", err.Error())
 		return 1, api.RunFailed, err.Error()
 	}
