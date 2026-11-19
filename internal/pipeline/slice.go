@@ -32,13 +32,15 @@ type Selection struct {
 }
 
 // foldEnvNames says that the host treats environment variable names without
-// regard to case. Windows does; the other systems do not. Tests set it.
-var foldEnvNames = runtime.GOOS == "windows"
+// regard to case. Windows does; the other systems do not.
+const foldEnvNames = runtime.GOOS == "windows"
 
 // EnvKey returns the form of an environment variable name under which the
 // host sees one variable: the name itself, or in upper case on Windows.
-func EnvKey(name string) string {
-	if foldEnvNames {
+func EnvKey(name string) string { return envKey(foldEnvNames, name) }
+
+func envKey(fold bool, name string) string {
+	if fold {
 		return strings.ToUpper(name)
 	}
 	return name
@@ -47,7 +49,7 @@ func EnvKey(name string) string {
 // overrideEnv returns base with over applied. A variable of base that the
 // host would see as the same as one of over is dropped, so the override wins
 // whatever the case.
-func overrideEnv(base, over map[string]string) map[string]string {
+func overrideEnv(base, over map[string]string, fold bool) map[string]string {
 	if len(over) == 0 {
 		return mergeEnv(base)
 	}
@@ -57,7 +59,7 @@ func overrideEnv(base, over map[string]string) map[string]string {
 	}
 	for name, value := range over {
 		for k := range out {
-			if EnvKey(k) == EnvKey(name) {
+			if envKey(fold, k) == envKey(fold, name) {
 				delete(out, k)
 			}
 		}
@@ -74,6 +76,11 @@ func overrideEnv(base, over map[string]string) map[string]string {
 // step's own condition is kept. p is not changed. The result is meant to be
 // run, not registered: it has no schedules, overlap or workdir.
 func Slice(p Pipeline, sel Selection) (Pipeline, error) {
+	return slice(p, sel, foldEnvNames)
+}
+
+// slice is Slice for a host that folds the case of environment names or not.
+func slice(p Pipeline, sel Selection, fold bool) (Pipeline, error) {
 	plan, err := Plan(p)
 	if err != nil {
 		return Pipeline{}, err
@@ -137,7 +144,7 @@ func Slice(p Pipeline, sel Selection) (Pipeline, error) {
 		}
 		for _, name := range names {
 			for _, secret := range s.Secrets {
-				if EnvKey(secret) == EnvKey(name) {
+				if envKey(fold, secret) == envKey(fold, name) {
 					return Pipeline{}, fmt.Errorf("cannot override %s: step %q reads it as a secret; use truss secret set %s", name, s.ID, name)
 				}
 			}
@@ -152,7 +159,7 @@ func Slice(p Pipeline, sel Selection) (Pipeline, error) {
 		if sel.Step != "" && s.Job == namedJob {
 			s.JobIf = nil
 		}
-		s.Env = overrideEnv(s.Env, sel.Env)
+		s.Env = overrideEnv(s.Env, sel.Env, fold)
 		steps = append(steps, s)
 	}
 	return Pipeline{Version: "1", Name: plan.Name, Steps: steps, Concurrency: plan.Concurrency}, nil

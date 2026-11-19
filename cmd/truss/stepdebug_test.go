@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -463,6 +464,17 @@ func TestRun_AnyOtherArgumentIsStillThePath(t *testing.T) {
 	}
 }
 
+func TestPlainWord_BackslashOnlyOnWindows(t *testing.T) {
+	if got, want := plainWord(`.truss\flows\a.yaml`), runtime.GOOS == "windows"; got != want {
+		t.Errorf("plainWord of a backslash path = %v on %s, want %v", got, runtime.GOOS, want)
+	}
+	for _, w := range []string{"build", "build/package", "./a.yaml", "a_b-c.d", "x:y", "a+b=c", "x@y"} {
+		if !plainWord(w) {
+			t.Errorf("plainWord(%q) = false", w)
+		}
+	}
+}
+
 func TestRerunHint(t *testing.T) {
 	plain := "to run only this step again: truss run bad --step build/package"
 	if got := rerunHint("bad", "build/package"); got != plain {
@@ -478,6 +490,11 @@ func TestRerunHint(t *testing.T) {
 		{"bad", ""},
 		{"my flow.yaml", "a"},
 		{"a$b", "a"},
+		{"bad", "a,b"},
+		{"bad", "@id"},
+		{"bad", "=id"},
+		{"@ci", "a"},
+		{"=ci", "a"},
 	} {
 		got := rerunHint(c.flow, c.step)
 		if strings.Contains(got, "truss run "+c.flow) || strings.ContainsAny(got, "$`%") {
@@ -550,8 +567,10 @@ steps:
 	wantRow(t, out, "PLAIN", "PLAIN", "pipeline", "set", `\*\*\*`)
 	wantRow(t, out, "TRUSSDBG_URL", "TRUSSDBG_URL", `host environment`, "set", `\*\*\*`)
 	// Without --values a declared value is shown, as it is in the file.
-	if plain := s.ok("flows", "show", "mask", "a"); !strings.Contains(plain, "s3cr3tvalue") {
-		t.Logf("declared value hidden without --values: fine either way\n%s", plain)
+	// Without --values the store is not read: a declared value is shown as it
+	// is in the file (spec 023 FR-004).
+	if plain := s.ok("flows", "show", "mask", "a"); !strings.Contains(plain, "postgres://u:s3cr3tvalue@h/db") {
+		t.Errorf("a declared value must be shown without --values:\n%s", plain)
 	}
 }
 
@@ -627,7 +646,7 @@ jobs:
       - {id: compile, run: "echo marker-build"}
   deploy:
     needs: [build]
-    if: env.DEPLOY == 'yes'
+    if: env.TRUSSDBG_DEPLOY == 'yes'
     steps:
       - {id: push, run: "echo marker-deploy"}
 `
@@ -674,7 +693,7 @@ func TestDebugRun_EnvReachesIfConditions(t *testing.T) {
 	s := newSession(t, false)
 	s.write("truss.yaml", projectFile)
 	s.write(".truss/flows/guard.yaml", guardedFlow)
-	if _, out, _ := s.truss("run", "guard", "--env", "DEPLOY=yes"); !strings.Contains(out, "marker-deploy") {
+	if _, out, _ := s.truss("run", "guard", "--env", "TRUSSDBG_DEPLOY=yes"); !strings.Contains(out, "marker-deploy") {
 		t.Errorf("an override must be seen by a condition:\n%s", out)
 	}
 }
@@ -686,5 +705,41 @@ func TestRun_HintIsNotACommandForAnOddID(t *testing.T) {
 	code, _, errOut := s.truss("run", "odd")
 	if code != 1 || strings.Contains(errOut, "x$(") || !strings.Contains(errOut, "to run only the failed step again, use truss run --step") {
 		t.Errorf("exit = %d, stderr = %q", code, errOut)
+	}
+}
+
+func TestStepInspect_ASecretIsFoundByItsExactName(t *testing.T) {
+	// The store and a run match secret names exactly, on every system, so the
+	// view must too: a secret stored as npm_token does not satisfy NPM_TOKEN.
+	s := debugSession(t)
+	s.setSecret("npm_token", "x")
+	out := s.ok("flows", "show", "dbg", "build/package")
+	wantRow(t, out, "NPM_TOKEN", "NPM_TOKEN", `secret store`, "missing", "-")
+	if code, _, errOut := s.truss("run", "dbg", "--step", "build/package"); code != 1 || !strings.Contains(errOut, "NPM_TOKEN") {
+		t.Errorf("a run disagrees with the view: exit %d, %s", code, errOut)
+	}
+}
+
+func TestDebugRun_InlineFormsAndLookalikes(t *testing.T) {
+	s := twoSession(t)
+	if _, out, _ := s.truss("run", "two", "--from=b"); strings.Contains(out, "marker-a") || !strings.Contains(out, "marker-c") {
+		t.Errorf("--from=b:\n%s", out)
+	}
+	// --track=x and --with-needs=x are not options: they are taken as the path.
+	for _, arg := range []string{"--track=x", "--with-needs=x"} {
+		code, out, errOut := s.truss("run", arg)
+		if code != 1 || strings.Contains(out, "marker-") || !strings.Contains(errOut, arg) {
+			t.Errorf("run %s: exit %d, stderr %q", arg, code, errOut)
+		}
+	}
+}
+
+func TestDebugRun_TheLaterOverrideWins(t *testing.T) {
+	s := newSession(t, false)
+	s.write("truss.yaml", projectFile)
+	s.write(".truss/flows/later.yaml", "version: \"1\"\nsteps:\n  - id: show\n    run: '"+helperCmd("print-env", "TRUSSDBG_TWICE")+"'\n")
+	_, out, _ := s.truss("run", "later", "--step", "show", "--env", "TRUSSDBG_TWICE=first", "--env", "TRUSSDBG_TWICE=second")
+	if !strings.Contains(out, "second") || strings.Contains(out, "first") {
+		t.Errorf("the later --env must win:\n%s", out)
 	}
 }

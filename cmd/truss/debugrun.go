@@ -90,6 +90,11 @@ func parseRunArgs(args []string) ([]string, runOptions, error) {
 				if !ok || !envName.MatchString(k) {
 					return nil, o, errors.New("--env needs NAME=VALUE, with a name of letters, digits and _ that does not start with a digit")
 				}
+				for have := range o.env { // the later of two names the host sees as one wins
+					if pipeline.EnvKey(have) == pipeline.EnvKey(k) {
+						delete(o.env, have)
+					}
+				}
 				o.env[k] = v
 			}
 		default:
@@ -108,17 +113,19 @@ func parseRunArgs(args []string) ([]string, runOptions, error) {
 }
 
 // plainWord reports whether s is safe to print in a command line to paste:
-// letters, digits and _ . / : @ + = , - (and \ on Windows, where it separates
-// paths), not starting with a dash. Quoting differs between sh, cmd and
-// PowerShell, and one of them would still expand a $ or %, so anything else
-// is not printed as a command.
+// letters, digits and _ . / : @ + = - (and \ on Windows, where it separates
+// paths). It does not start with - (an option), @ (PowerShell splatting) or =
+// (zsh expands it to a command's path). A comma is out too: PowerShell reads
+// it as an array. Quoting differs between sh, cmd and PowerShell, and one of
+// them would still expand a $ or %, so anything else is not printed as a
+// command.
 func plainWord(s string) bool {
-	if s == "" || s[0] == '-' {
+	if s == "" || strings.ContainsRune("-@=", rune(s[0])) {
 		return false
 	}
 	for _, r := range s {
 		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', strings.ContainsRune("_./:@+=,-", r):
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', strings.ContainsRune("_./:@+=-", r):
 		case r == '\\' && runtime.GOOS == "windows":
 		default:
 			return false

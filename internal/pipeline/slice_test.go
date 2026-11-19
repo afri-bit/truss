@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -319,9 +318,7 @@ func TestSlice_OtherJobsKeepTheirCondition(t *testing.T) {
 }
 
 func TestSlice_NamesFoldOnWindows(t *testing.T) {
-	foldEnvNames = true
-	t.Cleanup(func() { foldEnvNames = runtime.GOOS == "windows" })
-	got, err := Slice(sliceFlow(t), Selection{Step: "lint/linux", Env: map[string]string{"a": "lower", "p": "q"}})
+	got, err := slice(sliceFlow(t), Selection{Step: "lint/linux", Env: map[string]string{"a": "lower", "p": "q"}}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,25 +332,23 @@ func TestSlice_NamesFoldOnWindows(t *testing.T) {
 	if _, ok := env["P"]; ok {
 		t.Errorf("P: %v", env)
 	}
-	if _, err := Slice(sliceFlow(t), Selection{Step: "lint/linux", Env: map[string]string{"token": "x"}}); err == nil {
+	if _, err := slice(sliceFlow(t), Selection{Step: "lint/linux", Env: map[string]string{"token": "x"}}, true); err == nil {
 		t.Error("a secret may not be overridden under another case on Windows")
 	}
-	if EnvKey("Path") != "PATH" {
-		t.Errorf("EnvKey = %q", EnvKey("Path"))
+	if envKey(true, "Path") != "PATH" || envKey(false, "Path") != "Path" {
+		t.Errorf("envKey folds wrongly: %q %q", envKey(true, "Path"), envKey(false, "Path"))
 	}
 }
 
 func TestSlice_NamesDoNotFoldElsewhere(t *testing.T) {
-	foldEnvNames = false
-	t.Cleanup(func() { foldEnvNames = runtime.GOOS == "windows" })
-	got, err := Slice(sliceFlow(t), Selection{Step: "lint/linux", Env: map[string]string{"a": "lower"}})
+	got, err := slice(sliceFlow(t), Selection{Step: "lint/linux", Env: map[string]string{"a": "lower"}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Steps[0].Env["A"] != "step" || got.Steps[0].Env["a"] != "lower" {
 		t.Errorf("Env = %v: a and A are two variables here", got.Steps[0].Env)
 	}
-	if _, err := Slice(sliceFlow(t), Selection{Step: "lint/linux", Env: map[string]string{"token": "x"}}); err != nil {
+	if _, err := slice(sliceFlow(t), Selection{Step: "lint/linux", Env: map[string]string{"token": "x"}}, false); err != nil {
 		t.Errorf("token is not TOKEN here: %v", err)
 	}
 }

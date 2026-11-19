@@ -192,7 +192,7 @@ func (in invocation) stepView(file pipelineFile, def pipeline.Pipeline, id strin
 		}
 		storedNames = map[string]bool{}
 		for _, n := range names {
-			storedNames[pipeline.EnvKey(n)] = true
+			storedNames[n] = true // the store and the engine match secret names exactly
 		}
 		if showValues {
 			all, err := store.Load()
@@ -239,7 +239,7 @@ func (in invocation) stepView(file pipelineFile, def pipeline.Pipeline, id strin
 	for _, name := range step.Secrets {
 		taken[pipeline.EnvKey(name)] = true
 		row := envRow{Name: name, Source: "secret store", Kind: kindSecret, State: stateMissing}
-		if storedNames[pipeline.EnvKey(name)] {
+		if storedNames[name] {
 			v := masked
 			row.State, row.Value = stateSet, &v
 		}
