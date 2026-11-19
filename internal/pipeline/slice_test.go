@@ -352,3 +352,18 @@ func TestSlice_NamesDoNotFoldElsewhere(t *testing.T) {
 		t.Errorf("token is not TOKEN here: %v", err)
 	}
 }
+
+func TestSetEnv_TheLaterNameWinsWhateverTheCase(t *testing.T) {
+	env := map[string]string{}
+	setEnv(env, "Path", "first", true) // as Windows compares names
+	setEnv(env, "PATH", "second", true)
+	if len(env) != 1 || env["PATH"] != "second" {
+		t.Errorf("env = %v, want only PATH=second", env)
+	}
+	env = map[string]string{}
+	setEnv(env, "Path", "first", false) // as Linux and macOS do
+	setEnv(env, "PATH", "second", false)
+	if len(env) != 2 {
+		t.Errorf("env = %v: Path and PATH are two variables here", env)
+	}
+}

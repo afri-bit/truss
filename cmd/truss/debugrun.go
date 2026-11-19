@@ -90,12 +90,7 @@ func parseRunArgs(args []string) ([]string, runOptions, error) {
 				if !ok || !envName.MatchString(k) {
 					return nil, o, errors.New("--env needs NAME=VALUE, with a name of letters, digits and _ that does not start with a digit")
 				}
-				for have := range o.env { // the later of two names the host sees as one wins
-					if pipeline.EnvKey(have) == pipeline.EnvKey(k) {
-						delete(o.env, have)
-					}
-				}
-				o.env[k] = v
+				pipeline.SetEnv(o.env, k, v)
 			}
 		default:
 			pos = append(pos, args[i])

@@ -179,3 +179,17 @@ func (p ExecutionPlan) NeededBy(id string) []string {
 	}
 	return out
 }
+
+// SetEnv records name=value in env. The later of two names the host sees as
+// one variable wins, so an earlier one that differs only in case on Windows
+// is dropped.
+func SetEnv(env map[string]string, name, value string) { setEnv(env, name, value, foldEnvNames) }
+
+func setEnv(env map[string]string, name, value string, fold bool) {
+	for have := range env {
+		if envKey(fold, have) == envKey(fold, name) {
+			delete(env, have)
+		}
+	}
+	env[name] = value
+}
