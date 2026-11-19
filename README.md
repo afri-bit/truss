@@ -333,13 +333,43 @@ The same docs are also a website with search and a home page, built from `docs/`
 
 ## Roadmap
 
-After v0.1.0, roughly in this order. Scope and order may change.
+Scope and order may change. [`docs/MILESTONE.md`](docs/MILESTONE.md) decides what a release holds; a box
+is ticked when the work is merged and has a spec.
 
-- **Desktop:** a packaged window with tray icon, notifications and start at login
-- **Pipelines:** matrix builds, artifacts
-- **Triggers:** file changes and webhooks
-- **Execution:** containers, then remote workers
-- **Ecosystem:** SDKs and CI-provider bridges, so the same file runs in CI
+**v0.1.0, released**
+
+- [x] Run a pipeline file by hand, with dependencies, concurrency, retries, conditions, secrets and a readable run log
+- [x] The daemon: registry, cron schedules with a missed-run policy, a run queue, an HTTP API, start at login
+- [x] TRUSS Desktop: dashboard, pipeline control, run view with graph and live log, resource figures
+- [x] The project layout: `truss.yaml` and flows in `.truss/flows/`
+
+**v0.2.0, debug a flow**
+
+- [x] Inspect one step: its command, its neighbours and the environment it can use (`flows show <flow> <step>`)
+- [x] Run one step, a step with what it needs, or a step and what needs it, with `--env` overrides (`run --step`, `--with-needs`, `--from`)
+- [x] A layered command line: `status`, `dashboard`, `flows`, `runs show`, `daemon logs`, `env`, `--json`
+- [x] A run log with headings, shown as cards in Desktop
+- [x] Flows follow their registered file, including a new name
+- [x] Desktop: Flows as cards or a list
+- [x] A documentation site
+
+**Next: v0.3.0, debug further, and a first step towards agents**
+
+- [ ] **Debug, phase 2:** an interactive shell in a step's exact environment (`--shell`), stepping through a flow (`--break`), `--dry-run`, resume from the last failure, save a debug log, the last result of a step in `flows show`, try a step that runs only after a failure
+- [ ] **`requires:` on a step:** declare what the step needs from outside (variables, files) in the YAML, so inspect can flag what is missing without reading the script it runs
+- [ ] **Per-step shell:** `shell: bash | sh | pwsh | cmd` on a step, and step outputs (`TRUSS_OUTPUT`) to pass data between steps
+- [ ] **Hooks, local first:** a flow starts when another flow ends (`on.run`) or when files change (`on.file`)
+- [ ] **`truss mcp`:** an MCP server for agents, a thin client of the daemon API. It runs registered flows only and is read-only by default, so an agent can inspect a failure and rerun just that step
+
+**Later**
+
+- [ ] **Per-step platforms:** `runner: docker` for a step (the docker CLI and a mounted workspace, no multi-gigabyte image for the whole flow), then remote workers, so each step runs where its tool lives and the flow keeps one environment
+- [ ] **Hooks from outside:** webhooks as triggers
+- [ ] **A daemon reachable beyond localhost:** TLS, scoped tokens and an explicit opt-in, designed before any remote worker
+- [ ] **Agents:** recipes for running an agent as a step, an approval gate, then SDKs. TRUSS runs agents and is called by them; it is not an LLM framework
+- [ ] **Desktop:** a packaged window with tray icon, notifications and start at login
+- [ ] **Pipelines:** matrix builds, artifacts
+- [ ] **Ecosystem:** SDKs and CI-provider bridges, so the same file runs in CI
 
 ## Contributing
 
