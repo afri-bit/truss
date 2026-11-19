@@ -26,6 +26,7 @@ daemon. Most take `--json` for scripts ([Using the command line](cli-guide.md#sc
 | `truss projects [list] [--json]` | The projects the daemon knows, from the files it has registered, with counts of flows, running, paused and invalid. | needed |
 | `truss flows [list] [--json]` | The flows of this project with steps, schedules and whether the daemon has them (`registered`, `paused`, `not-registered`, or `unknown` without a daemon). A flow that does not load is listed with its error. | optional |
 | `truss flows show <name\|path> [--json]` | One flow: concurrency, overlap, the **names** of environment variables and secrets (never values), schedules, and a table of its steps. | optional |
+| `truss flows show <name\|path> <step> [--values] [--json]` | One step: its command, the steps before and after it, its settings, and a table of the environment it can use with where each value comes from. Secrets show as `set` or `missing`; token-like names show `***`. `--values` also shows the values of host variables the command reads. See [Debugging a step](cli-guide.md#debugging-a-step). | optional |
 | `truss flows graph <name\|path>` | The steps in stages; steps in one stage can run together. | no |
 | `truss pipelines show <name> [--json]` | One registered pipeline: state, file, project, schedules with next run, steps, latest runs. | needed |
 | `truss schedules [list] [--json]` | Every schedule of every registered pipeline, soonest first. | needed |
@@ -59,8 +60,13 @@ exits `1`.
 |---|---|
 | `truss run <name\|path>` | Runs a pipeline right here and waits for it. With no argument it is an error: it lists the pipelines in `.truss/flows/` and exits `1`. |
 | `truss run <name\|path> --track` | The same, and also reports the run to the daemon, which must be running. |
+| `truss run <name\|path> --step <id> [--with-needs]` | A debug run: only that step. The steps it needs are not run and the step starts as if they had succeeded; `--with-needs` runs them too. The log is printed, and the saved `run.log` is not replaced. |
+| `truss run <name\|path> --from <id>` | A debug run of the step and every step that needs it. Jobs after the step keep their `if`; only the job of the step you named loses it. |
+| `truss run <name\|path> --env NAME=VALUE` | Sets or replaces an environment variable for the steps that run, above everything in the file. Repeatable; works with a whole run too. A secret cannot be set this way: use `truss secret set`. |
 | `truss validate [<name\|path>]` | Checks one pipeline and prints its schedules and steps. With no argument, checks `truss.yaml` and every pipeline. Runs nothing. |
 | `truss help`, `truss version` | Usage and version. |
+
+A debug run does not combine with `--track`. `--step`, `--from`, `--with-needs` and `--env` are options of `run`, so a file named like one runs as `./--step`. When a `truss run` fails, it prints on standard error the command to run only the failed step (`to run only this step again: truss run <flow> --step <id>`), without your `--env` options. The command is printed only when the flow and the id are plain words: letters, digits and `_ . / : @ + = -` (and `\` on Windows), not starting with `-`, `@` or `=`.
 
 `truss run` does not talk to the daemon, so the run does not appear in `truss runs` or in Desktop (add `--track`, below). It prints the run log as it happens and keeps the last one in `.truss/state/<name>/run.log`.
 Interrupting it (Ctrl-C) ends every running step. Schedules in the file are ignored: `run`

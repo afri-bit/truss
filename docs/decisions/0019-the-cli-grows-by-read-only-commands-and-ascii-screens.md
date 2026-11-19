@@ -31,7 +31,8 @@ a public contract (constitution V), and v0.1.0's flat commands exist in scripts 
    dashboard redraws with an ANSI home-and-clear only on a Linux or macOS terminal. The Windows
    console draws it once, because enabling virtual-terminal mode is not worth a platform file here.
 6. **Names, not values.** `flows show` lists environment variable and secret names; values are never
-   printed. `status` never prints the Desktop token; `truss desktop` does, as before.
+   printed. ADR 0020 amends this for one step: `flows show <flow> <step>` shows values
+   under rules (secrets never). `status` never prints the Desktop token; `truss desktop` does, as before.
 7. **Screens are safe to read.** The new commands exist to inspect files that may come from someone
    else, so a control character from a file (an escape sequence that retitles the window, or a
    carriage return that hides the rest of a `run` line) is shown as `?`. A multi-line `run` is marked

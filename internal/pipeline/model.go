@@ -28,6 +28,9 @@ type Step struct {
 	// Env holds the variables this step adds to the run environment. In an
 	// ExecutionPlan it is already merged: pipeline, then job, then step.
 	Env map[string]string
+	// EnvSource is set by Plan. It names the layer each variable of Env comes
+	// from: "pipeline", "job <id>" or "step". It is nil when Env is empty.
+	EnvSource map[string]string
 	// Secrets names the stored secrets this step receives as environment
 	// variables. In an ExecutionPlan it is already merged: pipeline, then job,
 	// then step, without repeats. Only names are held here, never values.

@@ -733,6 +733,27 @@ if [ "$code" -ne 0 ] || [[ "$out" != *"hello: 2 steps in 2 stages"* ]] || [[ "$o
 else
 	pass "flows graph"
 fi
+# Spec 023: inspect a step and run part of a flow.
+run_truss "$work/look" flows show hello b
+if [ "$code" -ne 0 ] || [[ "$out" != *"Step          b"* ]] || [[ "$out" != *"Needs         a"* ]] || [[ "$out" != *"TRUSS_DATA_DIR"* ]]; then
+	fail "flows show <flow> <step>" "want exit 0, the step, its needs and the environment table; got $code: $out"
+else
+	pass "flows show <flow> <step>"
+fi
+run_truss "$work/look" run hello --step b
+if [ "$code" -ne 0 ] || ! has_line "step b started" || [[ "$out" == *"step a started"* ]] || [[ "$err" != *"debug run: 1 of 2 steps (b); the run log is not saved"* ]]; then
+	fail "run --step" "want only step b; got $code: $out / $err"
+elif [ -e "$work/look/.truss/state/hello/run.log" ]; then
+	fail "run --step" "a debug run saved a run log"
+else
+	pass "run --step"
+fi
+run_truss "$work/look" run hello --step nope
+if [ "$code" -ne 1 ] || [[ "$err" != *'no step "nope"'* ]] || [[ "$out" == *"started"* ]]; then
+	fail "run --step with an unknown step" "want exit 1 and nothing started; got $code: $out / $err"
+else
+	pass "run --step with an unknown step"
+fi
 run_truss "$work/look" daemon status --json
 if [ "$code" -ne 1 ] || [[ "$out" != *'"running": false'* ]]; then
 	fail "daemon status --json when stopped" "want exit 1 and running false; got $code: $out"

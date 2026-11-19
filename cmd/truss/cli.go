@@ -22,6 +22,7 @@ Look around (read-only; most take --json):
   projects                            projects known to the daemon (needs it)
   flows [list]                        the flows of the project, and whether the daemon has them
   flows show <name|path>              one flow: schedules, environment names, steps
+  flows show <name|path> <step>       one step: command, needs, and the environment it can use
   flows graph <name|path>             the stages a flow runs its steps in
   pipelines show <name>               one registered pipeline with its latest runs
   schedules                           every schedule, soonest first (needs the daemon)
@@ -31,6 +32,10 @@ Look around (read-only; most take --json):
 Run here, without the daemon:
   run <name|path> [--track]           run a pipeline: a name from .truss/flows/ or a file path;
                                       --track also reports it to the daemon (needs it)
+  run <name|path> --step <id> | --from <id>
+                                      debug: run one step, or a step and what needs it;
+                                      add --with-needs to --step for what it needs; the run
+                                      log is not saved. --env NAME=VALUE overrides a variable
   validate [<name|path>]              check truss.yaml and every pipeline, or one pipeline,
                                       without running it
 
@@ -114,21 +119,17 @@ func RunWithInput(ctx context.Context, args []string, cwd string, env []string, 
 	in.args = args[1:]
 	switch args[0] {
 	case "run":
-		// --track is the only option of run; any other argument is the path,
-		// so a file named like a flag still runs (spec 001).
-		var pos []string
-		track := false
-		for _, a := range in.args {
-			if a == "--track" {
-				track = true
-			} else {
-				pos = append(pos, a)
-			}
+		// --track, --with-needs, --step, --from and --env are the options of
+		// run; any other argument is the path, so a file named like a flag
+		// still runs (spec 001, spec 023).
+		pos, opts, err := parseRunArgs(in.args)
+		if err != nil {
+			return in.fail(err)
 		}
 		if len(pos) > 1 {
 			return in.usage()
 		}
-		return runLocal(ctx, pos, track, cwd, env, stdout, stderr)
+		return runLocal(ctx, pos, opts, cwd, env, stdout, stderr)
 	case "secret":
 		return in.secret(ctx)
 	case "validate":

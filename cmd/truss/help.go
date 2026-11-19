@@ -31,12 +31,18 @@ many flows each has and how many run, are paused or are broken. Needs the daemon
 `,
 	"flows": `truss flows [list] [--json]
 truss flows show <name|path> [--json]
+truss flows show <name|path> <step> [--values] [--json]
 truss flows graph <name|path>
 
 Read the pipeline files of the project. Nothing runs and the daemon is optional.
   list    every flow with its steps, schedules and whether the daemon has it
   show    one flow: concurrency, overlap, environment and secret names (never
           values), schedules and a table of its steps
+  show <step>  one step: its command, the steps before and after it, its settings
+          and a table of the environment it can use: what is set and where it
+          comes from. Secrets show as set or missing, never a value. --values also
+          shows the values of host variables the command reads, except token-like
+          names and stored secrets
   graph   the order the steps run in, as stages; steps of a stage can run together
 `,
 	"pipelines": `truss pipelines [list] [--json]
@@ -74,8 +80,20 @@ log, this folder's project and whether the daemon runs. It prints no secret name
 and no values.
 `,
 	"run": `truss run <name|path> [--track]
+truss run <name|path> --step <id> [--with-needs]
+truss run <name|path> --from <id>
+truss run <name|path> [...] --env NAME=VALUE
 
 Run a pipeline here, without the daemon. --track also reports it to the daemon.
+
+Debug a flow: --step runs one step (the steps it needs are not run, as if they had
+succeeded; --with-needs runs them too), --from runs a step and every step that needs
+it. A debug run prints its log and does not replace the saved run log. --env sets or
+replaces a variable for the steps that run (repeatable); a secret is set with
+truss secret set, never here. --env, --step, --from and --with-needs are options, so
+a file named like one runs as ./--step. A debug run does not combine with --track.
+After a failed run, truss prints the command to run only the failed step.
+Inspect a step first: truss flows show <name> <step>
 `,
 	"validate": `truss validate [<name|path>]
 

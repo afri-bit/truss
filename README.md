@@ -264,6 +264,8 @@ conditions. A file has `steps` or `jobs`, never both. Every field is described i
 | | Command | |
 |---|---|---|
 | **Run here** | `truss run <name\|path> [--track]` | Run a pipeline now; with no argument it is an error that lists the pipelines. `--track` also reports it to the daemon |
+| **Debug** | `truss flows show <name\|path> <step>` | One step: its command, its neighbours and a table of the environment it can use (secrets as `set` or `missing`) |
+| | `truss run <name\|path> --step <id>` \| `--from <id>` | Run one step, or a step and what needs it (`--with-needs`, `--env NAME=VALUE`); the saved run log stays |
 | | `truss validate [<name\|path>]` | Check a pipeline and show its steps; with no argument, check the project and every pipeline |
 | **Secrets** | `truss secret set <name>` \| `list` \| `remove <name>` | Store credentials for `secrets:` in a file (value from stdin) |
 | **Daemon** | `truss daemon start` \| `stop` \| `status` | Manage the background service |
@@ -331,13 +333,10 @@ The same docs are also a website with search and a home page, built from `docs/`
 
 ## Roadmap
 
-After v0.1.0, roughly in this order. Scope and order may change.
-
-- **Desktop:** a packaged window with tray icon, notifications and start at login
-- **Pipelines:** matrix builds, artifacts
-- **Triggers:** file changes and webhooks
-- **Execution:** containers, then remote workers
-- **Ecosystem:** SDKs and CI-provider bridges, so the same file runs in CI
+[`docs/MILESTONE.md`](docs/MILESTONE.md) holds what each release contains and what comes next: further
+debugging (a shell in a step's environment, stepping), hooks, `truss mcp` for agents, a runner per
+step (containers, then remote workers) and a daemon reachable beyond localhost. Scope and order may
+change.
 
 ## Contributing
 

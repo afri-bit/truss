@@ -119,7 +119,7 @@ publish  compile,test  -        -        -   make publish
 ```
 
 Environment variable and secret **names** are listed so you can see what a flow depends on. Values
-are never printed. `flows graph` shows the order the steps run in:
+are never printed here; to see them for one step, use [`flows show <flow> <step>`](#debugging-a-step). `flows graph` shows the order the steps run in:
 
 ```console
 $ truss flows graph nightly
@@ -145,6 +145,99 @@ PROJECT  FLOWS  RUNNING  PAUSED  INVALID  ROOT
 shop     4      1        0       0        /home/me/work/shop
 docs     2      0        1       0        /home/me/work/docs
 ```
+
+## Debugging a step
+
+A flow fails at step 9 of 12. You do not want to run all of it again. Look at the step first,
+then run only that step.
+
+```console
+$ truss flows show ci build/package
+Flow          ci
+File          .truss/flows/ci.yaml
+Project       shop
+Step          build/package
+Job           build
+Needs         build/compile
+Needed by     deploy/push
+Directory     /home/me/work/shop
+Timeout       -
+Retries       0
+If            -
+Command
+  echo "packaging for $REGION/$STAGE"
+  npm publish --registry "$REGISTRY_URL"
+
+NAME             SOURCE            STATE        VALUE
+REGION           pipeline          set          eu
+STAGE            step              set          staging
+NPM_TOKEN        secret store      missing      -
+TRUSS_DATA_DIR   truss run         set          .truss/state/ci/data
+TRUSS_CACHE_DIR  truss run         set          .truss/state/ci/data/cache
+TRUSS_RUN_ID     daemon            daemon only  -
+TRUSS_PIPELINE   daemon            daemon only  -
+TRUSS_TRIGGER    daemon            daemon only  -
+REGISTRY_URL     host environment  not set      -
+```
+
+The table lists what the step can use and where each value comes from: your file (`pipeline`,
+`job <id>` or `step`, whichever layer wins), the secret store, TRUSS itself, or your shell
+(`host environment`). Here two things are wrong before anything runs: the secret `NPM_TOKEN` is
+`missing`, and the command reads `$REGISTRY_URL`, which nothing sets.
+
+- A secret shows `set` and `***`, or `missing`. Its value is never printed.
+- A variable whose name has `TOKEN`, `SECRET`, `PASSWORD`, `KEY`, `AUTH` or a similar word shows
+  `***`, wherever it comes from, so a screenshot is safe.
+- The `host environment` rows come from reading the command text for `$NAME`, `${NAME}`,
+  `%NAME%` and `$env:NAME` with upper case names. A script can read variables this does not find.
+  Add `--values` to see their values (`***` for token-like names and stored secrets).
+- `TRUSS_RUN_ID`, `TRUSS_PIPELINE` and `TRUSS_TRIGGER` are set only by the daemon. To try a step
+  as if the daemon ran it, give them with `--env`.
+
+`truss flows show ci build/package --json` prints the same as JSON.
+
+Now run only that step. The steps it needs are not run, and the step starts as if they had
+succeeded:
+
+```console
+$ truss run ci --step build/package --env REGISTRY_URL=https://registry.example.com
+debug run: 1 of 3 steps (build/package); the run log is not saved
+2026-11-19 20:58:29 ==== Setup: the environment the steps run in ====
+...
+2026-11-19 20:58:29 ==== Step build/package ====
+2026-11-19 20:58:29 step build/package started
+2026-11-19 20:58:29 step build/package | packaging for eu/staging
+```
+
+| Option | What it runs |
+|---|---|
+| `--step <id>` | Only that step. |
+| `--step <id> --with-needs` | That step and every step it needs, directly or not. |
+| `--from <id>` | That step and every step that needs it, directly or not. |
+| `--env NAME=VALUE` | Sets or replaces a variable for the steps that run. Repeat it for more. A secret is refused: use `truss secret set`. |
+
+A debug run prints its log but does not save it: the `run.log` of your last real run stays. It uses
+the flow's data and cache folders, so files an earlier run left are still there. It keeps the
+step's settings (`timeout`, `retries`, `dir`, `env`, `secrets`) and its own `if`; the `if` of a
+job of the step you named is not evaluated, because you named it; other jobs keep theirs, so
+`--from` never starts a deploy the flow would skip. An `--env` value is seen by `if` conditions,
+like any variable of the step. It does not combine with `--track`.
+
+When a `truss run` fails, TRUSS tells you the command for the failed step, on standard error:
+
+```console
+$ truss run ci
+...
+to run only this step again: truss run ci --step build/package
+```
+
+The hint does not repeat your `--env` options; add them. It is printed only when the flow and the
+step id are plain words (letters, digits and `_ . / : @ + = -`, and `\` on Windows; not starting
+with `-`, `@` or `=`), because quoting differs between shells and a step id can be any text.
+
+An `--env` value is an argument, so other users of the machine can see it in the process list. Put
+credentials in the secret store (`truss secret set`) and name them in `secrets:`; `--env` refuses a
+name a step declares as a secret.
 
 ## What is scheduled
 
