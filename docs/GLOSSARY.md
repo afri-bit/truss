@@ -48,6 +48,11 @@ An individual unit of work inside a pipeline.
   run: go test ./...
 ```
 
+### Debug Run
+
+A run of part of a flow, started with `truss run <flow> --step <id>` or `--from <id>`. It prints
+its log and does not replace the saved run log. See [Debugging a step](cli-guide.md#debugging-a-step).
+
 ### Step Run
 
 A single execution instance of a step within a pipeline run.
