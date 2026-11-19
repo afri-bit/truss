@@ -63,10 +63,10 @@ exits `1`.
 | `truss run <name\|path> --step <id> [--with-needs]` | A debug run: only that step. The steps it needs are not run and the step starts as if they had succeeded; `--with-needs` runs them too. The log is printed, and the saved `run.log` is not replaced. |
 | `truss run <name\|path> --from <id>` | A debug run of the step and every step that needs it. Jobs after the step keep their `if`; only the job of the step you named loses it. |
 | `truss run <name\|path> --env NAME=VALUE` | Sets or replaces an environment variable for the steps that run, above everything in the file. Repeatable; works with a whole run too. A secret cannot be set this way: use `truss secret set`. |
-
-A debug run does not combine with `--track`. `--step`, `--from`, `--with-needs` and `--env` are options of `run`, so a file named like one runs as `./--step`. When a `truss run` fails, it prints on standard error the command to run only the failed step (`to run only this step again: truss run <flow> --step <id>`), without your `--env` options; it leaves the command out when the flow or the id has anything but letters, digits and `_ . / : @ + = , -`.
 | `truss validate [<name\|path>]` | Checks one pipeline and prints its schedules and steps. With no argument, checks `truss.yaml` and every pipeline. Runs nothing. |
 | `truss help`, `truss version` | Usage and version. |
+
+A debug run does not combine with `--track`. `--step`, `--from`, `--with-needs` and `--env` are options of `run`, so a file named like one runs as `./--step`. When a `truss run` fails, it prints on standard error the command to run only the failed step (`to run only this step again: truss run <flow> --step <id>`), without your `--env` options. The command is printed only when the flow and the id are plain words: letters, digits and `_ . / : @ + = -` (and `\` on Windows), not starting with `-`, `@` or `=`.
 
 `truss run` does not talk to the daemon, so the run does not appear in `truss runs` or in Desktop (add `--track`, below). It prints the run log as it happens and keeps the last one in `.truss/state/<name>/run.log`.
 Interrupting it (Ctrl-C) ends every running step. Schedules in the file are ignored: `run`

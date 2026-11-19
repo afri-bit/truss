@@ -38,13 +38,14 @@ steps around it, with inputs of their choice.
   and changes nothing (no file, no folder, no daemon call). `<step>` is the step id as `flows show`
   lists it: `job/step` for a step of a job. It prints: the flow, file and project; the step id and
   job; the command (all lines of `run`); the directory it starts in (worked out as a run works it
-  out: an absolute `dir` as it is, a relative one joined to the project, and the reason when a run
+  out: an absolute `dir` as it is, a relative one joined to the directory the run starts in, and the reason when a run
   would refuse it); the steps it needs and the
   steps that need it; its timeout, retries, retry delay, `continue-on-error` and `if` (and the job's
   `if`); then the environment table (FR-003). Text goes through the same cleaning as the other
   screens (spec 022 FR-014).
 - **FR-002** A step id that does not exist is an error (exit `1`) that names the step and lists the
-  ids of the flow. A flow that does not load is the error of `flows show`.
+  ids of the flow. A flow that does not load is the error of `flows show`. These errors are plain
+  messages on standard error, also with `--json`: no JSON document is printed for them.
 - **FR-003** The environment table has one row per variable the step can use, with columns `NAME`,
   `SOURCE`, `STATE` and `VALUE`:
   - **declared**: every variable in `env` at the pipeline, job or step level that reaches the step.
@@ -105,7 +106,8 @@ steps around it, with inputs of their choice.
   whole run. `NAME` must be a valid name (letters, digits, `_`, not starting with a digit); a
   malformed option is an error (exit `1`) that does not repeat the text it was given. A `NAME` that a selected step declares in `secrets` is an
   error that says to use `truss secret set`: a secret value is never an argument (spec 012). Names
-  are compared without regard to case on Windows, for this refusal and for which variable wins.
+  are compared without regard to case on Windows, for this refusal and for which variable wins; of
+  two overrides that differ only in case, the later one wins.
   An override is seen by `if` conditions (`env.NAME`), as any variable of the step is. Values are
   not written to the run log, as before. An argument is visible to other users of the machine in
   its process list, which the docs say.
@@ -120,8 +122,8 @@ steps around it, with inputs of their choice.
   one line to standard error after the summary:
   `to run only this step again: truss run <flow> --step <id>` (`<flow>` as the user wrote it, and
   without the `--env` options the run had). The line is a command to paste, so it is printed only
-  when `<flow>` and `<id>` are plain words: letters, digits and `_ . / : @ + = , -` (and `\` on
-  Windows), not starting with a dash. Otherwise the line says to use `truss run --step` with the
+  when `<flow>` and `<id>` are plain words: letters, digits and `_ . / : @ + = -` (and `\` on
+  Windows), not starting with `-`, `@` or `=` (PowerShell and zsh read those specially). Otherwise the line says to use `truss run --step` with the
   step's id, quoted for the shell, and repeats neither. A debug run prints no such line. Nothing
   else about a failed run changes.
 
@@ -138,7 +140,7 @@ Additive, with these precise rules so a script never changes meaning:
 
 - `truss flows show <flow> <step>` printed the usage text (exit `1`) before; `flows show <flow>`
   is unchanged.
-- `truss run <x>` is unchanged when none of `--step`, `--from`, `--with-needs` or `--env` is given.
+- `truss run <x>` behaves as before, apart from the line on failure below, when none of `--step`, `--from`, `--with-needs` or `--env` is given.
   As `--track` does today (spec 001), these four words are options, so a file literally named
   `--step` runs as `truss run ./--step`. The forms `--step=<id>`, `--from=<id>` and
   `--env=NAME=VALUE` are options too; `--track=x` and `--with-needs=x` stay paths.

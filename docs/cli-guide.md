@@ -155,6 +155,7 @@ then run only that step.
 $ truss flows show ci build/package
 Flow          ci
 File          .truss/flows/ci.yaml
+Project       shop
 Step          build/package
 Job           build
 Needs         build/compile
@@ -231,8 +232,8 @@ to run only this step again: truss run ci --step build/package
 ```
 
 The hint does not repeat your `--env` options; add them. It is printed only when the flow and the
-step id are plain words (letters, digits and `_ . / : @ + = , -`), because quoting differs between
-shells and a step id can be any text.
+step id are plain words (letters, digits and `_ . / : @ + = -`, and `\` on Windows; not starting
+with `-`, `@` or `=`), because quoting differs between shells and a step id can be any text.
 
 An `--env` value is an argument, so other users of the machine can see it in the process list. Put
 credentials in the secret store (`truss secret set`) and name them in `secrets:`; `--env` refuses a

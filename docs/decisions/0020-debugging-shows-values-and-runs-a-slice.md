@@ -37,7 +37,7 @@ the pipeline's process execution and the handling of secrets are public contract
    not combine with `--track`.
 6. **The failure hint.** A failed local run prints the command to run only the failed step, on
    standard error, so a script reading standard output or the log is not affected. It is printed
-   as a command only when the flow and the id are plain words: shells quote differently and a step
+   as a command only when the flow and the id are plain words (no comma, nothing PowerShell or zsh read specially at the start): shells quote differently and a step
    id is free text, so quoting for one shell would let another run code from a file the user did
    not read. Otherwise it names `--step` and leaves the command out.
 
