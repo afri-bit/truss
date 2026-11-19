@@ -41,6 +41,7 @@ func flatten(p Pipeline) []Step {
 	if len(p.Jobs) == 0 {
 		steps := make([]Step, len(p.Steps))
 		for i, s := range p.Steps {
+			s.EnvSource = envSource(layer{"pipeline", p.Env}, layer{"step", s.Env})
 			s.Env = mergeEnv(p.Env, s.Env)
 			s.Secrets = mergeNames(p.Secrets, s.Secrets)
 			if s.Dir == "" {
@@ -66,6 +67,7 @@ func flatten(p Pipeline) []Step {
 			s.ID = joinID(job.ID, s.ID)
 			s.Job, s.JobFirst, s.JobIf = job.ID, i == 0, job.If
 			s.Needs = needs
+			s.EnvSource = envSource(layer{"pipeline", p.Env}, layer{"job " + job.ID, job.Env}, layer{"step", s.Env})
 			s.Env = mergeEnv(p.Env, job.Env, s.Env)
 			s.Secrets = mergeNames(p.Secrets, job.Secrets, s.Secrets)
 			// The nearest setting wins: step, job, then pipeline workdir.
@@ -80,6 +82,28 @@ func flatten(p Pipeline) []Step {
 		}
 	}
 	return steps
+}
+
+// layer is one level of environment variables and the name it is shown under.
+type layer struct {
+	label string
+	env   map[string]string
+}
+
+// envSource returns, for every variable in the layers, the label of the
+// layer that wins (the last one that sets it). It returns nil when no layer
+// sets anything.
+func envSource(layers ...layer) map[string]string {
+	var out map[string]string
+	for _, l := range layers {
+		for k := range l.env {
+			if out == nil {
+				out = make(map[string]string)
+			}
+			out[k] = l.label
+		}
+	}
+	return out
 }
 
 // mergeEnv returns one map holding every layer; later layers win.
