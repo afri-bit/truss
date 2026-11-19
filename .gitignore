@@ -71,3 +71,5 @@ node_modules/
 
 # Local knowledge-graph output (graphify)
 graphify-out/
+
+.ignore/
