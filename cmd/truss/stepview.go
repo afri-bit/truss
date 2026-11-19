@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strings"
 
+	"github.com/afri-bit/truss/internal/engine"
 	"github.com/afri-bit/truss/internal/home"
 	"github.com/afri-bit/truss/internal/pipeline"
 	"github.com/afri-bit/truss/internal/project"
@@ -47,13 +47,16 @@ type envRow struct {
 	Value  *string `json:"value,omitempty"`
 }
 
-// stepInfo is the step itself in the JSON of the step view.
+// stepInfo is the step itself in the JSON of the step view. RunDir is the
+// directory the step starts in, worked out as a run works it out; DirError
+// says why it cannot be, and then RunDir is empty.
 type stepInfo struct {
 	ID         string   `json:"id"`
 	Job        string   `json:"job,omitempty"`
 	Run        string   `json:"run"`
 	Dir        string   `json:"dir,omitempty"`
 	RunDir     string   `json:"run_dir"`
+	DirError   string   `json:"dir_error,omitempty"`
 	Needs      []string `json:"needs"`
 	NeededBy   []string `json:"needed_by"`
 	Timeout    string   `json:"timeout,omitempty"`
@@ -68,6 +71,7 @@ type stepInfo struct {
 type stepDoc struct {
 	Flow        string   `json:"flow"`
 	File        string   `json:"file"`
+	Project     string   `json:"project,omitempty"`
 	Step        stepInfo `json:"step"`
 	Environment []envRow `json:"environment"`
 }
@@ -75,43 +79,57 @@ type stepDoc struct {
 // sensitiveName matches the names whose values are never printed: a screen
 // can end up in a screenshot (ADR 0020). It is a safeguard against accidents,
 // not a defence against a file that prints a variable itself.
-var sensitiveName = regexp.MustCompile(`(?i)TOKEN|SECRET|PASSWORD|PASSWD|PASSPHRASE|CREDENTIAL|PRIVATE|AUTH|KEY`)
+var sensitiveName = regexp.MustCompile(`(?i)TOKEN|SECRET|PASS|CREDENTIAL|PRIVATE|AUTH|KEY|DSN|COOKIE|SESSION|JWT|BEARER|WEBHOOK`)
 
-// Forms in which a command reads a variable: $NAME, ${NAME}, ${NAME:-x},
-// %NAME% and $env:NAME. Only upper case names count, which leaves out the
-// loop variables and locals of most scripts.
-var referencePatterns = []*regexp.Regexp{
-	regexp.MustCompile(`\$\{([A-Z_][A-Z0-9_]*)`),
-	regexp.MustCompile(`\$([A-Z_][A-Z0-9_]*)`),
-	regexp.MustCompile(`%([A-Z_][A-Z0-9_]*)%`),
-	regexp.MustCompile(`\$env:([A-Z_][A-Z0-9_]*)`),
-}
+// readPattern finds the forms in which a command reads a variable: $env:NAME
+// (any case of "env"), ${NAME, $NAME and %NAME%. Each name is a whole
+// identifier, so $Home is "Home" and not "H".
+var readPattern = regexp.MustCompile(`(?i:\$env:)([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)|\$([A-Za-z_][A-Za-z0-9_]*)|%([A-Za-z_][A-Za-z0-9_]*)%`)
+
+// Forms in which a command sets a variable itself: NAME=value after a
+// space, a separator or a quote (also cmd's set "NAME=x"), $env:NAME = value,
+// and for NAME in.
+var (
+	assignPattern   = regexp.MustCompile(`(?m)(?:^|[\s;&|("])([A-Za-z_][A-Za-z0-9_]*)=`)
+	psAssignPattern = regexp.MustCompile(`(?i:\$env:)([A-Za-z_][A-Za-z0-9_]*)\s*=`)
+	forPattern      = regexp.MustCompile(`\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\b`)
+)
 
 // references returns, sorted, the variable names a command reads and does not
-// set itself (NAME=value, or for NAME in).
+// set itself. A name counts when it is upper case, digits and _, which leaves
+// out the loop variables and locals of most scripts; %NAME% needs two
+// characters, so date formats such as %Y%m do not count. The scan is linear in
+// the length of the command.
 func references(run string) []string {
-	found := map[string]bool{}
-	for _, re := range referencePatterns {
+	assigned := map[string]bool{}
+	for _, re := range []*regexp.Regexp{assignPattern, psAssignPattern, forPattern} {
 		for _, m := range re.FindAllStringSubmatch(run, -1) {
-			found[m[1]] = true
+			assigned[m[1]] = true
 		}
 	}
-	var out []string
-	for name := range found {
-		q := regexp.QuoteMeta(name)
-		if regexp.MustCompile(`(?m)(^|[\s;&|(])`+q+`=`).MatchString(run) ||
-			regexp.MustCompile(`(?m)\bfor\s+`+q+`\b`).MatchString(run) {
-			continue
+	found := map[string]bool{}
+	for _, m := range readPattern.FindAllStringSubmatch(run, -1) {
+		for i, name := range m[1:] {
+			if name == "" || name == "_" || name != strings.ToUpper(name) || assigned[name] {
+				continue
+			}
+			if i == 3 && len(name) < 2 { // %X%
+				continue
+			}
+			found[name] = true
 		}
+	}
+	out := make([]string, 0, len(found))
+	for name := range found {
 		out = append(out, name)
 	}
 	sort.Strings(out)
 	return out
 }
 
-// stepView builds what `flows show <flow> <step>` prints. root is the project
-// root, env the environment of this invocation, stored the secrets store
-// (opened lazily so a step without secrets needs no TRUSS home).
+// stepView builds what `flows show <flow> <step>` prints. The secrets store is
+// opened only when the step declares secrets or showValues needs the stored
+// values, so a step without them needs no TRUSS home.
 func (in invocation) stepView(file pipelineFile, def pipeline.Pipeline, id string, showValues bool) (stepDoc, error) {
 	plan, err := pipeline.Plan(def)
 	if err != nil {
@@ -136,9 +154,17 @@ func (in invocation) stepView(file pipelineFile, def pipeline.Pipeline, id strin
 	}
 
 	d := stepDoc{Flow: plan.Name, File: file.display, Environment: []envRow{}}
-	d.Step = stepInfo{ID: step.ID, Job: step.Job, Run: step.Run, Dir: step.Dir, RunDir: root,
+	if _, name := projectOfFile(file.path); name != "" {
+		d.Project = name
+	}
+	d.Step = stepInfo{ID: step.ID, Job: step.Job, Run: step.Run, Dir: step.Dir,
 		Needs: nonNil(step.Needs), NeededBy: nonNil(plan.NeededBy(step.ID)),
 		Retries: step.Retries, ContinueOn: step.ContinueOnError}
+	if dir, err := engine.StepDir(root, step.Dir); err != nil {
+		d.Step.DirError = err.Error()
+	} else {
+		d.Step.RunDir = dir
+	}
 	if step.Timeout > 0 {
 		d.Step.Timeout = step.Timeout.String()
 	}
@@ -152,19 +178,7 @@ func (in invocation) stepView(file pipelineFile, def pipeline.Pipeline, id strin
 		d.Step.JobIf = step.JobIf.String()
 	}
 
-	// Declared variables, then secrets, then what TRUSS sets, then what the
-	// command reads from the host.
-	taken := map[string]bool{}
-	for _, name := range sortedStrings(step.Env) {
-		taken[name] = true
-		v := step.Env[name]
-		if sensitiveName.MatchString(name) {
-			v = masked
-		}
-		d.Environment = append(d.Environment, envRow{Name: name, Source: step.EnvSource[name], Kind: kindDeclared, State: stateSet, Value: &v})
-	}
-
-	var stored map[string]string // loaded only when --values needs the secret values
+	var stored []string // the values of the stored secrets; read only for --values
 	var storedNames map[string]bool
 	if len(step.Secrets) > 0 || showValues {
 		h, err := home.Resolve(in.env)
@@ -178,41 +192,78 @@ func (in invocation) stepView(file pipelineFile, def pipeline.Pipeline, id strin
 		}
 		storedNames = map[string]bool{}
 		for _, n := range names {
-			storedNames[n] = true
+			storedNames[pipeline.EnvKey(n)] = true
 		}
 		if showValues {
-			if stored, err = store.Load(); err != nil {
+			all, err := store.Load()
+			if err != nil {
 				return stepDoc{}, err
+			}
+			for _, v := range all {
+				if v != "" {
+					stored = append(stored, v)
+				}
 			}
 		}
 	}
+	// holdsSecret reports whether a value contains a stored secret, which a
+	// screen must not print even as a part of a longer value.
+	holdsSecret := func(v string) bool {
+		for _, s := range stored {
+			if strings.Contains(v, s) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// What a step receives, later winning: the base environment of the run
+	// (the TRUSS variables), then the file's variables, then the secrets. A
+	// name appears once, in the row of the layer that wins.
+	isSecret := map[string]bool{}
 	for _, name := range step.Secrets {
-		taken[name] = true
+		isSecret[pipeline.EnvKey(name)] = true
+	}
+	taken := map[string]bool{}
+	for _, name := range sortedStrings(step.Env) {
+		if isSecret[pipeline.EnvKey(name)] {
+			continue
+		}
+		taken[pipeline.EnvKey(name)] = true
+		v := step.Env[name]
+		if sensitiveName.MatchString(name) || holdsSecret(v) {
+			v = masked
+		}
+		d.Environment = append(d.Environment, envRow{Name: name, Source: step.EnvSource[name], Kind: kindDeclared, State: stateSet, Value: &v})
+	}
+	for _, name := range step.Secrets {
+		taken[pipeline.EnvKey(name)] = true
 		row := envRow{Name: name, Source: "secret store", Kind: kindSecret, State: stateMissing}
-		if storedNames[name] {
+		if storedNames[pipeline.EnvKey(name)] {
 			v := masked
 			row.State, row.Value = stateSet, &v
 		}
 		d.Environment = append(d.Environment, row)
 	}
-
 	for _, t := range []struct{ name, value string }{{"TRUSS_DATA_DIR", st.Data}, {"TRUSS_CACHE_DIR", st.Cache}} {
-		taken[t.name] = true
+		if taken[pipeline.EnvKey(t.name)] {
+			continue
+		}
+		taken[pipeline.EnvKey(t.name)] = true
 		v := t.value
 		d.Environment = append(d.Environment, envRow{Name: t.name, Source: "truss run", Kind: kindTruss, State: stateSet, Value: &v})
 	}
 	for _, name := range []string{"TRUSS_RUN_ID", "TRUSS_PIPELINE", "TRUSS_TRIGGER"} {
-		taken[name] = true
+		if taken[pipeline.EnvKey(name)] {
+			continue
+		}
+		taken[pipeline.EnvKey(name)] = true
 		d.Environment = append(d.Environment, envRow{Name: name, Source: "daemon", Kind: kindTruss, State: stateDaemonOnly})
 	}
 
 	hostEnv := envLookup(in.env)
-	secretValues := map[string]bool{}
-	for _, v := range stored {
-		secretValues[v] = true
-	}
 	for _, name := range references(step.Run) {
-		if taken[name] {
+		if taken[pipeline.EnvKey(name)] {
 			continue
 		}
 		row := envRow{Name: name, Source: "host environment", Kind: kindReferenced, State: stateNotSet}
@@ -220,7 +271,7 @@ func (in invocation) stepView(file pipelineFile, def pipeline.Pipeline, id strin
 			row.State = stateSet
 			switch {
 			case !showValues:
-			case sensitiveName.MatchString(name) || secretValues[v]:
+			case sensitiveName.MatchString(name) || holdsSecret(v):
 				m := masked
 				row.Value = &m
 			default:
@@ -233,26 +284,18 @@ func (in invocation) stepView(file pipelineFile, def pipeline.Pipeline, id strin
 }
 
 // envLookup returns a function that reads a variable of an environment list.
-// The last entry wins, as when a process starts.
+// The last entry wins, as when a process starts, and names are compared the
+// way the host does.
 func envLookup(env []string) func(string) (string, bool) {
 	return func(name string) (string, bool) {
 		value, ok := "", false
 		for _, kv := range env {
-			if k, v, has := strings.Cut(kv, "="); has && envNamesEqual(k, name) {
+			if k, v, has := strings.Cut(kv, "="); has && pipeline.EnvKey(k) == pipeline.EnvKey(name) {
 				value, ok = v, true
 			}
 		}
 		return value, ok
 	}
-}
-
-// envNamesEqual compares variable names the way the host does: Windows
-// ignores case, the other systems do not.
-func envNamesEqual(a, b string) bool {
-	if runtime.GOOS == "windows" {
-		return strings.EqualFold(a, b)
-	}
-	return a == b
 }
 
 func nonNil(s []string) []string {
@@ -275,7 +318,7 @@ func sortedStrings(m map[string]string) []string {
 func (in invocation) stepShow(ctx context.Context, file pipelineFile, id string, flags map[string]string) int {
 	l, err := load(ctx, file)
 	if err != nil {
-		return in.fail(fmt.Errorf("%s: %s", file.display, firstLine(err.Error())))
+		return in.fail(fmt.Errorf("%s: %s", file.display, clean(firstLine(err.Error()))))
 	}
 	d, err := in.stepView(file, l.def, id, flags["values"] != "")
 	if err != nil {
@@ -301,16 +344,22 @@ func (in invocation) writeStep(d stepDoc) {
 	s := d.Step
 	line("Flow", d.Flow)
 	line("File", d.File)
+	if d.Project != "" {
+		line("Project", d.Project)
+	}
 	line("Step", s.ID)
 	if s.Job != "" {
 		line("Job", s.Job)
 	}
 	line("Needs", list(s.Needs))
 	line("Needed by", list(s.NeededBy))
-	if s.Dir == "" {
+	switch {
+	case s.DirError != "":
+		line("Directory", "cannot be used: "+s.DirError)
+	case s.Dir != "":
+		line("Directory", s.RunDir+" (dir: "+s.Dir+")")
+	default:
 		line("Directory", s.RunDir)
-	} else {
-		line("Directory", s.Dir+" (relative to "+s.RunDir+")")
 	}
 	line("Timeout", dash(s.Timeout))
 	line("Retries", fmt.Sprint(s.Retries))
@@ -329,13 +378,14 @@ func (in invocation) writeStep(d stepDoc) {
 		fmt.Fprintf(w, "  %s\n", clean(strings.TrimRight(l, "\r")))
 	}
 	fmt.Fprintln(w)
+	root := workingRoot(in.cwd)
 	rows := [][]string{{"NAME", "SOURCE", "STATE", "VALUE"}}
 	for _, r := range d.Environment {
 		state, value := strings.ReplaceAll(r.State, "-", " "), "-"
 		if r.Value != nil {
 			value = *r.Value
-			if r.Kind == kindTruss {
-				if rel, err := filepath.Rel(s.RunDir, value); err == nil {
+			if r.Kind == kindTruss { // a path of the project, shown from its root
+				if rel, err := filepath.Rel(root, value); err == nil {
 					value = rel
 				}
 			}

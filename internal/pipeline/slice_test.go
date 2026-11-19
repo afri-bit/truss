@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -276,5 +277,83 @@ func TestSlice_NoStepMeansTheWholePipeline(t *testing.T) {
 	}
 	if _, err := Slice(sliceFlow(t), Selection{Env: map[string]string{"TOKEN": "o"}}); err == nil {
 		t.Error("a secret may not be overridden in a whole run either")
+	}
+}
+
+func TestSlice_OtherJobsKeepTheirCondition(t *testing.T) {
+	// Only the job of the named step loses its condition. A step pulled in by
+	// --from keeps the guard of its job: the user did not name it.
+	from, err := Slice(sliceFlow(t), Selection{Step: "lint/version", Mode: From})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range from.Steps {
+		if s.ID == "test/unit" && (s.JobIf == nil || s.JobIf.String() != "env.CI == 'yes'") {
+			t.Errorf("--from dropped the condition of job test: %v", s.JobIf)
+		}
+	}
+	// With the needs of a named step, the named job's own condition goes and
+	// the conditions of the jobs it needs stay.
+	guarded := sliceFlow(t)
+	cond, err := ParseCondition("env.LINT == 'yes'")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guarded.Jobs[0].If = cond
+	got, err := Slice(guarded, Selection{Step: "test/unit", Mode: WithNeeds})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range got.Steps {
+		switch s.Job {
+		case "test":
+			if s.JobIf != nil {
+				t.Errorf("%s: the named job's condition must go", s.ID)
+			}
+		case "lint":
+			if s.JobIf == nil {
+				t.Errorf("%s: the condition of a job that was not named must stay", s.ID)
+			}
+		}
+	}
+}
+
+func TestSlice_NamesFoldOnWindows(t *testing.T) {
+	foldEnvNames = true
+	t.Cleanup(func() { foldEnvNames = runtime.GOOS == "windows" })
+	got, err := Slice(sliceFlow(t), Selection{Step: "lint/linux", Env: map[string]string{"a": "lower", "p": "q"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := got.Steps[0].Env
+	if env["a"] != "lower" || env["p"] != "q" {
+		t.Errorf("Env = %v", env)
+	}
+	if _, ok := env["A"]; ok {
+		t.Errorf("the host would see A and a as one variable, and the file's A must not win: %v", env)
+	}
+	if _, ok := env["P"]; ok {
+		t.Errorf("P: %v", env)
+	}
+	if _, err := Slice(sliceFlow(t), Selection{Step: "lint/linux", Env: map[string]string{"token": "x"}}); err == nil {
+		t.Error("a secret may not be overridden under another case on Windows")
+	}
+	if EnvKey("Path") != "PATH" {
+		t.Errorf("EnvKey = %q", EnvKey("Path"))
+	}
+}
+
+func TestSlice_NamesDoNotFoldElsewhere(t *testing.T) {
+	foldEnvNames = false
+	t.Cleanup(func() { foldEnvNames = runtime.GOOS == "windows" })
+	got, err := Slice(sliceFlow(t), Selection{Step: "lint/linux", Env: map[string]string{"a": "lower"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Steps[0].Env["A"] != "step" || got.Steps[0].Env["a"] != "lower" {
+		t.Errorf("Env = %v: a and A are two variables here", got.Steps[0].Env)
+	}
+	if _, err := Slice(sliceFlow(t), Selection{Step: "lint/linux", Env: map[string]string{"token": "x"}}); err != nil {
+		t.Errorf("token is not TOKEN here: %v", err)
 	}
 }

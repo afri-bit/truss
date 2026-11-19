@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Spec 023: inspect one step and run a slice of a flow.
@@ -24,7 +26,7 @@ jobs:
         env: {MODE: step}
         secrets: [NPM_TOKEN]
         run: |
-          echo pack $REGION $UNSET_VAR ${HOME_DIR:-x} %WIN_VAR% $MY_API_TOKEN $OTHER
+          echo pack $REGION $TRUSSDBG_UNSET ${TRUSSDBG_HOME:-x} %TRUSSDBG_WIN% $TRUSSDBG_API_TOKEN $TRUSSDBG_OTHER
           for ITEM in a b; do echo $ITEM; done
           LOCAL_ONE=1; echo $LOCAL_ONE; echo $lowercase
   ship:
@@ -92,9 +94,9 @@ func TestStepInspect_EnvironmentTable(t *testing.T) {
 	wantRow(t, out, "NPM_TOKEN", "NPM_TOKEN", `secret store`, "missing", "-")
 	wantRow(t, out, "TRUSS_DATA_DIR", "TRUSS_DATA_DIR", `truss run`, "set", `\.truss\S*dbg\S*data`)
 	wantRow(t, out, "TRUSS_RUN_ID", "TRUSS_RUN_ID", "daemon", `daemon only`, "-")
-	wantRow(t, out, "UNSET_VAR", "UNSET_VAR", `host environment`, `not set`, "-")
-	wantRow(t, out, "HOME_DIR", "HOME_DIR", `host environment`, `not set`, "-")
-	wantRow(t, out, "WIN_VAR", "WIN_VAR", `host environment`, `not set`, "-")
+	wantRow(t, out, "TRUSSDBG_UNSET", "TRUSSDBG_UNSET", `host environment`, `not set`, "-")
+	wantRow(t, out, "TRUSSDBG_HOME", "TRUSSDBG_HOME", `host environment`, `not set`, "-")
+	wantRow(t, out, "TRUSSDBG_WIN", "TRUSSDBG_WIN", `host environment`, `not set`, "-")
 	for _, not := range []string{"ITEM", "LOCAL_ONE", "lowercase"} {
 		for _, l := range strings.Split(out, "\n") {
 			if f := strings.Fields(l); len(f) > 0 && f[0] == not {
@@ -134,16 +136,16 @@ func TestStepInspect_SecretsAreSetOrMissingNeverTheValue(t *testing.T) {
 func TestStepInspect_HostValuesOnlyWithValues(t *testing.T) {
 	s := debugSession(t)
 	s.setSecret("NPM_TOKEN", "stored-value")
-	s.env = append(s.env, "UNSET_VAR=visible-value", "MY_API_TOKEN=token-value", "OTHER=stored-value")
+	s.env = append(s.env, "TRUSSDBG_UNSET=visible-value", "TRUSSDBG_API_TOKEN=token-value", "TRUSSDBG_OTHER=stored-value")
 	plain := s.ok("flows", "show", "dbg", "build/package")
-	wantRow(t, plain, "UNSET_VAR", "UNSET_VAR", `host environment`, "set", "-")
+	wantRow(t, plain, "TRUSSDBG_UNSET", "TRUSSDBG_UNSET", `host environment`, "set", "-")
 	if strings.Contains(plain, "visible-value") {
 		t.Errorf("a host value was printed without --values:\n%s", plain)
 	}
 	shown := s.ok("flows", "show", "dbg", "build/package", "--values")
-	wantRow(t, shown, "UNSET_VAR", "UNSET_VAR", `host environment`, "set", "visible-value")
-	wantRow(t, shown, "MY_API_TOKEN", "MY_API_TOKEN", `host environment`, "set", `\*\*\*`)
-	wantRow(t, shown, "OTHER", "OTHER", `host environment`, "set", `\*\*\*`)
+	wantRow(t, shown, "TRUSSDBG_UNSET", "TRUSSDBG_UNSET", `host environment`, "set", "visible-value")
+	wantRow(t, shown, "TRUSSDBG_API_TOKEN", "TRUSSDBG_API_TOKEN", `host environment`, "set", `\*\*\*`)
+	wantRow(t, shown, "TRUSSDBG_OTHER", "TRUSSDBG_OTHER", `host environment`, "set", `\*\*\*`)
 	for _, v := range []string{"token-value", "stored-value"} {
 		if strings.Contains(shown, v) {
 			t.Errorf("--values printed %q:\n%s", v, shown)
@@ -153,7 +155,7 @@ func TestStepInspect_HostValuesOnlyWithValues(t *testing.T) {
 
 func TestStepInspect_JSON(t *testing.T) {
 	s := debugSession(t)
-	s.env = append(s.env, "UNSET_VAR=visible-value")
+	s.env = append(s.env, "TRUSSDBG_UNSET=visible-value")
 	raw := s.ok("flows", "show", "dbg", "build/package", "--json")
 	d := decode[stepDoc](t, raw)
 	if d.Flow != "dbg" || d.Step.ID != "build/package" || d.Step.Job != "build" || !strings.Contains(d.Step.Run, "echo pack") {
@@ -181,8 +183,8 @@ func TestStepInspect_JSON(t *testing.T) {
 	if r := got["TRUSS_RUN_ID"]; r.Kind != "truss" || r.State != "daemon-only" || r.Value != nil {
 		t.Errorf("TRUSS_RUN_ID = %+v", r)
 	}
-	if r := got["UNSET_VAR"]; r.Kind != "referenced" || r.State != "set" || r.Value != nil {
-		t.Errorf("UNSET_VAR = %+v, the value needs --values", r)
+	if r := got["TRUSSDBG_UNSET"]; r.Kind != "referenced" || r.State != "set" || r.Value != nil {
+		t.Errorf("TRUSSDBG_UNSET = %+v, the value needs --values", r)
 	}
 	if strings.Contains(raw, "visible-value") || strings.Contains(raw, "abc-do-not-print") {
 		t.Errorf("json prints a value it must not:\n%s", raw)
@@ -461,16 +463,228 @@ func TestRun_AnyOtherArgumentIsStillThePath(t *testing.T) {
 	}
 }
 
-func TestShellWord(t *testing.T) {
-	for in, want := range map[string]string{
-		"build/package":    "build/package",
-		".truss/flows/a.y": ".truss/flows/a.y",
-		"my flow.yaml":     `"my flow.yaml"`,
-		`a"b`:              `"a\"b"`,
-		"":                 `""`,
+func TestRerunHint(t *testing.T) {
+	plain := "to run only this step again: truss run bad --step build/package"
+	if got := rerunHint("bad", "build/package"); got != plain {
+		t.Errorf("hint = %q", got)
+	}
+	for _, c := range []struct{ flow, step string }{
+		{"bad", "x$(touch pwned)"},
+		{"bad", "x`id`"},
+		{"bad", "x%PATH%"},
+		{"bad", `a"b`},
+		{"bad", "two words"},
+		{"bad", "-dash"},
+		{"bad", ""},
+		{"my flow.yaml", "a"},
+		{"a$b", "a"},
 	} {
-		if got := shellWord(in); got != want {
-			t.Errorf("shellWord(%q) = %s, want %s", in, got, want)
+		got := rerunHint(c.flow, c.step)
+		if strings.Contains(got, "truss run "+c.flow) || strings.ContainsAny(got, "$`%") {
+			t.Errorf("rerunHint(%q, %q) = %q: a command that is not safe to paste", c.flow, c.step, got)
 		}
+		if !strings.Contains(got, "--step") {
+			t.Errorf("rerunHint(%q, %q) = %q: it should still name --step", c.flow, c.step, got)
+		}
+	}
+}
+
+func TestStepInspect_ProjectAndDirectory(t *testing.T) {
+	s := debugSession(t)
+	out := s.ok("flows", "show", "dbg", "build/compile")
+	if !regexp.MustCompile(`(?m)^Project\s+demo$`).MatchString(out) {
+		t.Errorf("no Project line:\n%s", out)
+	}
+	d := decode[stepDoc](t, s.ok("flows", "show", "dbg", "build/compile", "--json"))
+	if d.Project != "demo" || !filepath.IsAbs(d.Step.RunDir) {
+		t.Errorf("project = %q, run_dir = %q", d.Project, d.Step.RunDir)
+	}
+	// The directory a step starts in is worked out as a run works it out:
+	// an absolute dir is used as it is, a relative one is joined to the project.
+	abs := t.TempDir()
+	s.write(".truss/flows/dirs.yaml", "version: \"1\"\nsteps:\n  - {id: here, run: \"echo a\"}\n  - {id: sub, run: \"echo b\", dir: build}\n  - id: away\n    run: \"echo c\"\n    dir: '"+strings.ReplaceAll(abs, "'", "''")+"'\n")
+	here := decode[stepDoc](t, s.ok("flows", "show", "dirs", "here", "--json"))
+	sub := decode[stepDoc](t, s.ok("flows", "show", "dirs", "sub", "--json"))
+	away := decode[stepDoc](t, s.ok("flows", "show", "dirs", "away", "--json"))
+	if sub.Step.RunDir != filepath.Join(here.Step.RunDir, "build") || sub.Step.Dir != "build" {
+		t.Errorf("sub = %+v", sub.Step)
+	}
+	if away.Step.RunDir != abs {
+		t.Errorf("away run_dir = %q, want %q", away.Step.RunDir, abs)
+	}
+	text := s.ok("flows", "show", "dirs", "away")
+	if strings.Contains(text, "relative to") || !strings.Contains(text, abs) {
+		t.Errorf("an absolute dir was described as relative:\n%s", text)
+	}
+}
+
+func TestStepInspect_JSONHasTheAbsolutePathsOfTruss(t *testing.T) {
+	s := debugSession(t)
+	d := decode[stepDoc](t, s.ok("flows", "show", "dbg", "build/compile", "--json"))
+	for _, r := range d.Environment {
+		if r.Name == "TRUSS_DATA_DIR" {
+			if r.Value == nil || !filepath.IsAbs(*r.Value) || !strings.HasSuffix(*r.Value, filepath.Join("state", "dbg", "data")) {
+				t.Errorf("TRUSS_DATA_DIR = %v", r.Value)
+			}
+			return
+		}
+	}
+	t.Error("no TRUSS_DATA_DIR row")
+}
+
+func TestStepInspect_MasksAValueThatHoldsAStoredSecretOrASensitiveName(t *testing.T) {
+	s := debugSession(t)
+	s.setSecret("NPM_TOKEN", "s3cr3tvalue")
+	s.write(".truss/flows/mask.yaml", `version: "1"
+env: {PLAIN: "postgres://u:s3cr3tvalue@h/db", SESSION_ID: abc123, SMTP_PASS: hunter2}
+steps:
+  - {id: a, run: "echo $TRUSSDBG_URL $TRUSSDBG_COOKIE"}
+`)
+	s.env = append(s.env, "TRUSSDBG_URL=postgres://u:s3cr3tvalue@h/db", "TRUSSDBG_COOKIE=abc")
+	out := s.ok("flows", "show", "mask", "a", "--values")
+	for _, v := range []string{"s3cr3tvalue", "abc123", "hunter2", "TRUSSDBG_COOKIE=abc"} {
+		if strings.Contains(out, v) {
+			t.Errorf("--values printed %q:\n%s", v, out)
+		}
+	}
+	wantRow(t, out, "PLAIN", "PLAIN", "pipeline", "set", `\*\*\*`)
+	wantRow(t, out, "TRUSSDBG_URL", "TRUSSDBG_URL", `host environment`, "set", `\*\*\*`)
+	// Without --values a declared value is shown, as it is in the file.
+	if plain := s.ok("flows", "show", "mask", "a"); !strings.Contains(plain, "s3cr3tvalue") {
+		t.Logf("declared value hidden without --values: fine either way\n%s", plain)
+	}
+}
+
+func TestStepInspect_EachNameHasOneRow(t *testing.T) {
+	s := newSession(t, false)
+	s.write("truss.yaml", projectFile)
+	s.write(".truss/flows/dup.yaml", `version: "1"
+env: {TRUSS_DATA_DIR: mine, NPM_TOKEN: in-the-file, TRUSSDBG_ONCE: x}
+steps:
+  - {id: a, run: "echo $TRUSSDBG_ONCE $TRUSS_DATA_DIR", secrets: [NPM_TOKEN]}
+`)
+	out := s.ok("flows", "show", "dup", "a")
+	for _, name := range []string{"TRUSS_DATA_DIR", "NPM_TOKEN", "TRUSSDBG_ONCE"} {
+		n := 0
+		for _, l := range strings.Split(out, "\n") {
+			if f := strings.Fields(l); len(f) > 0 && f[0] == name {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Errorf("%s has %d rows:\n%s", name, n, out)
+		}
+	}
+	wantRow(t, out, "TRUSS_DATA_DIR", "TRUSS_DATA_DIR", "pipeline", "set", "mine") // the file overrides the base
+	wantRow(t, out, "NPM_TOKEN", "NPM_TOKEN", `secret store`, "missing", "-")      // the secret overrides the file
+}
+
+func TestReferences(t *testing.T) {
+	for name, c := range map[string]struct {
+		run  string
+		want []string
+	}{
+		"plain forms":    {`echo $A_B ${C_D} ${E_F:-x} %G_H% $env:I_J`, []string{"A_B", "C_D", "E_F", "G_H", "I_J"}},
+		"mixed case":     {`echo $Home ${Path} $lowercase $env:Path`, nil},
+		"date formats":   {`date +%Y%m%d-%H%M%S; date "+%Y-%m-%d"`, nil},
+		"underscore":     {`echo $_ $$ $1 $@ $?`, nil},
+		"assigned":       {"X_A=1; echo $X_A\nexport X_B=2; echo $X_B\nset \"X_C=3\" & echo %X_C%\n$env:X_D = 'x'; echo $env:X_D", nil},
+		"for loop":       {`for ITEM in a b; do echo $ITEM; done`, nil},
+		"powershell env": {`echo $ENV:TRUSSDBG_PS $Env:TRUSSDBG_PS2`, []string{"TRUSSDBG_PS", "TRUSSDBG_PS2"}},
+		"only a prefix":  {`echo $NAMEx`, nil},
+		"names repeat":   {`echo $AA $AA ${AA}`, []string{"AA"}},
+		"two characters": {`echo %AB% %C%`, []string{"AB"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := references(c.run)
+			if strings.Join(got, ",") != strings.Join(c.want, ",") {
+				t.Errorf("references(%q) = %v, want %v", c.run, got, c.want)
+			}
+		})
+	}
+}
+
+func TestReferences_IsLinear(t *testing.T) {
+	// A command with thousands of names must not take longer than the
+	// command is long: the scan once recompiled two patterns per name.
+	var b strings.Builder
+	for i := 0; i < 20000; i++ {
+		fmt.Fprintf(&b, "echo $NAME_%d\n", i)
+	}
+	start := time.Now()
+	if got := references(b.String()); len(got) != 20000 {
+		t.Fatalf("found %d names", len(got))
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Errorf("the scan took %v", d)
+	}
+}
+
+const guardedFlow = `version: "1"
+jobs:
+  build:
+    steps:
+      - {id: compile, run: "echo marker-build"}
+  deploy:
+    needs: [build]
+    if: env.DEPLOY == 'yes'
+    steps:
+      - {id: push, run: "echo marker-deploy"}
+`
+
+func TestDebugRun_OnlyTheNamedJobLosesItsCondition(t *testing.T) {
+	s := newSession(t, false)
+	s.write("truss.yaml", projectFile)
+	s.write(".truss/flows/guard.yaml", guardedFlow)
+	// A real run skips the guarded job.
+	if _, out, _ := s.truss("run", "guard"); strings.Contains(out, "marker-deploy") {
+		t.Fatalf("the flow runs a job whose if is false:\n%s", out)
+	}
+	// --from names the step to start at, not the jobs after it.
+	_, out, _ := s.truss("run", "guard", "--from", "build/compile")
+	if !strings.Contains(out, "marker-build") || strings.Contains(out, "marker-deploy") {
+		t.Errorf("--from ran a job whose if is false:\n%s", out)
+	}
+	// Naming the step is a decision to run it, whatever its job's condition.
+	if _, out, _ := s.truss("run", "guard", "--step", "deploy/push"); !strings.Contains(out, "marker-deploy") {
+		t.Errorf("--step did not run the named step:\n%s", out)
+	}
+	if _, out, _ := s.truss("run", "guard", "--step", "deploy/push", "--with-needs"); !strings.Contains(out, "marker-build") || !strings.Contains(out, "marker-deploy") {
+		t.Errorf("--with-needs:\n%s", out)
+	}
+}
+
+func TestDebugRun_AFileNamedLikeAnOptionNeedsDotSlash(t *testing.T) {
+	s := twoSession(t)
+	s.write("--step", strings.Replace(twoSteps(), "name: two", "name: odd", 1))
+	if code, out, errOut := s.truss("run", "./--step"); code != 0 || !strings.Contains(out, "marker-c") {
+		t.Fatalf("exit = %d: %s", code, errOut)
+	}
+}
+
+func TestDebugRun_ABadEnvOptionIsNotEchoed(t *testing.T) {
+	s := twoSession(t)
+	code, _, errOut := s.truss("run", "two", "--env", "pasted-secret-without-equals")
+	if code != 1 || strings.Contains(errOut, "pasted-secret") {
+		t.Errorf("exit = %d, stderr = %q", code, errOut)
+	}
+}
+
+func TestDebugRun_EnvReachesIfConditions(t *testing.T) {
+	s := newSession(t, false)
+	s.write("truss.yaml", projectFile)
+	s.write(".truss/flows/guard.yaml", guardedFlow)
+	if _, out, _ := s.truss("run", "guard", "--env", "DEPLOY=yes"); !strings.Contains(out, "marker-deploy") {
+		t.Errorf("an override must be seen by a condition:\n%s", out)
+	}
+}
+
+func TestRun_HintIsNotACommandForAnOddID(t *testing.T) {
+	s := newSession(t, false)
+	s.write("truss.yaml", projectFile)
+	s.write(".truss/flows/odd.yaml", "version: \"1\"\nsteps:\n  - id: 'x$(echo hi)'\n    run: '"+helperCmd("exit", "3")+"'\n")
+	code, _, errOut := s.truss("run", "odd")
+	if code != 1 || strings.Contains(errOut, "x$(") || !strings.Contains(errOut, "to run only the failed step again, use truss run --step") {
+		t.Errorf("exit = %d, stderr = %q", code, errOut)
 	}
 }

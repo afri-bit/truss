@@ -181,7 +181,7 @@ func execute(ctx, runCtx context.Context, def pipeline.Pipeline, stem, cwd strin
 			fmt.Fprintf(stderr, "error: %s\n", err.Error())
 		}
 		if run.FailedStep != "" && !spec.debug {
-			fmt.Fprintf(stderr, "to run only this step again: truss run %s --step %s\n", clean(shellWord(spec.flow)), clean(shellWord(run.FailedStep)))
+			fmt.Fprintln(stderr, rerunHint(spec.flow, run.FailedStep))
 		}
 		return 1, api.RunFailed, run.Failure()
 	}

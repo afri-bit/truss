@@ -283,7 +283,7 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 		}
 		stepEnvironment := withSecrets(stepEnv(env, step.Env), step.Secrets, stored)
 		var proc *executor.Process
-		workDir, err := stepDir(dir, step.Dir)
+		workDir, err := StepDir(dir, step.Dir)
 		if err == nil {
 			proc, err = executor.Start(base, executor.Request{Run: step.Run, Dir: workDir, Env: stepEnvironment, Out: out, ErrOut: errOut})
 		}
@@ -389,12 +389,12 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 	return run, nil
 }
 
-// stepDir resolves a step's working directory against the run directory.
+// StepDir resolves a step's working directory against the run directory.
 // A relative path is joined to runDir. On Windows a path with a drive letter
 // must be absolute, and one that starts with a separator but no drive letter
 // is taken from the drive of runDir; "C:tmp" depends on a per-drive current
 // directory, so it is refused.
-func stepDir(runDir, dir string) (string, error) {
+func StepDir(runDir, dir string) (string, error) {
 	switch {
 	case dir == "":
 		return runDir, nil

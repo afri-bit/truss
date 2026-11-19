@@ -228,12 +228,12 @@ func TestStepDir(t *testing.T) {
 			if c.windows && runtime.GOOS != "windows" {
 				t.Skip("Windows path rules")
 			}
-			got, err := stepDir(c.run, c.dir)
+			got, err := StepDir(c.run, c.dir)
 			if (err != nil) != c.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, c.wantErr)
 			}
 			if err == nil && filepath.Clean(got) != filepath.Clean(c.want) {
-				t.Fatalf("stepDir(%q, %q) = %q, want %q", c.run, c.dir, got, c.want)
+				t.Fatalf("StepDir(%q, %q) = %q, want %q", c.run, c.dir, got, c.want)
 			}
 		})
 	}

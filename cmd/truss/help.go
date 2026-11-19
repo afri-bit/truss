@@ -90,7 +90,10 @@ Debug a flow: --step runs one step (the steps it needs are not run, as if they h
 succeeded; --with-needs runs them too), --from runs a step and every step that needs
 it. A debug run prints its log and does not replace the saved run log. --env sets or
 replaces a variable for the steps that run (repeatable); a secret is set with
-truss secret set, never here. Inspect a step first: truss flows show <name> <step>
+truss secret set, never here. --env, --step, --from and --with-needs are options, so
+a file named like one runs as ./--step. A debug run does not combine with --track.
+After a failed run, truss prints the command to run only the failed step.
+Inspect a step first: truss flows show <name> <step>
 `,
 	"validate": `truss validate [<name|path>]
 

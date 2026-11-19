@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/afri-bit/truss/internal/pipeline"
@@ -106,14 +107,32 @@ func parseRunArgs(args []string) ([]string, runOptions, error) {
 	return pos, o, nil
 }
 
-// shellWord quotes s for the hint line when it holds anything but the
-// characters of a plain word.
-func shellWord(s string) string {
-	plain := func(r rune) bool {
-		return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("_./:@%+=,-", r)
+// plainWord reports whether s is safe to print in a command line to paste:
+// letters, digits and _ . / : @ + = , - (and \ on Windows, where it separates
+// paths), not starting with a dash. Quoting differs between sh, cmd and
+// PowerShell, and one of them would still expand a $ or %, so anything else
+// is not printed as a command.
+func plainWord(s string) bool {
+	if s == "" || s[0] == '-' {
+		return false
 	}
-	if s != "" && strings.TrimFunc(s, plain) == "" {
-		return s
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', strings.ContainsRune("_./:@+=,-", r):
+		case r == '\\' && runtime.GOOS == "windows":
+		default:
+			return false
+		}
 	}
-	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+	return true
+}
+
+// rerunHint is the line printed after a failed run: the command that runs
+// only the failed step. When the flow or the id holds anything but a plain
+// word it names the option and leaves the command out.
+func rerunHint(flow, step string) string {
+	if plainWord(flow) && plainWord(step) {
+		return "to run only this step again: truss run " + flow + " --step " + step
+	}
+	return "to run only the failed step again, use truss run --step with its id (quote it for your shell)"
 }

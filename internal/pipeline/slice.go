@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -30,11 +31,48 @@ type Selection struct {
 	Env map[string]string
 }
 
+// foldEnvNames says that the host treats environment variable names without
+// regard to case. Windows does; the other systems do not. Tests set it.
+var foldEnvNames = runtime.GOOS == "windows"
+
+// EnvKey returns the form of an environment variable name under which the
+// host sees one variable: the name itself, or in upper case on Windows.
+func EnvKey(name string) string {
+	if foldEnvNames {
+		return strings.ToUpper(name)
+	}
+	return name
+}
+
+// overrideEnv returns base with over applied. A variable of base that the
+// host would see as the same as one of over is dropped, so the override wins
+// whatever the case.
+func overrideEnv(base, over map[string]string) map[string]string {
+	if len(over) == 0 {
+		return mergeEnv(base)
+	}
+	out := make(map[string]string, len(base)+len(over))
+	for k, v := range base {
+		out[k] = v
+	}
+	for name, value := range over {
+		for k := range out {
+			if EnvKey(k) == EnvKey(name) {
+				delete(out, k)
+			}
+		}
+		out[name] = value
+	}
+	return out
+}
+
 // Slice returns a flat pipeline that holds only the selected steps. Each
 // step keeps its merged environment, secrets, directory and settings. A need
 // outside the slice is dropped, so a step starts as if the steps it needs had
-// succeeded. The condition of a job is dropped: naming a step runs it. The
-// step's own condition is kept. p is not changed.
+// succeeded. The condition of the job of the named step is dropped: naming a
+// step runs it. Every other job in the slice keeps its condition, and the
+// step's own condition is kept. p is not changed. The result is meant to be
+// run, not registered: it has no schedules, overlap or workdir.
 func Slice(p Pipeline, sel Selection) (Pipeline, error) {
 	plan, err := Plan(p)
 	if err != nil {
@@ -52,6 +90,7 @@ func Slice(p Pipeline, sel Selection) (Pipeline, error) {
 		return Pipeline{}, fmt.Errorf("no step %q in flow %q; its steps: %s", sel.Step, plan.Name, strings.Join(known, ", "))
 	}
 
+	namedJob := byID[sel.Step].Job
 	in := map[string]bool{sel.Step: true}
 	if sel.Step == "" {
 		for _, s := range plan.Graph {
@@ -98,7 +137,7 @@ func Slice(p Pipeline, sel Selection) (Pipeline, error) {
 		}
 		for _, name := range names {
 			for _, secret := range s.Secrets {
-				if secret == name {
+				if EnvKey(secret) == EnvKey(name) {
 					return Pipeline{}, fmt.Errorf("cannot override %s: step %q reads it as a secret; use truss secret set %s", name, s.ID, name)
 				}
 			}
@@ -110,10 +149,10 @@ func Slice(p Pipeline, sel Selection) (Pipeline, error) {
 			}
 		}
 		s.Needs = needs
-		if sel.Step != "" {
+		if sel.Step != "" && s.Job == namedJob {
 			s.JobIf = nil
 		}
-		s.Env = mergeEnv(s.Env, sel.Env)
+		s.Env = overrideEnv(s.Env, sel.Env)
 		steps = append(steps, s)
 	}
 	return Pipeline{Version: "1", Name: plan.Name, Steps: steps, Concurrency: plan.Concurrency}, nil
