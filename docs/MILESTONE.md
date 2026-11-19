@@ -10,9 +10,8 @@ v0.1.0 was tagged on 2026-11-16. It is the first tagged release and the first ve
 machine: write a pipeline file, run it by hand, or hand it to the daemon and let it run on a
 schedule, and watch all of it from the terminal or from TRUSS Desktop.
 
-Do not tag v0.1.0 until every item in this section has a specification and an implementation
-that matches it, and the checklist below is done. `go.mod`, `cmd/truss` and Desktop already say
-`0.1.0`, and the changelog has its `## [0.1.0]` section; its date must be the day the tag is pushed.
+Every item in this section has a specification and an implementation that matches it. `go.mod`,
+`cmd/truss` and Desktop said `0.1.0` at the tag, and the changelog has its `## [0.1.0]` section.
 
 ### In this release
 
@@ -73,14 +72,14 @@ v0.1.0 was tagged (the table in v0.1.0 listed three of them before; they belong 
 | A readable run log | The run log has headings for the setup, each step and the summary, and TRUSS Desktop shows it as one card per step (added by the maintainer, 2026-11-16) | `020-readable-run-log` | Implemented |
 | A richer command line | Read-only `status`, `dashboard`, `flows`, `project(s)`, `schedules`, `runs show`, `daemon logs`, `env`, `help <command>` and `--json`; ASCII screens (added by the maintainer, 2026-11-17) | `022-cli-enrichment` | Implemented |
 | Desktop corrections | Flows page naming, Re-run, the Resources chart (added by the maintainer, 2026-11-16) | `018-desktop-corrections` | Implemented |
-| Flows view toggle | The Flows page as cards or as a list (added by the maintainer, 2026-11-17) | `021-flows-view-toggle` | Implemented |
+| Flows view toggle | The Flows page as cards or as a list (added by the maintainer, 2026-11-16) | `021-flows-view-toggle` | Implemented |
 
 ### Not in v0.2.0
 
-An interactive shell in a step's environment, step-by-step stepping, resuming from the last
-failure, event triggers (hooks), a daemon reachable beyond localhost, per-step runners (container,
+An interactive shell in a step's environment, step-by-step stepping, `--dry-run`, resuming from
+the last failure, saving a debug log, debug runs through the daemon, event triggers (hooks), a daemon reachable beyond localhost, per-step runners (container,
 other shells) and AI integration (an MCP server). Each needs its own decision and spec.
 
 ## How to change this file
 
-Change this file when the release scope changes. Do not treat a chat or a local note as the milestone. A new capability inside v0.1.0 gets its own `specs/<feature>/spec.md` in the same pull request as its code.
+Change this file when the release scope changes. Do not treat a chat or a local note as the milestone. A new capability inside the current release gets its own `specs/<feature>/spec.md` in the same pull request as its code.

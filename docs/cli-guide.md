@@ -218,7 +218,9 @@ debug run: 1 of 3 steps (build/package); the run log is not saved
 A debug run prints its log but does not save it: the `run.log` of your last real run stays. It uses
 the flow's data and cache folders, so files an earlier run left are still there. It keeps the
 step's settings (`timeout`, `retries`, `dir`, `env`, `secrets`) and its own `if`; the `if` of a
-job is not evaluated, because you named the step. It does not combine with `--track`.
+job of the step you named is not evaluated, because you named it; other jobs keep theirs, so
+`--from` never starts a deploy the flow would skip. An `--env` value is seen by `if` conditions,
+like any variable of the step. It does not combine with `--track`.
 
 When a `truss run` fails, TRUSS tells you the command for the failed step, on standard error:
 
@@ -227,6 +229,14 @@ $ truss run ci
 ...
 to run only this step again: truss run ci --step build/package
 ```
+
+The hint does not repeat your `--env` options; add them. It is printed only when the flow and the
+step id are plain words (letters, digits and `_ . / : @ + = , -`), because quoting differs between
+shells and a step id can be any text.
+
+An `--env` value is an argument, so other users of the machine can see it in the process list. Put
+credentials in the secret store (`truss secret set`) and name them in `secrets:`; `--env` refuses a
+name a step declares as a secret.
 
 ## What is scheduled
 

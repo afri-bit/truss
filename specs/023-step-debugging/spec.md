@@ -37,7 +37,9 @@ steps around it, with inputs of their choice.
 - **FR-001** `truss flows show <name|path> <step> [--values] [--json]` prints one step of a flow
   and changes nothing (no file, no folder, no daemon call). `<step>` is the step id as `flows show`
   lists it: `job/step` for a step of a job. It prints: the flow, file and project; the step id and
-  job; the command (all lines of `run`); the directory it starts in; the steps it needs and the
+  job; the command (all lines of `run`); the directory it starts in (worked out as a run works it
+  out: an absolute `dir` as it is, a relative one joined to the project, and the reason when a run
+  would refuse it); the steps it needs and the
   steps that need it; its timeout, retries, retry delay, `continue-on-error` and `if` (and the job's
   `if`); then the environment table (FR-003). Text goes through the same cleaning as the other
   screens (spec 022 FR-014).
@@ -57,20 +59,29 @@ steps around it, with inputs of their choice.
     the project, the JSON the absolute path) and `TRUSS_RUN_ID`, `TRUSS_PIPELINE` and
     `TRUSS_TRIGGER` (`SOURCE` `daemon`, `STATE` `daemon only`: only the daemon sets them, `VALUE`
     `-`).
-  - **referenced**: a name in upper case, digits and `_` (starting with a letter or `_`) that the
-    command reads as `$NAME`, `${NAME}`, `${NAME:-...}` or `%NAME%` (or `$env:NAME`), when no other
-    row has that name and the command does not assign it (`NAME=` or `for NAME in`). `SOURCE` is
-    `host environment`. `STATE` is `set` or `not set`, from the environment of the `truss` process.
-    `VALUE` is `-` unless `--values` is given, which prints the value.
+  - **referenced**: a whole name in upper case, digits and `_` (starting with a letter or `_`,
+    and not `_` alone) that the command reads as `$NAME`, `${NAME}`, `${NAME:-...}`, `%NAME%`
+    (two characters or more, so `date +%Y%m%d` adds nothing) or `$env:NAME` (`env` in any case),
+    when no other row has that name and the command does not assign it (`NAME=`, `set "NAME=`,
+    `$env:NAME =` or `for NAME in`). `$Home` is the name `Home`, which is not upper case, so it is
+    not listed. `SOURCE` is `host environment`. `STATE` is `set` or `not set`, from the
+    environment of the `truss` process. `VALUE` is `-` unless `--values` is given, which prints
+    the value.
   This list is a best-effort reading of the command text, not a shell parser: a variable a script
   builds by other means does not appear, and the table says so in a note.
-- **FR-004** A variable whose name contains `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `PASSPHRASE`,
-  `CREDENTIAL`, `PRIVATE`, `AUTH` or `KEY` (any case) is never printed: its `VALUE` is `***`, even
-  when it is declared in the file and even with `--values`. A value that equals a stored secret is
-  printed as `***` too (checked only when `--values` is given). `--values` only shows the values of
-  referenced host variables; declared values are always shown (they are in the file).
-- **FR-005** `--json` prints one document: `flow`, `file`, `step` (`id`, `run`,
-  `run_dir`, `needs`, `needed_by`, and, where they apply, `job`, `dir`, `timeout`, `retries`,
+  A name appears in one row, the row of the layer a run lets win: a secret over a variable of the
+  file, and a variable of the file over what `truss run` sets. Names are compared without regard to
+  case on Windows, as the host does, and exactly on Linux and macOS.
+- **FR-004** A variable whose name contains `TOKEN`, `SECRET`, `PASS`, `CREDENTIAL`, `PRIVATE`,
+  `AUTH`, `KEY`, `DSN`, `COOKIE`, `SESSION`, `JWT`, `BEARER` or `WEBHOOK` (any case) is never
+  printed: its `VALUE` is `***`, even when it is declared in the file and even with `--values`. With
+  `--values`, any value, declared or from the host, that contains a stored secret (not only equals
+  one) is printed as `***` too; the stored values are read only for `--values`. `--values` only
+  shows the values of referenced host variables; declared values are always shown (they are in the
+  file).
+- **FR-005** `--json` prints one document: `flow`, `file`, `project` (when the flow is in a
+  project), `step` (`id`, `run`, `run_dir` (the directory the step starts in, absolute), `needs`,
+  `needed_by`, and, where they apply, `job`, `dir`, `dir_error`, `timeout`, `retries`,
   `retry_delay`, `continue_on_error`, `if`, `job_if`) and `environment`, a list of `{name, source, kind, state, value}` where `kind` is
   `declared`, `secret`, `truss` or `referenced` and `state` is `set`, `not-set`, `missing` or
   `daemon-only` (the text form writes `not set` and `daemon only`). `value` is present only when FR-003 and FR-004 allow printing it. Empty lists are
@@ -85,14 +96,19 @@ steps around it, with inputs of their choice.
   `--step`, are errors (exit `1`). An unknown id fails as in FR-002 before any step starts.
 - **FR-007** The steps of a slice keep their settings: command, `env`, `secrets`, `dir`, `timeout`,
   `retries` and `continue-on-error`. Concurrency follows the flow. Their own `if` is evaluated as
-  if the steps they need outside the slice had succeeded. The `if` of a job is not evaluated:
-  naming a step is a decision to run it.
+  if the steps they need outside the slice had succeeded. The `if` of the job of the step named
+  with `--step` or `--from` is not evaluated: naming a step is a decision to run it. Every other
+  job in the slice, one `--from` pulls in after the named step or `--with-needs` pulls in before
+  it, keeps its `if`, so a deploy or a cleanup the flow would skip is still skipped.
 - **FR-008** `--env NAME=VALUE` (repeatable) replaces or adds an environment variable for the steps
   that run, above every layer of the file. It works with `--step`, `--from` or on its own for a
   whole run. `NAME` must be a valid name (letters, digits, `_`, not starting with a digit); a
   malformed option is an error (exit `1`) that does not repeat the text it was given. A `NAME` that a selected step declares in `secrets` is an
-  error that says to use `truss secret set`: a secret value is never an argument (spec 012).
-  Values are not written to the run log, as before.
+  error that says to use `truss secret set`: a secret value is never an argument (spec 012). Names
+  are compared without regard to case on Windows, for this refusal and for which variable wins.
+  An override is seen by `if` conditions (`env.NAME`), as any variable of the step is. Values are
+  not written to the run log, as before. An argument is visible to other users of the machine in
+  its process list, which the docs say.
 - **FR-009** A run with `--step` or `--from` is a debug run. It prints the run log to standard
   output as a real run does, and does **not** write `.truss/state/<flow>/run.log`: the log of the
   last real run stays. It uses the flow's data and cache folders, so files an earlier run left are
@@ -102,8 +118,12 @@ steps around it, with inputs of their choice.
   combined with `--track` (an error).
 - **FR-010** When a local `truss run` fails and the run knows which step failed first, it prints
   one line to standard error after the summary:
-  `to run only this step again: truss run <flow> --step <id>` (`<flow>` as the user wrote it). A
-  debug run prints no such line. Nothing else about a failed run changes.
+  `to run only this step again: truss run <flow> --step <id>` (`<flow>` as the user wrote it, and
+  without the `--env` options the run had). The line is a command to paste, so it is printed only
+  when `<flow>` and `<id>` are plain words: letters, digits and `_ . / : @ + = , -` (and `\` on
+  Windows), not starting with a dash. Otherwise the line says to use `truss run --step` with the
+  step's id, quoted for the shell, and repeats neither. A debug run prints no such line. Nothing
+  else about a failed run changes.
 
 ## Not in this spec
 
@@ -120,15 +140,18 @@ Additive, with these precise rules so a script never changes meaning:
   is unchanged.
 - `truss run <x>` is unchanged when none of `--step`, `--from`, `--with-needs` or `--env` is given.
   As `--track` does today (spec 001), these four words are options, so a file literally named
-  `--step` runs as `truss run ./--step`.
+  `--step` runs as `truss run ./--step`. The forms `--step=<id>`, `--from=<id>` and
+  `--env=NAME=VALUE` are options too; `--track=x` and `--with-needs=x` stay paths.
 - A failed local `truss run` gains one line on standard error (FR-010). Standard output, the run
   log, the saved `run.log` and the exit code are unchanged.
 - The run-log format is unchanged.
 
 ## Platforms
 
-Pure text and process work with the existing executor: no platform file. Paths use `filepath`.
-`%NAME%` is read on every platform (it is only text). Tests run on Linux, macOS and Windows in CI.
+Pure text and process work with the existing executor: no platform file. Paths use `filepath`,
+so the text form shows the separators of the host. `%NAME%` and `$env:NAME` are read on every
+platform (it is only text). Environment variable names are compared without regard to case on
+Windows only. Tests run on Linux, macOS and Windows in CI.
 
 ## Testing
 

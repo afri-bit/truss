@@ -58,7 +58,8 @@ working with the same output, flags and exit codes (see Compatibility).
   `unknown` when no daemon runs. It needs no daemon. A flow that does not load is listed with its
   error and does not hide the others. `truss flows show <name|path> [--json]` prints the pipeline
   name, file, project, registration, concurrency, overlap, the **names** of the environment
-  variables and secrets its steps receive (never their values), its schedules, and a table of its
+  variables and secrets its steps receive (never their values) (spec 023 shows the values of one
+  step, under rules), its schedules, and a table of its
   steps (needs, timeout, retries, `if`, first line of `run`). `truss flows graph <name|path>` prints the steps in stages: a step is in
   the stage after the latest of the steps it needs, and each step lists what it needs. `show` of a flow that does not load is an error: exit `1`, and with `--json` the document
   (`valid: false`, `error`) is printed first. A `run` of more than one line shows its first line and

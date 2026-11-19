@@ -264,6 +264,8 @@ conditions. A file has `steps` or `jobs`, never both. Every field is described i
 | | Command | |
 |---|---|---|
 | **Run here** | `truss run <name\|path> [--track]` | Run a pipeline now; with no argument it is an error that lists the pipelines. `--track` also reports it to the daemon |
+| **Debug** | `truss flows show <name\|path> <step>` | One step: its command, its neighbours and a table of the environment it can use (secrets as `set` or `missing`) |
+| | `truss run <name\|path> --step <id>` \| `--from <id>` | Run one step, or a step and what needs it (`--with-needs`, `--env NAME=VALUE`); the saved run log stays |
 | | `truss validate [<name\|path>]` | Check a pipeline and show its steps; with no argument, check the project and every pipeline |
 | **Secrets** | `truss secret set <name>` \| `list` \| `remove <name>` | Store credentials for `secrets:` in a file (value from stdin) |
 | **Daemon** | `truss daemon start` \| `stop` \| `status` | Manage the background service |
