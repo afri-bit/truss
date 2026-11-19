@@ -1,0 +1,18 @@
+{
+  "work_id": "release--0.2.0",
+  "title": "Release v0.2.0",
+  "tier": 0,
+  "branch": "release/0.2.0",
+  "status": "in_review",
+  "step": "release branch prepared: version declarations at 0.2.0, changelog section [0.2.0] passes release-check; waiting for CI on Linux, macOS and Windows; then PR to main and the tag (maintainer)",
+  "steps_done": [],
+  "requirements": [],
+  "specs": [],
+  "owner_agent": "main-session",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [],
+  "pr": null,
+  "created": "2026-11-19T20:45:02Z",
+  "updated": "2026-11-19T20:45:02Z"
+}
