@@ -37,7 +37,7 @@ is a file the daemon has registered ([glossary](GLOSSARY.md)).
 
 ```console
 $ truss status
-TRUSS      0.1.0 (linux/amd64)
+TRUSS      0.2.0 (linux/amd64)
 Project    demo, 3 flows in .truss/flows/
 Daemon     running, pid 4121, up 2h 5m, 127.0.0.1:7878
 Desktop    http://127.0.0.1:7878/ (open it with: truss desktop)

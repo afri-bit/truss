@@ -77,9 +77,9 @@ v0.1.0 was tagged (the table in v0.1.0 listed three of them before; they belong 
 
 ### Release checklist
 
-- [ ] The pull request of `023-step-debugging` is merged into `main`.
+- [x] The pull request of `023-step-debugging` is merged into `main`.
 - [ ] CI is green on Linux, macOS and Windows. The step view and the debug run have only run on macOS locally; Windows gets its first proof here.
-- [ ] `release/0.2.0`: `0.2.0-beta` becomes `0.2.0` in `go.mod`, `cmd/truss` and `internal/webui/VERSION`; `[Unreleased]` becomes `[0.2.0]` with the date; the release check passes.
+- [x] `release/0.2.0`: `0.2.0-beta` becomes `0.2.0` in `go.mod`, `cmd/truss` and `internal/webui/VERSION`; `[Unreleased]` becomes `[0.2.0]` with the date; the release check passes.
 - [ ] `release/0.2.0` is merged into `main` through a pull request, then the maintainer pushes the tag.
 
 ### Not in v0.2.0

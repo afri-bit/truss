@@ -42,7 +42,7 @@ read-only commands change nothing and never start or stop the daemon.
 
 ```console
 $ truss status
-TRUSS      0.1.0 (linux/amd64)
+TRUSS      0.2.0 (linux/amd64)
 Project    shop, 4 flows in .truss/flows/
 Daemon     running, pid 4121, up 2h 5m, 127.0.0.1:7878
 Desktop    http://127.0.0.1:7878/ (open it with: truss desktop)
@@ -62,7 +62,7 @@ whether the daemon runs, use `truss daemon status`, which exits `1` when it does
 the latest runs. On a terminal it redraws every two seconds until you press Ctrl-C.
 
 ```text
-+- TRUSS 0.1.0  2026-11-17 09:15:02 -------------------------------------------+
++- TRUSS 0.2.0  2026-11-17 09:15:02 -------------------------------------------+
 | Daemon   running  pid 4121  127.0.0.1:7878  up 2h 5m                         |
 | Runs     1 running, 0 queued   [#####...............] 1 of 4 slots           |
 | Host     CPU [##........]  21%   Mem [######....]  61% (9.6G of 15.7G)       |
