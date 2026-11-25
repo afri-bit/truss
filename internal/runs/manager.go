@@ -602,7 +602,7 @@ func (m *Manager) execute(ctx context.Context, rec *record) {
 		return
 	}
 	defer func() { _ = f.Close() }()
-	out := io.Writer(f)
+	out := io.Writer(&cappedLog{w: f, left: MaxRunLog})
 	log := runlog.New(out, m.opts.Now)
 	log.Setup(runlog.OSName(runtime.GOOS), runtime.GOARCH, executor.Shell(), req.Dir)
 

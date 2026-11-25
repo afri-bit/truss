@@ -23,6 +23,12 @@ func attach(cmd *exec.Cmd) (tree, error) {
 	return &groupTree{pgid: cmd.Process.Pid}, nil
 }
 
+// terminate sends SIGTERM to the whole group, so its processes can clean up.
+func (g *groupTree) terminate() bool {
+	_ = syscall.Kill(-g.pgid, syscall.SIGTERM) // ESRCH: already gone
+	return true
+}
+
 // kill sends SIGKILL to the whole group. A group that is already gone is fine.
 func (g *groupTree) kill() {
 	_ = syscall.Kill(-g.pgid, syscall.SIGKILL) // ESRCH: already gone
@@ -49,12 +55,4 @@ func signalName(st *os.ProcessState) string {
 		return ws.Signal().String()
 	}
 	return "unknown"
-}
-
-// endedByKill reports whether the shell was terminated by SIGKILL, the signal
-// TRUSS sends to the group. killed has already been established by the
-// caller.
-func endedByKill(st *os.ProcessState) bool {
-	ws, ok := st.Sys().(syscall.WaitStatus)
-	return ok && ws.Signaled() && ws.Signal() == syscall.SIGKILL
 }

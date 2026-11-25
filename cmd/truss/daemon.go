@@ -32,11 +32,13 @@ func (in invocation) daemon(ctx context.Context) int {
 	if sub == "config" {
 		return in.daemonConfig(in.args[1:])
 	}
-	pos, flags, err := options(in.args[1:], []string{"address", "max-runs", "history"}, nil)
+	pos, flags, err := options(in.args[1:], []string{"address", "max-runs", "history"}, []string{"wait"})
 	if err != nil || len(pos) != 0 {
 		return in.usage()
 	}
-	if (sub == "stop" || sub == "status" || sub == "uninstall") && len(flags) != 0 {
+	_, wait := flags["wait"]
+	delete(flags, "wait")
+	if (sub == "stop" || sub == "status" || sub == "uninstall") && len(flags) != 0 || wait && sub != "stop" {
 		return in.usage()
 	}
 	if _, ok := flags["history"]; ok && sub != "start" && sub != "run" {
@@ -70,7 +72,7 @@ func (in invocation) daemon(ctx context.Context) int {
 		}
 		return in.daemonStart(ctx, h, in.args[1:])
 	case "stop":
-		return in.daemonStop(ctx, h)
+		return in.daemonStop(ctx, h, wait)
 	case "status":
 		return in.daemonStatus(ctx, h)
 	case "install":
@@ -110,6 +112,7 @@ func (in invocation) daemonStart(ctx context.Context, h home.Dir, flags []string
 	if err != nil {
 		return in.fail(fmt.Errorf("find the truss binary: %w", err))
 	}
+	rotateLog(h.DaemonLog())
 	logFile, err := os.OpenFile(h.DaemonLog(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return in.fail(fmt.Errorf("open daemon log: %w", err))
@@ -146,7 +149,7 @@ func (in invocation) daemonStart(ctx context.Context, h home.Dir, flags []string
 	}
 }
 
-func (in invocation) daemonStop(ctx context.Context, h home.Dir) int {
+func (in invocation) daemonStop(ctx context.Context, h home.Dir, wait bool) int {
 	c, err := api.Dial(ctx, h)
 	if errors.Is(err, api.ErrNotRunning) {
 		fmt.Fprintln(in.stdout, "daemon is not running")
@@ -154,6 +157,27 @@ func (in invocation) daemonStop(ctx context.Context, h home.Dir) int {
 	}
 	if err != nil {
 		return in.fail(err)
+	}
+	// --wait lets running and queued runs finish first (spec 028). A run a
+	// schedule starts meanwhile is waited for too.
+	for said := -1; wait; {
+		st, err := c.Status(ctx)
+		if err != nil {
+			return in.fail(err)
+		}
+		active := st.RunningRuns + st.QueuedRuns
+		if active == 0 {
+			break
+		}
+		if active != said {
+			fmt.Fprintf(in.stdout, "waiting for %d run(s) to finish (Ctrl-C to stop waiting)\n", active)
+			said = active
+		}
+		select {
+		case <-ctx.Done():
+			return in.fail(errors.New("stopped waiting; the daemon is still running"))
+		case <-time.After(500 * time.Millisecond):
+		}
 	}
 	if err := c.Shutdown(ctx); err != nil {
 		return in.fail(err)
@@ -295,4 +319,15 @@ func resolveConfig(h home.Dir, flags map[string]string, env []string) (config.Co
 		}
 	}
 	return cfg, nil
+}
+
+// maxDaemonLog is the size at which the daemon's log is set aside when the
+// daemon starts: it becomes daemon.log.1, replacing an older one (spec 028).
+const maxDaemonLog = 10 << 20
+
+// rotateLog keeps the daemon log bounded across starts.
+func rotateLog(path string) {
+	if info, err := os.Lstat(path); err == nil && info.Mode().IsRegular() && info.Size() > maxDaemonLog {
+		_ = os.Rename(path, path+".1")
+	}
 }

@@ -147,6 +147,8 @@ func parsePipelineBlock(p *Pipeline, val *yaml.Node) {
 			p.Workdir = parseString(p, v, "flow workdir")
 		case "overlap":
 			p.Overlap = Overlap(oneOf(p, v, "flow overlap", string(OverlapQueue), string(OverlapSkip), string(OverlapParallel)))
+		case "kill_timeout":
+			p.KillTimeout = parseDuration(p, v, "flow", "kill_timeout")
 		default:
 			p.noteUnknown(field, "in flow")
 		}
@@ -191,6 +193,8 @@ func parseStep(p *Pipeline, item *yaml.Node, pos int, job string) Step {
 			deferred = append(deferred, func(label string) { step.Dir = parseString(p, v, label+" dir") })
 		case "timeout":
 			deferred = append(deferred, func(label string) { step.Timeout = parseDuration(p, v, label, "timeout") })
+		case "kill_timeout":
+			deferred = append(deferred, func(label string) { step.KillTimeout = parseDuration(p, v, label, "kill_timeout") })
 		case "retries":
 			deferred = append(deferred, func(label string) { step.Retries = parseRetries(p, v, label) })
 		case "retry_delay":

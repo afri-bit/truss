@@ -17,6 +17,10 @@ import (
 // The implementation is per OS: a process group on Unix, a job object on
 // Windows.
 type tree interface {
+	// terminate asks every process of the tree to stop (SIGTERM on Unix). It
+	// reports false where the OS has no such request (Windows): the caller
+	// then kills at once.
+	terminate() bool
 	// kill force-ends every process of the tree at once. It is idempotent.
 	kill()
 	// afterExit runs once the shell has exited. It ends every process still
@@ -32,7 +36,8 @@ const copyGrace = 2 * time.Second
 
 // Process is a started Step command. Call Wait exactly once.
 type Process struct {
-	cmd *exec.Cmd
+	cmd         *exec.Cmd
+	killTimeout time.Duration
 	// exited receives the result of cmd.Wait, sent by a reaper goroutine that
 	// Start launches as soon as the shell is running in its tree. It is
 	// buffered (capacity 1), so the reaper never blocks and a delivered exit
@@ -64,7 +69,7 @@ func Start(ctx context.Context, req Request) (*Process, error) {
 	}
 	prepare(cmd)
 
-	p := &Process{cmd: cmd}
+	p := &Process{cmd: cmd, killTimeout: req.KillTimeout}
 	var outW, errW io.Writer = &p.stdout, &p.stderr
 	if req.Out != nil {
 		mu := &sync.Mutex{}
@@ -127,8 +132,12 @@ func Start(ctx context.Context, req Request) (*Process, error) {
 // macOS it is also the id of the Step's process group.
 func (p *Process) PID() int { return p.cmd.Process.Pid }
 
+// DefaultKillTimeout is how long a stopped step has to end by itself before
+// its processes are killed, when the Request does not say (spec 028).
+const DefaultKillTimeout = 10 * time.Second
+
 // Wait blocks until the shell exits, or ctx is done, in which case the whole
-// tree is force-ended first. Either way it ends leftover processes, waits for
+// tree is asked to stop and, after the request's KillTimeout, force-ended. Either way it ends leftover processes, waits for
 // them to be gone and returns the Result.
 //
 // Wait must be called exactly once, and always: it collects the reaper's
@@ -145,21 +154,31 @@ func (p *Process) Wait(ctx context.Context) Result {
 		case err = <-p.exited:
 		default:
 			killed = true
-			p.tree.kill()
-			err = <-p.exited
+			if p.killTimeout > 0 && p.tree.terminate() {
+				select {
+				case err = <-p.exited:
+				case <-time.After(p.killTimeout):
+					p.tree.kill()
+					err = <-p.exited
+				}
+			} else {
+				p.tree.kill()
+				err = <-p.exited
+			}
 		}
 	}
 	p.tree.afterExit()
 	p.drain()
 	p.tree.release()
 
-	res := Result{Stdout: p.stdout.String(), Stderr: p.stderr.String()}
+	// A shell that TRUSS stopped was stopped, whether it ended on SIGTERM,
+	// on a code of its own after handling it (0 included), or killed.
+	res := Result{Stdout: p.stdout.String(), Stderr: p.stderr.String(), Stopped: killed}
 	if err == nil {
 		code := 0
 		res.ExitCode = &code
 		return res
 	}
-	res.Stopped = killed && endedByKill(p.cmd.ProcessState)
 	var exitErr *exec.ExitError
 	if !errors.As(err, &exitErr) {
 		res.Err = fmt.Errorf("wait for command: %w", err)

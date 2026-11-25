@@ -52,6 +52,9 @@ func flatten(p Pipeline) []Step {
 			if s.Dir == "" {
 				s.Dir = p.Workdir
 			}
+			if s.KillTimeout == 0 {
+				s.KillTimeout = p.KillTimeout
+			}
 			steps[i] = s
 		}
 		return steps
@@ -82,6 +85,9 @@ func flatten(p Pipeline) []Step {
 			}
 			if s.Dir == "" {
 				s.Dir = p.Workdir
+			}
+			if s.KillTimeout == 0 {
+				s.KillTimeout = p.KillTimeout
 			}
 			steps = append(steps, s)
 			needs = []string{s.ID}

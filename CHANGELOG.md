@@ -11,6 +11,9 @@ Dates below are when a release was made. 0.1.0 is the first release.
 
 ### Added
 
+- Steps are asked to stop before they are killed  
+  On Linux and macOS a step that TRUSS stops (timeout, cancel, a failure elsewhere, `daemon stop`) gets `SIGTERM` and has `kill_timeout` (default `10s`, settable per step or flow) to clean up before `SIGKILL`. On Windows a step's processes now end when TRUSS itself ends. A step that runs out of `timeout` fails even if it exits `0`. `truss daemon stop --wait` lets runs finish first. A daemon run's log keeps at most 64 MiB, and `daemon.log` is set aside at 10 MiB (specs/028-robust-runs, ADR 0024).
+
 - Daemon configuration file  
   The daemon reads `~/.truss/config.yaml` when it starts: `address`, `max_runs` and `history` (finished runs kept, new). A `TRUSS_DAEMON_*` variable or a flag of `truss daemon start` wins over the file. `truss daemon config [--json]` shows each setting, its value and where it comes from (specs/027-daemon-config).
 

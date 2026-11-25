@@ -201,6 +201,13 @@ flow's data, delete `~/.truss/pipelines/<name>` yourself; nothing else refers to
 `truss run` keeps its folders in `.truss/state/<name>/data` of the project; delete that folder
 to clear them. Those folders are ignored by git (see [Project layout](pipeline-reference.md#state-folders)).
 
+## Limits that keep the disk safe
+
+- A run's log keeps at most 64 MiB. After that it says so and keeps no more; the run goes on, and
+  `truss runs show` has its result.
+- The daemon's own log is set aside as `daemon.log.1` when it is over 10 MiB at a start.
+- `history` in [the configuration](#configuration) bounds how many finished runs are kept.
+
 ## Where state lives
 
 Everything is under the TRUSS home, `~/.truss` unless `TRUSS_HOME` says otherwise. The

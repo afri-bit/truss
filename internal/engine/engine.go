@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -307,7 +308,8 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 			}
 		}
 		if err == nil {
-			proc, err = executor.Start(base, executor.Request{Run: step.Run, Dir: workDir, Env: stepEnvironment, Out: out, ErrOut: errOut})
+			proc, err = executor.Start(base, executor.Request{Run: step.Run, Dir: workDir, Env: stepEnvironment, Out: out, ErrOut: errOut,
+				KillTimeout: cmp.Or(step.KillTimeout, executor.DefaultKillTimeout)})
 		}
 		if err != nil {
 			return finish(outcome{slot: slot, attempt: attempt, id: step.ID, res: executor.Result{Err: err}})
@@ -328,6 +330,8 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 			}
 			o := outcome{slot: slot, attempt: attempt, id: step.ID, res: res}
 			if res.Stopped && base.Err() == nil && errors.Is(waitCtx.Err(), context.DeadlineExceeded) {
+				// A step that handled the stop and exited 0 still ran out of
+				// time: the timeout fails it whatever its exit (spec 028).
 				// The step's own limit ended it, not a failure elsewhere.
 				o.res.Stopped = false
 				o.res.ExitCode = nil

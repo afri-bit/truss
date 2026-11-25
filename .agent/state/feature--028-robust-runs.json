@@ -1,0 +1,20 @@
+{
+  "work_id": "feature--028-robust-runs",
+  "title": "Robust runs",
+  "tier": 2,
+  "branch": "feature/028-robust-runs",
+  "status": "in_progress",
+  "step": "implemented; review next",
+  "steps_done": [],
+  "requirements": [],
+  "specs": [
+    "specs/028-robust-runs/spec.md"
+  ],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [],
+  "pr": null,
+  "created": "2026-11-25T15:58:43Z",
+  "updated": "2026-11-25T15:58:43Z"
+}
