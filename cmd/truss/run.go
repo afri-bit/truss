@@ -164,7 +164,11 @@ func execute(ctx, runCtx context.Context, def pipeline.Pipeline, stem, cwd strin
 	if tr != nil {
 		events = newTrackedEvents(log, tr, runCtx)
 	}
-	run, err := engine.Run(runCtx, def, cwd, env, events, engine.WithSecrets(secretLoader(env)))
+	info := engine.RunInfo{ID: localRunID(), Trigger: api.TriggerLocal, ProjectDir: abs}
+	if tr != nil {
+		info.ID = tr.id
+	}
+	run, err := engine.Run(runCtx, def, cwd, env, events, engine.WithSecrets(secretLoader(env)), engine.WithRun(info))
 	if err != nil {
 		discard()
 		return interrupted(ctx, tr, err, stderr)
@@ -312,4 +316,12 @@ func replaceFile(tmpPath, dest string) error {
 func discardRunLog(tmp *os.File, tmpPath string) {
 	_ = tmp.Close()
 	_ = os.Remove(tmpPath)
+}
+
+// localRunID names a local run that the daemon does not know: the time and
+// a random suffix, like a daemon run id, with "local-" in front (spec 026).
+func localRunID() string {
+	var b [3]byte
+	_, _ = rand.Read(b[:])
+	return "local-" + time.Now().Format("20060102-150405") + "-" + hex.EncodeToString(b[:])
 }

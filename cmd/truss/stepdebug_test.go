@@ -94,7 +94,8 @@ func TestStepInspect_EnvironmentTable(t *testing.T) {
 	wantRow(t, out, "MODE", "MODE", "step", "set", "step") // the step wins over the job and the pipeline
 	wantRow(t, out, "NPM_TOKEN", "NPM_TOKEN", `secret store`, "missing", "-")
 	wantRow(t, out, "TRUSS_DATA_DIR", "TRUSS_DATA_DIR", `truss run`, "set", `\.truss\S*dbg\S*data`)
-	wantRow(t, out, "TRUSS_RUN_ID", "TRUSS_RUN_ID", "daemon", `daemon only`, "-")
+	wantRow(t, out, "TRUSS_RUN_ID", "TRUSS_RUN_ID", "truss", `each run`, "-")
+	wantRow(t, out, "TRUSS_FLOW", "TRUSS_FLOW", "truss", "set", `\S+`)
 	wantRow(t, out, "TRUSSDBG_UNSET", "TRUSSDBG_UNSET", `host environment`, `not set`, "-")
 	wantRow(t, out, "TRUSSDBG_HOME", "TRUSSDBG_HOME", `host environment`, `not set`, "-")
 	wantRow(t, out, "TRUSSDBG_WIN", "TRUSSDBG_WIN", `host environment`, `not set`, "-")
@@ -181,7 +182,7 @@ func TestStepInspect_JSON(t *testing.T) {
 	if r := got["API_TOKEN"]; r.Value == nil || *r.Value != "***" {
 		t.Errorf("API_TOKEN = %+v", r)
 	}
-	if r := got["TRUSS_RUN_ID"]; r.Kind != "truss" || r.State != "daemon-only" || r.Value != nil {
+	if r := got["TRUSS_RUN_ID"]; r.Kind != "truss" || r.State != "each-run" || r.Value != nil {
 		t.Errorf("TRUSS_RUN_ID = %+v", r)
 	}
 	if r := got["TRUSSDBG_UNSET"]; r.Kind != "referenced" || r.State != "set" || r.Value != nil {
