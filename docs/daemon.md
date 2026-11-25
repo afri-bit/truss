@@ -110,7 +110,7 @@ Three limits work together:
 
 | Limit | Set with | Default | Controls |
 |---|---|---|---|
-| Runs at once | `truss daemon start --max-runs <n>` | 4 | How many runs execute in parallel, across all flows. |
+| Runs at once | `max_runs` in [the configuration](#configuration) | 4 | How many runs execute in parallel, across all flows. |
 | Overlap | `flow.overlap` in the file | `queue` | Whether two runs of the *same* flow may overlap, wait, or the second is skipped. |
 | Steps at once | `flow.concurrency` in the file | 1 | How many steps of one run execute in parallel. |
 
@@ -118,6 +118,44 @@ Runs that cannot start yet are `queued` and start in the order they were request
 survives a restart: stop the daemon and start it again, and the queued runs start, still in
 order. A queued run whose flow was unregistered or no longer loads in the meantime is closed
 as `failed` with the reason.
+
+## Configuration
+
+The daemon reads `config.yaml` in the TRUSS home (`~/.truss/config.yaml` unless `TRUSS_HOME`
+says otherwise) each time it starts. The file is optional; every setting has a default.
+
+```yaml
+# ~/.truss/config.yaml
+address: 127.0.0.1:7878   # where it listens; loopback only
+max_runs: 4               # runs that execute at the same time
+history: 200              # finished runs kept, with their logs
+```
+
+| Setting | Default | Environment variable | Flag of `truss daemon start` |
+|---|---|---|---|
+| `address` | `127.0.0.1:7878` | `TRUSS_DAEMON_ADDRESS` | `--address` |
+| `max_runs` | `4` | `TRUSS_DAEMON_MAX_RUNS` | `--max-runs` |
+| `history` | `200` | `TRUSS_DAEMON_HISTORY` | `--history` |
+
+A flag wins over the environment variable, which wins over the file, which wins over the
+default. A setting the daemon does not know, or a value it cannot use, stops it from starting with
+an error that names the setting. Changes apply when the daemon starts again:
+`truss daemon stop`, then `truss daemon start`.
+
+`truss daemon config` shows what the daemon would use and where each value comes from:
+
+```console
+$ truss daemon config
+file  /home/me/.truss/config.yaml
+
+SETTING   VALUE           SOURCE
+address   127.0.0.1:7878  default
+max_runs  2               config.yaml
+history   200             default
+...
+```
+
+`--json` prints the same for a script.
 
 ## Run states
 

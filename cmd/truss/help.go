@@ -63,14 +63,19 @@ and a timeline of when the steps ran. "last" is the newest run, of one flow
 with --flow (--pipeline also works). --status is one of queued, running, succeeded, failed, cancelled,
 skipped. --active means queued or running. Needs the daemon.
 `,
-	"daemon": `truss daemon start|stop|status|run|install|uninstall|logs
+	"daemon": `truss daemon start|stop|status|run|install|uninstall|logs|config
 
-  start [--address <host:port>] [--max-runs <n>]   start the service in the background
+  start [--address <host:port>] [--max-runs <n>] [--history <n>]
+                                                  start the service in the background
   stop                                            stop it; active runs are cancelled
   status [--json]                                 exits 1 when it is not running
   run                                             run it in this terminal
   install | uninstall                             start it at login, or stop doing so
   logs [-n <lines>] [--follow]                    the daemon's own log file; works when it is stopped
+  config [--json]                                 each setting, its value and where it comes from
+
+Settings live in config.yaml in the TRUSS home (address, max_runs, history); a
+TRUSS_DAEMON_* variable or a flag of start wins over the file.
 `,
 	"env": `truss env
 

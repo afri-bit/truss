@@ -1,0 +1,22 @@
+{
+  "work_id": "feature--027-daemon-config",
+  "title": "Daemon configuration file",
+  "tier": 2,
+  "branch": "feature/027-daemon-config",
+  "status": "in_progress",
+  "step": "implemented; review next",
+  "steps_done": [
+    "implemented with tests and docs"
+  ],
+  "requirements": [],
+  "specs": [
+    "specs/027-daemon-config/spec.md"
+  ],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [],
+  "pr": null,
+  "created": "2026-11-25T15:48:07Z",
+  "updated": "2026-11-25T15:48:07Z"
+}

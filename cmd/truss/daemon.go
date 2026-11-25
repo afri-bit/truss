@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/afri-bit/truss/internal/api"
+	"github.com/afri-bit/truss/internal/config"
 	"github.com/afri-bit/truss/internal/daemon"
 	"github.com/afri-bit/truss/internal/home"
 )
@@ -28,16 +29,18 @@ func (in invocation) daemon(ctx context.Context) int {
 	case sub == "status" && len(in.args) == 2 && in.args[1] == "--json":
 		return in.daemonStatusJSON(ctx)
 	}
-	pos, flags, err := options(in.args[1:], []string{"address", "max-runs"}, nil)
+	if sub == "config" {
+		return in.daemonConfig(in.args[1:])
+	}
+	pos, flags, err := options(in.args[1:], []string{"address", "max-runs", "history"}, nil)
 	if err != nil || len(pos) != 0 {
 		return in.usage()
 	}
 	if (sub == "stop" || sub == "status" || sub == "uninstall") && len(flags) != 0 {
 		return in.usage()
 	}
-	maxRuns := 0
 	if text, ok := flags["max-runs"]; ok {
-		if maxRuns, err = strconv.Atoi(text); err != nil || maxRuns < 1 {
+		if n, err := strconv.Atoi(text); err != nil || n < 1 {
 			return in.fail(fmt.Errorf("--max-runs must be a whole number of at least 1, got %q", text))
 		}
 	}
@@ -45,9 +48,16 @@ func (in invocation) daemon(ctx context.Context) int {
 	if err != nil {
 		return in.fail(err)
 	}
+	maxRuns, _ := strconv.Atoi(flags["max-runs"])
 	switch sub {
 	case "run":
-		return in.daemonRun(ctx, h, flags["address"], maxRuns)
+		// The settings resolve here, in the process that serves: flag, then
+		// environment, then config.yaml, then default (spec 027).
+		cfg, err := config.Resolve(h.Config(), flags, in.env)
+		if err != nil {
+			return in.fail(err)
+		}
+		return in.daemonRun(ctx, h, cfg)
 	case "start":
 		return in.daemonStart(ctx, h, in.args[1:])
 	case "stop":
@@ -63,9 +73,10 @@ func (in invocation) daemon(ctx context.Context) int {
 }
 
 // daemonRun serves in the foreground until interrupted.
-func (in invocation) daemonRun(ctx context.Context, h home.Dir, address string, maxRuns int) int {
+func (in invocation) daemonRun(ctx context.Context, h home.Dir, cfg config.Config) int {
 	d, err := daemon.Start(ctx, daemon.Options{
-		Home: h, Address: address, MaxParallelRuns: maxRuns, Version: Version, Env: in.env, Log: in.stderr,
+		Home: h, Address: cfg.Get("address"), MaxParallelRuns: cfg.Int("max_runs"), KeepRuns: cfg.Int("history"),
+		Version: Version, Env: in.env, Log: in.stderr,
 	})
 	if err != nil {
 		return in.fail(err)
@@ -203,5 +214,61 @@ func (in invocation) desktop(ctx context.Context) int {
 	if err := openBrowser(url); err != nil {
 		fmt.Fprintf(in.stderr, "could not open a browser (%s); open the address above yourself\n", err.Error())
 	}
+	return 0
+}
+
+// daemonConfig prints each daemon setting, its value and where it comes from
+// (spec 027). It reads the file and the environment as truss daemon start
+// would; flags given to start are not known here.
+func (in invocation) daemonConfig(args []string) int {
+	pos, flags, err := options(args, nil, []string{"json"})
+	if err != nil || len(pos) != 0 {
+		return in.usage()
+	}
+	h, err := home.Resolve(in.env)
+	if err != nil {
+		return in.fail(err)
+	}
+	cfg, err := config.Resolve(h.Config(), nil, in.env)
+	if err != nil {
+		return in.fail(err)
+	}
+	if flags["json"] != "" {
+		type row struct {
+			Key     string `json:"key"`
+			Value   string `json:"value"`
+			Source  string `json:"source"`
+			Default string `json:"default"`
+			Env     string `json:"env"`
+			Flag    string `json:"flag"`
+		}
+		out := struct {
+			File   string `json:"file"`
+			Exists bool   `json:"exists"`
+			Values []row  `json:"settings"`
+		}{File: cfg.Path, Exists: cfg.Exists, Values: []row{}}
+		for _, v := range cfg.Values {
+			out.Values = append(out.Values, row{v.Key, v.Value, v.Source, v.Default, v.Env, "--" + v.Flag})
+		}
+		return writeJSON(in.stdout, out)
+	}
+	state := "(not there; every value is a default or from the environment)"
+	if cfg.Exists {
+		state = ""
+	}
+	fmt.Fprintf(in.stdout, "file  %s %s\n\n", clean(cfg.Path), state)
+	rows := [][]string{{"SETTING", "VALUE", "SOURCE"}}
+	for _, v := range cfg.Values {
+		rows = append(rows, []string{v.Key, v.Value, v.Source})
+	}
+	for _, l := range columns(rows, screenWidth(in.env)) {
+		fmt.Fprintln(in.stdout, clean(l))
+	}
+	fmt.Fprintln(in.stdout, "\nSet a value in the file, with a variable or with a flag of truss daemon start:")
+	for _, v := range cfg.Values {
+		fmt.Fprintf(in.stdout, "  %-9s %s or --%s   %s\n", v.Key, v.Env, v.Flag, v.Help)
+	}
+	fmt.Fprintln(in.stdout, "A flag wins over a variable, which wins over the file.")
+	fmt.Fprintln(in.stdout, "Changes take effect when the daemon starts again.")
 	return 0
 }

@@ -47,6 +47,9 @@ type Options struct {
 	Address string
 	// MaxParallelRuns limits runs that execute at once; 0 means the default.
 	MaxParallelRuns int
+	// KeepRuns is how many finished runs stay in the history; 0 means the
+	// default.
+	KeepRuns int
 	// Version is the product version reported by the API.
 	Version string
 	// Env is the environment steps start from ("KEY=value" entries).
@@ -141,7 +144,7 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 	if err != nil {
 		return nil, err
 	}
-	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Env: opts.Env, Secrets: secrets.Open(opts.Home.Secrets()).Load, Now: opts.Now, Resolve: resolver(reg), Folders: func(name string) (string, string) { return opts.Home.PipelineData(name), opts.Home.PipelineCache(name) }})
+	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Keep: opts.KeepRuns, Env: opts.Env, Secrets: secrets.Open(opts.Home.Secrets()).Load, Now: opts.Now, Resolve: resolver(reg), Folders: func(name string) (string, string) { return opts.Home.PipelineData(name), opts.Home.PipelineCache(name) }})
 	if err != nil {
 		return nil, err
 	}

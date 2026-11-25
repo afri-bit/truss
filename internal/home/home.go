@@ -83,6 +83,9 @@ func (d Dir) ClearPipelineCache(name string) (existed bool, err error) {
 // DaemonLog is the daemon's own log file.
 func (d Dir) DaemonLog() string { return d.Path("daemon.log") }
 
+// Config is the daemon's configuration file (spec 027).
+func (d Dir) Config() string { return d.Path("config.yaml") }
+
 // Ensure creates the home directory, private to the user. A directory that
 // already exists is tightened to 0700 on systems that honor file modes; one
 // that cannot be tightened (for example it belongs to someone else) is an

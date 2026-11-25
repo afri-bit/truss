@@ -175,10 +175,11 @@ through [`secrets`](pipeline-reference.md#secrets).
 
 | Command | What it does |
 |---|---|
-| `truss daemon start` | Starts the background service and returns. |
+| `truss daemon start [--address <host:port>] [--max-runs <n>] [--history <n>]` | Starts the background service and returns. The flags win over `config.yaml` for this start. |
 | `truss daemon stop` | Stops it. Active runs are cancelled. |
 | `truss daemon status [--json]` | Says whether it runs, where, how busy it is, and whether it starts at login. Exits `1` when it does not run. `--json` prints `{"running": ..., "daemon": ...}` and keeps the exit code. |
 | `truss daemon logs [-n <lines>] [--follow]` | Prints the last 50 lines (or `-n`) of the daemon's own log, and with `--follow` keeps printing until Ctrl-C. Reads a file, so it works when the daemon is stopped. |
+| `truss daemon config [--json]` | Shows each daemon setting (`address`, `max_runs`, `history`), its value and where it comes from: a `TRUSS_DAEMON_*` variable, `config.yaml` or the default. See [Configuration](daemon.md#configuration). |
 | `truss daemon run` | Runs the service in the terminal, logging to standard error. For debugging and for service managers. |
 | `truss daemon install` | Makes the daemon start at login: a systemd user unit (Linux), a launchd agent (macOS) or a Task Scheduler task (Windows). Needs no root or administrator rights. Refuses a binary in a temporary directory. See [Starting at login](daemon.md#starting-at-login). |
 | `truss daemon uninstall` | Removes what `install` created, and nothing else. |

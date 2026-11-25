@@ -125,7 +125,7 @@ func TestTidy_BashCompletionCompletes(t *testing.T) {
 	script := s.ok("completion", "bash")
 	for line, want := range map[string]string{
 		"truss reg":     "register",
-		"truss daemon ": "install logs run start status stop uninstall",
+		"truss daemon ": "config install logs run start status stop uninstall",
 		"truss runs ":   "build my\\ flow show",
 		"truss run ":    "build my\\ flow",
 		"truss run b":   "build",
