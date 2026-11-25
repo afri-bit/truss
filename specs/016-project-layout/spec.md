@@ -78,7 +78,7 @@ working directory) that contains `steps` or `jobs` is no longer a pipeline file;
 - **FR-012** `truss register` takes a flow name, a path or `--all`. Without any of them it is an
   error that lists the available flows. `--all` registers every flow, each under its pipeline name
   (`--name` is not allowed with `--all`). After a successful `register --all` (every flow
-  registered, none failed) the CLI prints one line, `registered N pipelines (M with schedules)`, or
+  registered, none failed) the CLI prints one line, `registered N pipelines (M with schedules)` (since spec 024: `flows`), or
   `registered 1 pipeline (M with schedules)` for one. No summary is printed when any flow failed.
   A name already registered for another file is reported with a hint to use `--name`.
 

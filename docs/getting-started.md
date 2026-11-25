@@ -1,6 +1,6 @@
 # Getting started
 
-This page takes you from install to a scheduled pipeline in about five minutes. You need a
+This page takes you from install to a scheduled flow in about five minutes. You need a
 terminal and Go. TRUSS is one binary; nothing else runs until you ask.
 
 ## Install
@@ -35,13 +35,13 @@ project:
   name: demo
 ```
 
-Pipelines live next to it, one file each, in `.truss/flows/`:
+Flows live next to it, one file each, in `.truss/flows/`:
 
 ```yaml
 # .truss/flows/hello.yaml
 version: "1"
 
-pipeline:
+flow:
   name: hello
 
 steps:
@@ -49,7 +49,7 @@ steps:
     run: echo "Hello from TRUSS"
 ```
 
-## Run a pipeline
+## Run a flow
 
 Run it by name, from the project folder:
 
@@ -72,13 +72,13 @@ $ truss run hello
 The `====` lines are headings: the setup (the machine your steps run on), each step, and the
 summary. What your command prints is always labelled `step <id> |`.
 
-`truss run` with no name is an error that lists the pipelines it finds (exit 1). `truss run <path>` runs any pipeline file.
+`truss run` with no name is an error that lists the flows it finds (exit 1). `truss run <path>` runs any flow file.
 
 TRUSS keeps what a run leaves behind in `.truss/state/<name>/`: the run log, and the data and cache
 folders your steps can use. It also writes `.truss/.gitignore` so that only `state/` is ignored and
-your pipelines stay in git.
+your flows stay in git.
 
-## Add a pipeline with dependencies
+## Add a flow with dependencies
 
 Group steps into jobs and let a job wait for others. Jobs that do not depend on each other run side
 by side.
@@ -87,7 +87,7 @@ by side.
 # .truss/flows/ci.yaml
 version: "1"
 
-pipeline:
+flow:
   name: ci
   concurrency: 2
 
@@ -112,11 +112,11 @@ Check the files without running anything:
 ```console
 $ truss validate
 truss.yaml is valid: project demo
-.truss/flows/ci.yaml is valid: pipeline ci, 3 steps, concurrency 2
+.truss/flows/ci.yaml is valid: flow ci, 3 steps, concurrency 2
 step lint/vet
 step test/unit
 step release/build needs lint/vet, test/unit
-.truss/flows/hello.yaml is valid: pipeline hello, 1 steps, concurrency 1
+.truss/flows/hello.yaml is valid: flow hello, 1 steps, concurrency 1
 step greet
 ```
 
@@ -126,7 +126,7 @@ fails the run and stops the rest.
 ## Let the daemon run it
 
 The daemon is a small background service with a queue, a history and one API for every client. Start
-it, tell it about your pipelines, and trigger one:
+it, tell it about your flows, and trigger one:
 
 ```console
 $ truss daemon start
@@ -135,7 +135,7 @@ daemon started (pid 4242, 127.0.0.1:7878)
 $ truss register --all
 registered ci (/home/me/demo/.truss/flows/ci.yaml)
 registered hello (/home/me/demo/.truss/flows/hello.yaml)
-registered 2 pipelines (0 with schedules)
+registered 2 flows (0 with schedules)
 
 $ truss trigger ci --follow
 ...
@@ -151,13 +151,13 @@ every login (`truss daemon uninstall` takes it back). Details are in [the daemon
 
 ## Put it on a schedule
 
-Add a trigger to the pipeline file and save. The daemon re-reads the files it already knows, so a change to a registered pipeline takes effect by itself.
+Add a trigger to the flow file and save. The daemon re-reads the files it already knows, so a change to a registered flow takes effect by itself.
 
 ```yaml
 # .truss/flows/nightly.yaml
 version: "1"
 
-pipeline:
+flow:
   name: nightly
 
 on:
@@ -180,12 +180,12 @@ catch-up run with `missed: run`. Register the new file with `truss register nigh
 $ truss desktop
 ```
 
-Desktop is a dashboard in your browser. It shows your pipelines, every run as a step graph, and the
+Desktop is a dashboard in your browser. It shows your flows, every run as a step graph, and the
 live log. It talks to the daemon, so start the daemon first.
 
 ## Where next
 
-- [Pipeline file reference](pipeline-reference.md): every field, cron syntax and recipes.
+- [Flow file reference](pipeline-reference.md): every field, cron syntax and recipes.
 - [Command line reference](cli.md): every command and exit code.
 - [The daemon](daemon.md): registration, schedules, missed runs and concurrency.
 - [TRUSS Desktop](desktop.md): what the dashboard shows.

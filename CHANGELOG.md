@@ -9,6 +9,11 @@ Dates below are when a release was made. 0.1.0 is the first release.
 
 ## [Unreleased]
 
+### Changed
+
+- One word: flow  
+  TRUSS says "flow" everywhere a user reads it: help, command output, validation messages, the daemon log, TRUSS Desktop and the docs. A flow file may call its main block `flow:`; `pipeline:` is still accepted, but not both in one file. `truss runs show last --flow <name>` joins `--pipeline`. Unchanged: the `truss pipelines` command, the API paths and JSON fields, `TRUSS_PIPELINE`, JSON output and the run log. A script that matches English output must update, for example `registered 2 pipelines` is now `registered 2 flows` and the `Pipeline` row of `runs show` is `Flow` (specs/024-flow-vocabulary, ADR 0021).
+
 ## [0.2.0] - 2026-11-19
 
 Debug a flow: look at one step and run just that step. Alongside it come a layered command line, a readable run log, flows that follow their files and Desktop corrections.

@@ -24,7 +24,7 @@ Tier 2 (pipeline schema, process environment, a CLI command). The user-facing te
 ## Requirements
 
 - **FR-001** `pipeline.workdir` is an optional non-empty string. Empty, non-string and
-  non-scalar values are errors (`pipeline workdir must be a non-empty string`).
+  non-scalar values are errors (`flow workdir must be a non-empty string`).
 - **FR-002** A step's working directory is the first one set of: the step's `dir`, its job's
   `dir`, `pipeline.workdir`, the directory the run starts in. The settings replace each other;
   they are never joined. A relative value is always relative to the run's starting directory

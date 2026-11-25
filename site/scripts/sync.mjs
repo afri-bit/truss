@@ -28,7 +28,7 @@ if (!/^[A-Za-z0-9._/-]+$/.test(BRANCH)) throw new Error(`sync: TRUSS_DOCS_BRANCH
 // The pages of the site, in sidebar order (astro.config.mjs lists the same slugs).
 const pages = [
   { file: 'getting-started.md', slug: 'getting-started', title: 'Getting started' },
-  { file: 'pipeline-reference.md', slug: 'pipeline-reference', title: 'Pipeline file reference' },
+  { file: 'pipeline-reference.md', slug: 'pipeline-reference', title: 'Flow file reference' },
   { file: 'cli-guide.md', slug: 'cli-guide', title: 'Using the command line' },
   { file: 'cli.md', slug: 'cli', title: 'Command line reference' },
   { file: 'daemon.md', slug: 'daemon', title: 'The daemon' },

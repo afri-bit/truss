@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>Pipelines that live on your machine.</strong><br>
+  <strong>Flows that live on your machine.</strong><br>
   Write one YAML file, run it by hand or on a schedule,<br>
   and watch it from the terminal or from TRUSS Desktop.
 </p>
@@ -18,14 +18,14 @@
 
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
-  <a href="docs/pipeline-reference.md">Pipeline file</a> ·
+  <a href="docs/pipeline-reference.md">Flow file</a> ·
   <a href="docs/cli.md">Commands</a> ·
   <a href="docs/daemon.md">Daemon</a> ·
   <a href="docs/desktop.md">Desktop</a> ·
   <a href="docs/architecture.md">Architecture</a>
 </p>
 
-> **Status:** [v0.2.0](docs/MILESTONE.md) is the latest release (v0.1.0 was the first). The pipeline file, the CLI and the daemon API may still change before 1.0.
+> **Status:** [v0.2.0](docs/MILESTONE.md) is the latest release (v0.1.0 was the first). The flow file, the CLI and the daemon API may still change before 1.0.
 
 <p align="center">
   <img src="docs/images/desktop-dashboard.png" alt="TRUSS Desktop dashboard" width="900">
@@ -37,7 +37,7 @@
 - [What you get](#what-you-get)
 - [Quick start](#quick-start)
 - [Three ways to use TRUSS](#three-ways-to-use-truss)
-- [A pipeline file](#a-pipeline-file)
+- [A flow file](#a-flow-file)
 - [Commands](#commands)
 - [How it fits together](#how-it-fits-together)
 - [Documentation](#documentation)
@@ -54,7 +54,7 @@ Pipelines are software, but they are rarely developed like software.
 - **Hard to debug.** Failures happen on a remote runner you can't step into, with an environment you can't easily reproduce.
 - **Implicit behavior.** It is often unclear what runs, in what order, with which environment, and why it failed.
 
-TRUSS treats a pipeline as an executable artifact rather than platform configuration. The same definition runs locally while you work on it and unchanged wherever it is deployed.
+TRUSS treats a pipeline (in TRUSS: a flow) as an executable artifact rather than platform configuration. The same definition runs locally while you work on it and unchanged wherever it is deployed.
 
 ```mermaid
 flowchart LR
@@ -72,13 +72,13 @@ flowchart LR
 
 ## What you get
 
-- **Local first.** `truss run` executes a pipeline right where you are. No server, no account, no push.
+- **Local first.** `truss run` executes a flow right where you are. No server, no account, no push.
 - **Jobs and dependencies.** Group steps into jobs, let jobs wait for each other, run independent work in parallel.
 - **A daemon, like Docker's.** `truss daemon start` gives you a queue, a history and one API for every client.
-- **Cron that understands laptops.** Schedules live in the pipeline file. A job planned for 09:00 does not fire at 11:00 because you opened the lid late, unless you ask for a catch-up run.
+- **Cron that understands laptops.** Schedules live in the flow file. A job planned for 09:00 does not fire at 11:00 because you opened the lid late, unless you ask for a catch-up run.
 - **Register what you want watched.** Your files stay in your projects; the daemon only remembers where they are and re-reads them when they change.
-- **Concurrency you control.** Steps per run, runs per machine, and whether a pipeline may overlap itself.
-- **TRUSS Desktop.** A dashboard, pipeline controls, step graphs and live logs, built into the same binary.
+- **Concurrency you control.** Steps per run, runs per machine, and whether a flow may overlap itself.
+- **TRUSS Desktop.** A dashboard, flow controls, step graphs and live logs, built into the same binary.
 - **One small binary.** Go standard library plus a YAML parser. Linux, macOS and Windows.
 
 ## Quick start
@@ -101,9 +101,9 @@ go build -o bin/truss ./cmd/truss
 
 Or download a prebuilt binary for Linux, macOS or Windows (amd64 and arm64) from [GitHub Releases](https://github.com/afri-bit/truss/releases/latest). Each release lists SHA-256 checksums.
 
-### 1. Run a pipeline by hand
+### 1. Run a flow by hand
 
-A project is a folder with a `truss.yaml` file that names it. Pipelines are files in
+A project is a folder with a `truss.yaml` file that names it. Flows are files in
 `.truss/flows/`. Create the project file:
 
 ```yaml
@@ -114,7 +114,7 @@ project:
   name: hello
 ```
 
-Then add a pipeline, `.truss/flows/hello.yaml`:
+Then add a flow, `.truss/flows/hello.yaml`:
 
 ```yaml
 # .truss/flows/hello.yaml
@@ -168,7 +168,7 @@ The daemon does not start by itself after a reboot. To have your schedules keep 
 
 ### 3. Put it on a schedule
 
-Add a trigger to the pipeline file and save. The daemon picks the change up by itself.
+Add a trigger to the flow file and save. The daemon picks the change up by itself.
 
 ```yaml
 # .truss/flows/hello.yaml
@@ -213,11 +213,11 @@ either register the file and use `truss trigger` (the daemon runs it, with the d
 or keep running in your shell and add `--track`: `truss run --track` still uses your environment and
 only reports to the daemon, which shows it as a `local` run.
 
-Pipelines are written in files, with your editor. Desktop watches and controls them; it does not edit them.
+Flows are written in files, with your editor. Desktop watches and controls them; it does not edit them.
 
-## A pipeline file
+## A flow file
 
-Each file in `.truss/flows/` is one pipeline. A project can hold as many as you need:
+Each file in `.truss/flows/` is one flow. A project can hold as many as you need:
 `build.yaml`, `test.yaml`, `nightly.yml`. Run one by its file name without the extension:
 `truss run nightly`.
 
@@ -225,7 +225,7 @@ Each file in `.truss/flows/` is one pipeline. A project can hold as many as you 
 # .truss/flows/nightly.yaml
 version: "1"
 
-pipeline:
+flow:
   concurrency: 3            # steps at once
   overlap: skip             # never run on top of itself
 
@@ -256,28 +256,28 @@ steps:
 `vet` and `unit` run side by side; `build` starts when both succeeded. The first failed step
 fails the run and stops the rest, unless you opt into retries, `continue-on-error` or `if`
 conditions. A file has `steps` or `jobs`, never both. Every field is described in the
-[pipeline file reference](docs/pipeline-reference.md), and the layout of a project is in
+[flow file reference](docs/pipeline-reference.md), and the layout of a project is in
 [Project layout](docs/pipeline-reference.md#project-layout).
 
 ## Commands
 
 | | Command | |
 |---|---|---|
-| **Run here** | `truss run <name\|path> [--track]` | Run a pipeline now; with no argument it is an error that lists the pipelines. `--track` also reports it to the daemon |
+| **Run here** | `truss run <name\|path> [--track]` | Run a flow now; with no argument it is an error that lists the flows. `--track` also reports it to the daemon |
 | **Debug** | `truss flows show <name\|path> <step>` | One step: its command, its neighbours and a table of the environment it can use (secrets as `set` or `missing`) |
 | | `truss run <name\|path> --step <id>` \| `--from <id>` | Run one step, or a step and what needs it (`--with-needs`, `--env NAME=VALUE`); the saved run log stays |
-| | `truss validate [<name\|path>]` | Check a pipeline and show its steps; with no argument, check the project and every pipeline |
+| | `truss validate [<name\|path>]` | Check a flow and show its steps; with no argument, check the project and every flow |
 | **Secrets** | `truss secret set <name>` \| `list` \| `remove <name>` | Store credentials for `secrets:` in a file (value from stdin) |
 | **Daemon** | `truss daemon start` \| `stop` \| `status` | Manage the background service |
 | | `truss daemon install` \| `uninstall` | Start the daemon at login, or stop doing so |
 | | `truss desktop` | Open TRUSS Desktop |
-| **Pipelines** | `truss register <name> [--name <name>]` | Make a pipeline known to the daemon |
-| | `truss register <path> [--name <name>]` | Same, for a pipeline file by path |
-| | `truss register --all` | Register every pipeline in the project |
+| **Flows** | `truss register <name> [--name <name>]` | Make a flow known to the daemon |
+| | `truss register <path> [--name <name>]` | Same, for a flow file by path |
+| | `truss register --all` | Register every flow in the project |
 | | `truss unregister <name>` | Forget it; the file and history stay |
 | | `truss pipelines` | List registrations, next and last run |
 | | `truss pause <name>` \| `resume <name>` | Stop or restart its schedules |
-| | `truss cache clear <name>` | Empty a pipeline's cache folder (no daemon needed) |
+| | `truss cache clear <name>` | Empty a flow's cache folder (no daemon needed) |
 | **Runs** | `truss trigger <name> [--follow]` | Start a run now |
 | | `truss runs [<name>]` | List runs, newest first |
 | | `truss logs <run-id> [--follow]` | Show a run log |
@@ -308,7 +308,7 @@ flowchart LR
     scheduler --> runs --> engine --> shell
 ```
 
-`truss run` and the daemon drive the same engine, so a pipeline behaves the same either way.
+`truss run` and the daemon drive the same engine, so a flow behaves the same either way.
 The engine knows nothing about the daemon, and the daemon knows nothing about its clients.
 The full map is in [docs/architecture.md](docs/architecture.md).
 
@@ -316,8 +316,8 @@ The full map is in [docs/architecture.md](docs/architecture.md).
 
 | Read this | When you want to |
 |---|---|
-| [Getting started](docs/getting-started.md) | Go from install to a scheduled pipeline in five minutes |
-| [Pipeline file reference](docs/pipeline-reference.md) | Know every field, cron syntax, and recipes |
+| [Getting started](docs/getting-started.md) | Go from install to a scheduled flow in five minutes |
+| [Flow file reference](docs/pipeline-reference.md) | Know every field, cron syntax, and recipes |
 | [Using the command line](docs/cli-guide.md) | Tour the commands: status, dashboard, flows, runs, scripting with `--json` |
 | [Command line reference](docs/cli.md) | Look up a command or an exit code |
 | [The daemon](docs/daemon.md) | Understand registration, schedules, missed runs, concurrency, the HTTP API |
