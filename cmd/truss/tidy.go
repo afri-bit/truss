@@ -137,21 +137,24 @@ func (in invocation) completion() int {
 	var b strings.Builder
 	switch in.args[0] {
 	case "bash":
+		// Flow names are data: they never go through compgen -W, which would
+		// expand $(...) in a file name, and they are inserted quoted.
 		b.WriteString("# truss completion for bash. Load with: eval \"$(truss completion bash)\"\n")
-		b.WriteString("_truss_flows() {\n  local f\n  for f in .truss/flows/*.yaml .truss/flows/*.yml; do\n")
-		b.WriteString("    [ -f \"$f\" ] || continue\n    f=${f##*/}\n    printf '%s\\n' \"${f%.*}\"\n  done\n}\n")
-		b.WriteString("_truss() {\n  local cur=${COMP_WORDS[COMP_CWORD]} cmd=${COMP_WORDS[1]} IFS=$'\\n'\n")
-		b.WriteString("  if [ \"$COMP_CWORD\" -eq 1 ]; then COMPREPLY=($(compgen -W \"" + strings.ReplaceAll(words, " ", "\n") + "\" -- \"$cur\")); return; fi\n")
+		b.WriteString("_truss_add_flows() {\n  local f n\n  for f in .truss/flows/*.yaml .truss/flows/*.yml; do\n")
+		b.WriteString("    [ -f \"$f\" ] || continue\n    n=${f##*/}; n=${n%.*}\n")
+		b.WriteString("    case \"$n\" in \"$1\"*) COMPREPLY+=(\"$(printf '%q' \"$n\")\");; esac\n  done\n}\n")
+		b.WriteString("_truss() {\n  local cur=${COMP_WORDS[COMP_CWORD]} cmd=${COMP_WORDS[1]}\n  COMPREPLY=()\n")
+		b.WriteString("  if [ \"$COMP_CWORD\" -eq 1 ]; then COMPREPLY=($(compgen -W \"" + words + "\" -- \"$cur\")); return; fi\n")
 		b.WriteString("  if [ \"$COMP_CWORD\" -eq 2 ]; then case \"$cmd\" in\n")
-		b.WriteString("    runs) COMPREPLY=($(compgen -W \"show\n$(_truss_flows)\" -- \"$cur\")); return;;\n")
+		b.WriteString("    runs) COMPREPLY=($(compgen -W \"show\" -- \"$cur\")); _truss_add_flows \"$cur\"; return;;\n")
 		for _, k := range keys {
 			if k == "runs" {
 				continue
 			}
-			fmt.Fprintf(&b, "    %s) COMPREPLY=($(compgen -W \"%s\" -- \"$cur\")); return;;\n", k, strings.ReplaceAll(subs(k), " ", "\n"))
+			fmt.Fprintf(&b, "    %s) COMPREPLY=($(compgen -W \"%s\" -- \"$cur\")); return;;\n", k, subs(k))
 		}
 		b.WriteString("  esac; fi\n")
-		b.WriteString("  COMPREPLY=($(compgen -W \"$(_truss_flows)\" -- \"$cur\"))\n}\ncomplete -o default -F _truss truss\n")
+		b.WriteString("  _truss_add_flows \"$cur\"\n}\ncomplete -o default -F _truss truss\n")
 	case "zsh":
 		b.WriteString("#compdef truss\n# truss completion for zsh. Load with: eval \"$(truss completion zsh)\"\n")
 		b.WriteString("(( $+functions[compdef] )) || { autoload -Uz compinit && compinit }\n")
@@ -191,7 +194,10 @@ func (in invocation) completion() int {
 		b.WriteString("  elseif ($n -eq 2 -and $parts[1] -eq 'runs') { $list = @('show') + $flows }\n")
 		b.WriteString("  elseif ($n -eq 2 -and $subs.ContainsKey($parts[1])) { $list = $subs[$parts[1]] }\n")
 		b.WriteString("  else { $list = $flows }\n")
-		b.WriteString("  $list | Where-Object { $_.StartsWith($word, [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { [System.Management.Automation.CompletionResult]::new($_) }\n}\n")
+		b.WriteString("  $list | Where-Object { $_.StartsWith($word, [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object {\n")
+		b.WriteString("    $text = $_\n")
+		b.WriteString("    if ($text -notmatch '^[A-Za-z0-9._-]+$') { $text = \"'\" + $text.Replace(\"'\", \"''\") + \"'\" }\n")
+		b.WriteString("    [System.Management.Automation.CompletionResult]::new($text, $_, 'ParameterValue', $_)\n  }\n}\n")
 	default:
 		return in.usage()
 	}

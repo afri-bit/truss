@@ -2,7 +2,9 @@ package main
 
 import (
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -124,8 +126,8 @@ func TestTidy_BashCompletionCompletes(t *testing.T) {
 	for line, want := range map[string]string{
 		"truss reg":     "register",
 		"truss daemon ": "install logs run start status stop uninstall",
-		"truss runs ":   "build my flow show",
-		"truss run ":    "build my flow",
+		"truss runs ":   "build my\\ flow show",
+		"truss run ":    "build my\\ flow",
 		"truss run b":   "build",
 	} {
 		words := strings.Fields(line)
@@ -146,6 +148,36 @@ func TestTidy_BashCompletionCompletes(t *testing.T) {
 		}
 		if got := strings.Join(strings.Split(strings.TrimSpace(string(out)), "\n"), " "); got != want {
 			t.Errorf("%q completes to %q, want %q", line, got, want)
+		}
+	}
+}
+
+// A flow file name is data: completing it runs nothing (security review of
+// spec 025: compgen -W expands $(...) in its word list).
+func TestTidy_BashCompletionRunsNothingFromAFileName(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil || runtime.GOOS == "windows" {
+		t.Skip("needs bash on a Unix system")
+	}
+	s := newSession(t, false)
+	for _, name := range []string{"$(touch PWNED1)", "`touch PWNED2`", "${HOME}", "a;b", "it's"} {
+		s.write(".truss/flows/"+name+".yaml", "x")
+	}
+	prog := s.ok("completion", "bash") + "\nCOMP_WORDS=(truss run ''); COMP_CWORD=2; _truss; printf '%s\\n' \"${COMPREPLY[@]}\""
+	cmd := exec.Command(bash, "-c", prog)
+	cmd.Dir = s.dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	for _, marker := range []string{"PWNED1", "PWNED2"} {
+		if _, err := os.Stat(filepath.Join(s.dir, marker)); err == nil {
+			t.Fatalf("completion ran code from a file name: %s exists", marker)
+		}
+	}
+	for _, want := range []string{`\$\(touch\ PWNED1\)`, `\$\{HOME\}`, `a\;b`, `it\'s`} {
+		if !strings.Contains(string(out), want+"\n") {
+			t.Errorf("completion lacks the quoted %s:\n%s", want, out)
 		}
 	}
 }
