@@ -24,7 +24,7 @@ test("dashboard counters follow what the daemon did", async () => {
   await page.goto(d.authedUrl());
   await page.locator("h1", { hasText: "Dashboard" }).waitFor();
 
-  const expected = { "pipelines registered": "4", "running now": "1", "queued": "0", "succeeded today": "1", "failed today": "1", "skipped today": "1" };
+  const expected = { "flows registered": "4", "running now": "1", "queued": "0", "succeeded today": "1", "failed today": "1", "skipped today": "1" };
   for (const [label, want] of Object.entries(expected)) {
     await poll(async () => (await tile(page, label).textContent()) === want, `tile "${label}" = ${want}`);
   }

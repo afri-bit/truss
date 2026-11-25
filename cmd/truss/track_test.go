@@ -112,7 +112,7 @@ func TestRunTrack_InvalidDefinitionNeverReachesTheDaemon(t *testing.T) {
 	s := newSession(t, true)
 	s.write("pipeline.yaml", "version: \"1\"\npipeline: {name: x}\nsteps: []\n")
 	code, _, errOut := s.truss("run", "pipeline.yaml", "--track")
-	if code != 1 || !strings.Contains(errOut, "pipeline must contain one or more steps") {
+	if code != 1 || !strings.Contains(errOut, "a flow must contain one or more steps") {
 		t.Fatalf("exit %d, stderr %q", code, errOut)
 	}
 	if out := s.ok("runs"); !strings.Contains(out, "no runs yet") {

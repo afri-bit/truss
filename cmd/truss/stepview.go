@@ -390,7 +390,7 @@ func (in invocation) writeStep(d stepDoc) {
 				}
 			}
 		}
-		rows = append(rows, []string{r.Name, r.Source, state, value})
+		rows = append(rows, []string{r.Name, sourceLabel(r.Source), state, value})
 	}
 	for _, l := range columns(rows, screenWidth(in.env)) {
 		fmt.Fprintln(w, clean(l))
@@ -398,4 +398,14 @@ func (in invocation) writeStep(d stepDoc) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Host environment rows come from reading the command text; a script can read more.")
 	fmt.Fprintln(w, "Values of host variables are shown with --values; secrets and token-like names never.")
+}
+
+// sourceLabel is the word the table shows for where a variable comes from.
+// The flow-level env keeps the source "pipeline" in --json, a released
+// contract; the table says "flow", the word TRUSS uses since v0.3.0.
+func sourceLabel(source string) string {
+	if source == "pipeline" {
+		return "flow"
+	}
+	return source
 }

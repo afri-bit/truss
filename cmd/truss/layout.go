@@ -61,7 +61,7 @@ func absPath(cwd, arg string) string {
 func resolveFile(cwd, arg string) (pipelineFile, error) {
 	if project.IsPath(arg) {
 		if isProjectFile(cwd, arg) {
-			return pipelineFile{}, errors.New("truss.yaml is project metadata, not a pipeline; pipelines live in .truss/flows/")
+			return pipelineFile{}, errors.New("truss.yaml is project metadata, not a flow; flows live in .truss/flows/")
 		}
 		return pipelineFile{path: absPath(cwd, arg), display: arg, stem: project.FileStem(arg)}, nil
 	}
@@ -86,7 +86,7 @@ func needFlowError(cwd, what string) error {
 	if err != nil {
 		return err
 	}
-	return fmt.Errorf("%s needs a pipeline name or path; %s", what, project.AvailableText(project.Names(flows)))
+	return fmt.Errorf("%s needs a flow name or path; %s", what, project.AvailableText(project.Names(flows)))
 }
 
 // loaded is a parsed and validated pipeline.

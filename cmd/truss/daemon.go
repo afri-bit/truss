@@ -174,7 +174,7 @@ func (in invocation) daemonStatus(ctx context.Context, h home.Dir) int {
 	fmt.Fprintf(in.stdout, "  address    %s\n", st.Address)
 	fmt.Fprintf(in.stdout, "  home       %s\n", st.Home)
 	fmt.Fprintf(in.stdout, "  started    %s\n", local(&st.StartedAt))
-	fmt.Fprintf(in.stdout, "  pipelines  %d\n", st.Pipelines)
+	fmt.Fprintf(in.stdout, "  flows      %d\n", st.Pipelines)
 	fmt.Fprintf(in.stdout, "  runs       %d running, %d queued (limit %d at once)\n", st.RunningRuns, st.QueuedRuns, st.MaxParallelRuns)
 	in.loginLine(ctx, h)
 	return 0

@@ -161,7 +161,7 @@ else
 fi
 rm -rf "$work"
 
-# Spec 016: pipelines live in .truss/flows/ and `truss run <name>` runs one.
+# Spec 016: flows live in .truss/flows/ and `truss run <name>` runs one.
 new_dir
 printf 'version: "1"\nproject:\n  name: demo\n' >"$work/project/truss.yaml"
 mkdir -p "$work/project/.truss/flows"
@@ -178,7 +178,7 @@ else
 fi
 run_truss "$work/project" validate
 if [ "$code" -ne 0 ] || [[ "$out" != *"truss.yaml is valid: project demo"* ]] ||
-	[[ "$out" != *".truss/flows/hello.yaml is valid: pipeline hello-world"* ]]; then
+	[[ "$out" != *".truss/flows/hello.yaml is valid: flow hello-world"* ]]; then
 	fail "validate project" "want the project and the pipeline reported"
 else
 	pass "validate project"
@@ -375,7 +375,7 @@ EOF
 run_truss "$work/project" run pipeline.yaml
 if [ "$code" -ne 1 ]; then
 	fail "unknown field" "want exit 1"
-elif [ "$err" != 'error: unknown field "concurency" in pipeline' ]; then
+elif [ "$err" != 'error: unknown field "concurency" in flow' ]; then
 	fail "unknown field" "want the unknown field error on stderr"
 elif [ -e "$work/project/marker.txt" ]; then
 	fail "unknown field" "a step command ran"
@@ -631,7 +631,7 @@ else
 	fi
 	run_truss "$work/project" unregister jobs
 	run_truss "$work/project" pipelines
-	if [ "$code" -ne 0 ] || [[ "$out" != "no pipelines registered"* ]]; then
+	if [ "$code" -ne 0 ] || [[ "$out" != "no flows registered"* ]]; then
 		fail "unregister" "want an empty registry"
 	else
 		pass "unregister"

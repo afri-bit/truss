@@ -240,7 +240,7 @@ test("#demo on a real daemon's page shows real data; demo data exists only on th
     await page.locator("#conn", { hasText: "connected" }).waitFor();
     assert.equal(await page.locator("#conn", { hasText: "Demo data" }).count(), 0);
     assert.equal(await page.evaluate(() => sessionStorage.getItem("truss-demo")), null, "the demo flag is dropped");
-    const names = await page.locator(".tile", { hasText: "Pipelines registered" }).locator(".num").textContent();
+    const names = await page.locator(".tile", { hasText: "Flows registered" }).locator(".num").textContent();
     assert.equal(names, String((await d.call("GET", "/pipelines")).length), "counts come from the daemon");
   } finally {
     await page.context().close();

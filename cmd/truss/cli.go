@@ -11,7 +11,7 @@ import (
 )
 
 // usageText is the CLI usage printed for help and for unknown invocations.
-const usageText = `TRUSS runs pipelines on your machine.
+const usageText = `TRUSS runs flows on your machine.
 
 usage: truss <command> [arguments]
 
@@ -24,19 +24,19 @@ Look around (read-only; most take --json):
   flows show <name|path>              one flow: schedules, environment names, steps
   flows show <name|path> <step>       one step: command, needs, and the environment it can use
   flows graph <name|path>             the stages a flow runs its steps in
-  pipelines show <name>               one registered pipeline with its latest runs
+  pipelines show <name>               one registered flow with its latest runs
   schedules                           every schedule, soonest first (needs the daemon)
   runs show <run-id|last>             one run: steps, exit codes, timeline
   env                                 where TRUSS keeps its files; what it sees
 
 Run here, without the daemon:
-  run <name|path> [--track]           run a pipeline: a name from .truss/flows/ or a file path;
+  run <name|path> [--track]           run a flow: a name from .truss/flows/ or a file path;
                                       --track also reports it to the daemon (needs it)
   run <name|path> --step <id> | --from <id>
                                       debug: run one step, or a step and what needs it;
                                       add --with-needs to --step for what it needs; the run
                                       log is not saved. --env NAME=VALUE overrides a variable
-  validate [<name|path>]              check truss.yaml and every pipeline, or one pipeline,
+  validate [<name|path>]              check truss.yaml and every flow, or one flow,
                                       without running it
 
 The daemon:
@@ -54,12 +54,12 @@ Secrets (no daemon needed; values come from standard input, never an argument):
   secret list                         list secret names
   secret remove <name>                delete a secret
 
-Registered pipelines (these need the daemon):
-  register <name|path> [--name <name>]  make a pipeline known to the daemon
-  register --all                      register every pipeline in .truss/flows/
+Registered flows (these need the daemon):
+  register <name|path> [--name <name>]  make a flow known to the daemon
+  register --all                      register every flow in .truss/flows/
   unregister <name>                   forget it; its run history stays
-  pipelines                           list registered pipelines
-  pause <name> | resume <name>        stop or restart a pipeline's schedules
+  pipelines                           list registered flows
+  pause <name> | resume <name>        stop or restart a flow's schedules
   trigger <name> [--follow]           start a run now
   runs [<name>] [--status <s>] [--active] [--limit <n>]
                                       list runs, newest first
@@ -67,7 +67,7 @@ Registered pipelines (these need the daemon):
   cancel <run-id>                     end a queued or running run
 
 Files only (no daemon needed):
-  cache clear <name>                  remove a pipeline's cache folder; the next run recreates it
+  cache clear <name>                  remove a flow's cache folder; the next run recreates it
 
   help [<command>] | version          truss help <command> explains one command
 `
@@ -270,7 +270,7 @@ func (in invocation) validateProject(ctx context.Context) int {
 		return in.fail(err)
 	}
 	if len(flows) == 0 {
-		fmt.Fprintln(in.stdout, "no pipelines in .truss/flows/")
+		fmt.Fprintln(in.stdout, "no flows in .truss/flows/")
 		return 0
 	}
 	code := 0
@@ -294,9 +294,9 @@ func (in invocation) validateFile(ctx context.Context, file pipelineFile) error 
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(in.stdout, "%s is valid: pipeline %s, %d steps, concurrency %d\n", clean(file.display), clean(plan.Name), len(plan.Graph), plan.Concurrency)
+	fmt.Fprintf(in.stdout, "%s is valid: flow %s, %d steps, concurrency %d\n", clean(file.display), clean(plan.Name), len(plan.Graph), plan.Concurrency)
 	if l.declared != "" && l.declared != file.stem {
-		fmt.Fprintf(in.stdout, "note: %s declares the pipeline name %q, not %q; the run log and the daemon use %q\n", clean(file.display), l.declared, file.stem, l.declared)
+		fmt.Fprintf(in.stdout, "note: %s declares the flow name %q, not %q; the run log and the daemon use %q\n", clean(file.display), l.declared, file.stem, l.declared)
 	}
 	for _, s := range l.def.Schedules {
 		zone := "local time"

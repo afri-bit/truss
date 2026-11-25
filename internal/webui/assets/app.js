@@ -383,7 +383,7 @@ function runsTable(runs, opts = {}) {
   const open = (r) => () => go(href.run(r.id));
   return h("table", null,
     h("thead", null, h("tr", null,
-      h("th", null, "Status"), h("th", null, "Run"), withPipeline && h("th", null, "Pipeline"), h("th", null, "Trigger"),
+      h("th", null, "Status"), h("th", null, "Run"), withPipeline && h("th", null, "Flow"), h("th", null, "Trigger"),
       h("th", null, "Steps"), live && h("th", null, h("span", null, "Resources")),
       h("th", null, "Created"), h("th", { class: "num" }, "Duration"), !live && note && h("th", null, "Note"))),
     h("tbody", null, runs.map((r) => h("tr", { class: "link", onclick: open(r), hidden: hide ? hide(r) : false, "data-filter": [r.pipeline, r.id, r.trigger].join(" ").toLowerCase() },
@@ -406,7 +406,7 @@ function pipelineActions(p, compactMode, iconOnly) {
   const btn = (label, ico, attrs) => h("button", iconOnly ? Object.assign({}, attrs, { "aria-label": label, title: attrs.title || label, class: ((attrs.class || "") + " icon-only").trim() }) : attrs,
     icon(ico, "sm"), !iconOnly && label);
   const pauseBtn = !hasSchedule
-    ? btn("Pause schedule", "pause", { disabled: true, title: "This pipeline has no schedule" })
+    ? btn("Pause schedule", "pause", { disabled: true, title: "This flow has no schedule" })
     : p.paused
       ? btn("Resume schedule", "play", { onclick: () => act(`Schedules of ${p.name} resumed`, () => api("POST", `/pipelines/${name}/resume`)) })
       : btn("Pause schedule", "pause", { onclick: () => act(`Schedules of ${p.name} paused`, () => api("POST", `/pipelines/${name}/pause`)) });
@@ -581,9 +581,9 @@ views.dashboard = {
       h("div", { class: "head" }, h("div", { class: "title" }, h("h1", null, "Dashboard"),
         h("p", { class: "sub" }, `Up to ${status.max_parallel_runs} runs at once · daemon ${status.version} · up ${compact(up)}`)),
       h("span", { class: "spacer" }),
-      h("a", { class: "btn", href: "#/pipelines" }, icon("plus", "sm"), "Register pipeline")),
+      h("a", { class: "btn", href: "#/pipelines" }, icon("plus", "sm"), "Register flow")),
       h("div", { class: "tiles" },
-        tile("", pipelines.length, "Pipelines registered", `${scheduled} on a schedule`),
+        tile("", pipelines.length, "Flows registered", `${scheduled} on a schedule`),
         tile("run", status.running_runs, "Running now", `${status.running_runs} of ${status.max_parallel_runs} slots`),
         tile("wait", status.queued_runs, "Queued", status.queued_runs ? "waiting for a slot" : "queue empty"),
         tile("ok", count("succeeded"), "Succeeded today", avg),
@@ -650,13 +650,13 @@ views.pipelines = {
   load: () => getJSON("/pipelines"),
   render(pipelines) {
     // The draft survives the periodic refresh, so a half-typed form is never lost.
-    const path = h("input", { id: "register-path", class: "grow mono", name: "path", placeholder: "/absolute/path/to/truss.yaml", required: true, autocomplete: "off", "aria-label": "Path of the pipeline file", value: draft.path,
+    const path = h("input", { id: "register-path", class: "grow mono", name: "path", placeholder: "/absolute/path/to/truss.yaml", required: true, autocomplete: "off", "aria-label": "Path of the flow file", value: draft.path,
       oninput: (e) => { draft.path = e.target.value; } });
     const name = h("input", { id: "register-name", name: "name", placeholder: "name (optional)", autocomplete: "off", "aria-label": "Registration name", value: draft.name,
       oninput: (e) => { draft.name = e.target.value; } });
     const form = h("form", { class: "register", onsubmit: (e) => {
       e.preventDefault();
-      act("Pipeline registered", async () => {
+      act("Flow registered", async () => {
         await api("POST", "/pipelines", { path: path.value.trim(), name: name.value.trim() });
         draft.path = draft.name = path.value = name.value = "";
       });
@@ -668,16 +668,16 @@ views.pipelines = {
     const viewBtn = (id, value, label, ico) => h("button", { type: "button", id, "aria-pressed": String(list === (value === "list")), onclick: () => setSetting("flowsView", value) }, icon(ico, "sm"), label);
     return [
       h("div", { class: "head" }, h("div", { class: "title" }, h("h1", null, "Flows"),
-        h("p", { class: "sub" }, "Pipeline files this daemon knows. The file stays where it is and is read again before every run."))),
-      panel("Register a pipeline", { hint: "absolute path to a truss.yaml" }, form),
+        h("p", { class: "sub" }, "Flow files this daemon knows. The file stays where it is and is read again before every run."))),
+      panel("Register a flow", { hint: "absolute path to a truss.yaml" }, form),
       h("div", { class: "toolbar" },
-        h("input", { type: "search", id: "pipe-filter", class: "filter", placeholder: "Filter by name or path", "aria-label": "Filter pipelines", value: ui.pipeQuery, oninput: (e) => { ui.pipeQuery = e.target.value; filterInPlace(".cards > .card, #flows-table tbody tr", ui.pipeQuery, "pipe-count", pipelines.length); } }),
+        h("input", { type: "search", id: "pipe-filter", class: "filter", placeholder: "Filter by name or path", "aria-label": "Filter flows", value: ui.pipeQuery, oninput: (e) => { ui.pipeQuery = e.target.value; filterInPlace(".cards > .card, #flows-table tbody tr", ui.pipeQuery, "pipe-count", pipelines.length); } }),
         h("span", { class: "muted", id: "pipe-count", style: "font-size:12px" }, `${shown.length} of ${pipelines.length}`),
         h("span", { class: "spacer" }),
         states.map(([st, n]) => h("span", { class: "muted", style: "font-size:12px;display:inline-flex;gap:6px;align-items:center" }, badge(st), n)),
         pipelines.length > 0 && h("div", { class: "seg", role: "group", "aria-label": "Flows view" }, viewBtn("flows-view-cards", "cards", "Cards", "grid"), viewBtn("flows-view-list", "list", "List", "list"))),
       !pipelines.length
-        ? h("div", { class: "panel empty" }, h("div", { class: "empty-title" }, "No pipelines registered yet."), "Use the form above or ", h("code", null, "truss register <path>"))
+        ? h("div", { class: "panel empty" }, h("div", { class: "empty-title" }, "No flows registered yet."), "Use the form above or ", h("code", null, "truss register <path>"))
         : list
           ? flowsTable(pipelines, shown)
           : h("div", { class: "cards" }, pipelines.map((p) => { const c = pipelineCard(p); c.hidden = !shown.includes(p); return c; })),
@@ -806,7 +806,7 @@ views.runs = {
       h("div", { class: "toolbar" },
         groups.filter((g) => g === "all" || n(g) > 0).map((g) => h("button", { class: "chip", "aria-pressed": String(ui.runFilter === g), onclick: () => { ui.runFilter = g; route(true); } }, g, h("span", { class: "n" }, n(g)))),
         h("span", { class: "spacer" }),
-        h("input", { type: "search", id: "runs-filter", class: "filter", placeholder: "Filter by pipeline, id or trigger", "aria-label": "Filter runs", value: ui.runQuery, oninput: (e) => { ui.runQuery = e.target.value; filterInPlace("#runs-table tbody tr", ui.runQuery); } })),
+        h("input", { type: "search", id: "runs-filter", class: "filter", placeholder: "Filter by flow, id or trigger", "aria-label": "Filter runs", value: ui.runQuery, oninput: (e) => { ui.runQuery = e.target.value; filterInPlace("#runs-table tbody tr", ui.runQuery); } })),
       h("div", { class: "panel", id: "runs-table" }, h("div", { class: "table-wrap tall" }, runsTable(byStatus, { empty: runs.length ? "No run has this status." : null, hide: (r) => !shown.includes(r) }))),
     ];
   },
@@ -1039,7 +1039,7 @@ views.run = {
         h("div", null, h("div", { class: "k" }, "Started"), h("div", { class: "v" }, clock(run.started_at))),
         h("div", null, h("div", { class: "k" }, active ? "Elapsed" : "Duration"), h("div", { class: "v" }, took(run))),
         h("div", null, h("div", { class: "k" }, "Processes"), h("div", { class: "v", title: run.trigger === "local" ? "the run executes in a shell outside the daemon" : res.ok() ? "processes of this run's running steps" : res.why() }, !active ? "0 live" : run.trigger === "local" ? "local shell" : res.ok() ? `${usage.procs} live` : "not reported")),
-        h("div", null, h("div", { class: "k" }, "Supervisor PID"), h("div", { class: "v", title: run.trigger === "local" ? "the run executes in a shell outside the daemon" : "the daemon process that runs this pipeline" }, run.trigger === "local" ? "local shell" : shell.status ? shell.status.pid : "–"))),
+        h("div", null, h("div", { class: "k" }, "Supervisor PID"), h("div", { class: "v", title: run.trigger === "local" ? "the run executes in a shell outside the daemon" : "the daemon process that runs this flow" }, run.trigger === "local" ? "local shell" : shell.status ? shell.status.pid : "–"))),
       run.reason && h("div", { class: "callout" + (run.status === "failed" ? " bad" : ""), role: run.status === "failed" ? "alert" : null }, icon(run.status === "failed" ? "alert" : "info"), h("div", null, run.reason)),
       steps.length > 0 && panel("Workflow", { hint: "click a step to filter the log", tools: legend() },
         graph(steps, stepState, logState.step, select, (st) => (st.started_at ? tookCompact(st) : ""))),
@@ -1077,9 +1077,9 @@ views.run = {
       h("div", { class: "grid-2" },
         panel("Resources", { sim: true, hint: active ? "this run's processes, since this page opened" : "this run has ended" },
           h("div", { class: "panel-body" }, runResources(run))),
-        panel("Configuration", { hint: pipeline ? pipeline.path : "pipeline not registered" },
+        panel("Configuration", { hint: pipeline ? pipeline.path : "flow not registered" },
           h("div", { class: "panel-body", style: "padding-top:4px;padding-bottom:4px" }, h("dl", { class: "facts" },
-            h("dt", null, "Pipeline"), h("dd", null, h("a", { href: href.pipeline(run.pipeline) }, run.pipeline)),
+            h("dt", null, "Flow"), h("dd", null, h("a", { href: href.pipeline(run.pipeline) }, run.pipeline)),
             h("dt", null, "Run id"), h("dd", { class: "mono" }, run.id),
             h("dt", null, "Trigger"), h("dd", null, triggerLabel(run.trigger), run.scheduled_for ? ` · for ${clock(run.scheduled_for)}` : ""),
             pipeline && [h("dt", null, "File"), h("dd", { class: "mono", title: pipeline.path }, pipeline.path)],
@@ -1132,7 +1132,7 @@ function healthChecks() {
   const paused = sched.filter((p) => p.paused).length;
   checks.push({ name: "Scheduler", detail: sched.length ? `${sched.length} scheduled pipeline${sched.length === 1 ? "" : "s"}${paused ? `, ${paused} paused` : ""}` : "nothing scheduled", val: sched.length ? `${sched.length - paused} active` : "idle", state: sched.length ? (paused ? "warn" : "ok") : "off" });
   const invalid = shell.pipelines.filter((p) => !p.valid).length;
-  checks.push({ name: "Pipeline files", detail: invalid ? `${invalid} file${invalid === 1 ? "" : "s"} failed validation` : "all files parse", val: `${shell.pipelines.length - invalid}/${shell.pipelines.length}`, state: invalid ? "bad" : "ok" });
+  checks.push({ name: "Flow files", detail: invalid ? `${invalid} file${invalid === 1 ? "" : "s"} failed validation` : "all files parse", val: `${shell.pipelines.length - invalid}/${shell.pipelines.length}`, state: invalid ? "bad" : "ok" });
   const failedRecent = shell.runs.slice(0, 20).filter((r) => r.status === "failed").length;
   checks.push({ name: "Recent runs", detail: `${failedRecent} of the last ${Math.min(20, shell.runs.length)} failed`, val: shell.runs.length ? `${Math.round(100 - (failedRecent / Math.min(20, shell.runs.length)) * 100)}%` : "–", state: failedRecent > 3 ? "bad" : failedRecent ? "warn" : "ok" });
   const m = res.m;
@@ -1326,7 +1326,7 @@ function pickerPaint() {
     closePicker();
   };
   dlg.replaceChildren(...[
-    h("h2", { id: "picker-title" }, "Choose a pipeline file"),
+    h("h2", { id: "picker-title" }, "Choose a flow file"),
     picker.error && h("p", { class: "error", role: "alert", id: "picker-error" }, picker.error),
     l && h("div", { class: "picker-bar" },
       h("button", { type: "button", id: "picker-up", disabled: !l.parent, onclick: () => pickerLoad(l.parent) }, icon("up", "sm"), "Up"),
@@ -1399,7 +1399,7 @@ function finderPaint() {
   if (!finder.items.length) list.append(h("li", { class: "empty" }, "Nothing matches."));
   const old = dlg.querySelector("#finder-list");
   if (old) { old.replaceWith(list); dlg.querySelector("input").setAttribute("aria-activedescendant", finder.items.length ? "finder-opt-" + finder.sel : ""); return; }
-  const input = h("input", { type: "text", placeholder: "Jump to a page, pipeline or run…", "aria-label": "Jump to", "aria-controls": "finder-list", autocomplete: "off",
+  const input = h("input", { type: "text", placeholder: "Jump to a page, flow or run…", "aria-label": "Jump to", "aria-controls": "finder-list", autocomplete: "off",
     oninput: (e) => { finder.q = e.target.value; finder.sel = 0; finderPaint(); },
     onkeydown: (e) => {
       if (e.key === "ArrowDown") { e.preventDefault(); finder.sel = Math.min(finder.items.length - 1, finder.sel + 1); finderPaint(); }

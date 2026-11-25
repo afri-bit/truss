@@ -129,7 +129,7 @@ func TestValidate_NewFieldFaults(t *testing.T) {
 	head := "version: \"1\"\npipeline: {name: x}\n"
 	steps := "steps:\n  - {id: a, run: \"true\"}\n"
 	tests := []struct{ name, body, want string }{
-		{"overlap", "version: \"1\"\npipeline: {name: x, overlap: sometimes}\n" + steps, `pipeline overlap must be one of queue, skip, parallel, got "sometimes"`},
+		{"overlap", "version: \"1\"\npipeline: {name: x, overlap: sometimes}\n" + steps, `flow overlap must be one of queue, skip, parallel, got "sometimes"`},
 		{"on not mapping", head + "on: push\n" + steps, "on must be a mapping"},
 		{"unknown trigger", head + "on: {push: true}\n" + steps, `unknown field "push" in on`},
 		{"empty schedule", head + "on: {schedule: []}\n" + steps, "on.schedule must be a list with at least one schedule"},
@@ -141,8 +141,8 @@ func TestValidate_NewFieldFaults(t *testing.T) {
 		{"env value", head + "env: {A: [1]}\n" + steps, "env: value of A must be a single value"},
 		{"step timeout", head + "steps:\n  - {id: a, run: \"true\", timeout: soon}\n", `step "a" timeout must be a duration such as 90s, 5m or 1h30m, got "soon"`},
 		{"step dir", head + "steps:\n  - {id: a, run: \"true\", dir: \"\"}\n", `step "a" dir must be a non-empty string`},
-		{"both", head + steps + "jobs: {j: {steps: [{id: a, run: \"true\"}]}}\n", "a pipeline has either steps or jobs, not both"},
-		{"no jobs", head + "jobs: {}\n", "pipeline must contain one or more jobs"},
+		{"both", head + steps + "jobs: {j: {steps: [{id: a, run: \"true\"}]}}\n", "a flow has either steps or jobs, not both"},
+		{"no jobs", head + "jobs: {}\n", "a flow must contain one or more jobs"},
 		{"job id", head + "jobs: {\"a/b\": {steps: [{id: a, run: \"true\"}]}}\n", `job id "a/b" must use only`},
 		{"empty job", head + "jobs: {j: {steps: []}}\n", `job "j" must contain one or more steps`},
 		{"job unknown field", head + "jobs: {j: {when: x, steps: [{id: a, run: \"true\"}]}}\n", `unknown field "when" in job "j"`},

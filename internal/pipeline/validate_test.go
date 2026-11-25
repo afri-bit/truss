@@ -173,7 +173,7 @@ func TestValidate_ExistingMessagesAreUnchanged(t *testing.T) {
 	}{
 		{name: "missing version", yaml: "pipeline:\n  name: n\nsteps:\n  - id: a\n    run: echo a\n", want: "missing or unsupported schema version"},
 		{name: "unsupported version", yaml: "version: \"2\"\npipeline:\n  name: n\nsteps:\n  - id: a\n    run: echo a\n", want: `unsupported schema version "2"`},
-		{name: "empty steps", yaml: "version: \"1\"\npipeline:\n  name: n\nsteps: []\n", want: "pipeline must contain one or more steps"},
+		{name: "empty steps", yaml: "version: \"1\"\npipeline:\n  name: n\nsteps: []\n", want: "a flow must contain one or more steps"},
 		{name: "duplicate id", yaml: "version: \"1\"\npipeline:\n  name: n\nsteps:\n  - id: a\n    run: echo a\n  - id: a\n    run: echo b\n", want: `duplicate step id "a"`},
 		{name: "empty run", yaml: "version: \"1\"\npipeline:\n  name: n\nsteps:\n  - id: a\n    run: \"\"\n", want: `missing or empty run for step "a"`},
 	}
@@ -240,7 +240,7 @@ func TestValidate_RejectsInvalidConcurrency(t *testing.T) {
 	for _, tt := range scalars {
 		t.Run("value "+tt.raw, func(t *testing.T) {
 			doc := "version: \"1\"\npipeline:\n  name: n\n  concurrency: " + tt.raw + "\n" + steps
-			want := `pipeline concurrency must be a whole number of at least 1, got "` + tt.shown + `"`
+			want := `flow concurrency must be a whole number of at least 1, got "` + tt.shown + `"`
 			if err := validateDoc(t, doc); err == nil || err.Error() != want {
 				t.Fatalf("Validate() error = %v, want %q", err, want)
 			}
@@ -250,7 +250,7 @@ func TestValidate_RejectsInvalidConcurrency(t *testing.T) {
 	for _, tt := range nonScalars {
 		t.Run("value "+tt.raw, func(t *testing.T) {
 			doc := "version: \"1\"\npipeline:\n  name: n\n  concurrency: " + tt.raw + "\n" + steps
-			want := "pipeline concurrency must be a whole number of at least 1, got " + tt.shown
+			want := "flow concurrency must be a whole number of at least 1, got " + tt.shown
 			if err := validateDoc(t, doc); err == nil || err.Error() != want {
 				t.Fatalf("Validate() error = %v, want %q", err, want)
 			}
@@ -261,7 +261,7 @@ func TestValidate_RejectsInvalidConcurrency(t *testing.T) {
 // A negative value set from Go code (not from a file) is also rejected (T029).
 func TestValidate_RejectsNegativeConcurrencyFromCode(t *testing.T) {
 	p := Pipeline{Version: "1", Name: "n", Concurrency: -1, Steps: []Step{{ID: "a", Run: "echo a"}}}
-	want := `pipeline concurrency must be a whole number of at least 1, got "-1"`
+	want := `flow concurrency must be a whole number of at least 1, got "-1"`
 	if err := Validate(p); err == nil || err.Error() != want {
 		t.Fatalf("Validate() error = %v, want %q", err, want)
 	}
@@ -292,7 +292,7 @@ func TestValidate_RejectsUnknownFields(t *testing.T) {
 		{
 			name: "under pipeline",
 			doc:  "version: \"1\"\npipeline:\n  name: n\n  concurency: 2\nsteps:\n  - id: a\n    run: echo a\n",
-			want: `unknown field "concurency" in pipeline`,
+			want: `unknown field "concurency" in flow`,
 		},
 		{
 			name: "in a step with an id",
@@ -330,32 +330,32 @@ func TestValidate_CheckOrder(t *testing.T) {
 		{
 			name: "unknown field before name",
 			doc:  "version: \"1\"\npipeline:\n  concurency: 2\nsteps:\n  - id: a\n    run: echo a\n",
-			want: `unknown field "concurency" in pipeline`,
+			want: `unknown field "concurency" in flow`,
 		},
 		{
 			name: "concurrency without a name",
 			doc:  "version: \"1\"\npipeline:\n  concurrency: 0\nsteps:\n  - id: a\n    run: echo a\n",
-			want: `pipeline concurrency must be a whole number of at least 1, got "0"`,
+			want: `flow concurrency must be a whole number of at least 1, got "0"`,
 		},
 		{
 			name: "concurrency before steps",
 			doc:  "version: \"1\"\npipeline:\n  name: n\n  concurrency: 0\nsteps: []\n",
-			want: `pipeline concurrency must be a whole number of at least 1, got "0"`,
+			want: `flow concurrency must be a whole number of at least 1, got "0"`,
 		},
 		{
 			name: "concurrency before a missing step id",
 			doc:  "version: \"1\"\npipeline:\n  name: n\n  concurrency: 0\nsteps:\n  - run: echo a\n",
-			want: `pipeline concurrency must be a whole number of at least 1, got "0"`,
+			want: `flow concurrency must be a whole number of at least 1, got "0"`,
 		},
 		{
 			name: "concurrency before a missing run",
 			doc:  "version: \"1\"\npipeline:\n  name: n\n  concurrency: 0\nsteps:\n  - id: a\n",
-			want: `pipeline concurrency must be a whole number of at least 1, got "0"`,
+			want: `flow concurrency must be a whole number of at least 1, got "0"`,
 		},
 		{
 			name: "concurrency before needs",
 			doc:  "version: \"1\"\npipeline:\n  name: n\n  concurrency: 0\nsteps:\n  - id: a\n    needs: [ghost]\n    run: echo a\n",
-			want: `pipeline concurrency must be a whole number of at least 1, got "0"`,
+			want: `flow concurrency must be a whole number of at least 1, got "0"`,
 		},
 		{
 			name: "unknown field in a step before its missing run",

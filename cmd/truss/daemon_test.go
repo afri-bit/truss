@@ -92,7 +92,7 @@ func TestCLI_RegisterTriggerLogsUnregister(t *testing.T) {
 	s := newSession(t, true)
 	s.write("pipeline.yaml", validPipeline(echoHello()))
 
-	if out := s.ok("pipelines"); !strings.Contains(out, "no pipelines registered") {
+	if out := s.ok("pipelines"); !strings.Contains(out, "no flows registered") {
 		t.Fatalf("pipelines = %q", out)
 	}
 	if out := s.ok("register", "pipeline.yaml"); !strings.HasPrefix(out, "registered hello-world (") {
@@ -154,7 +154,7 @@ func TestCLI_RegisterRejectsAnInvalidDefinition(t *testing.T) {
 	s := newSession(t, true)
 	s.write("pipeline.yaml", "version: \"1\"\npipeline: {name: x}\nsteps: []\n")
 	code, _, errOut := s.truss("register", "pipeline.yaml")
-	if code != 1 || errOut != "error: pipeline must contain one or more steps\n" {
+	if code != 1 || errOut != "error: a flow must contain one or more steps\n" {
 		t.Fatalf("exit %d, stderr %q", code, errOut)
 	}
 }
@@ -224,7 +224,7 @@ jobs:
     steps:
       - {id: publish, run: make publish}
 `)
-	want := ".truss/flows/nightly.yaml is valid: pipeline nightly, 2 steps, concurrency 2\n" +
+	want := ".truss/flows/nightly.yaml is valid: flow nightly, 2 steps, concurrency 2\n" +
 		"schedule 0 9 * * 1-5 (local time, missed: skip)\n" +
 		"step build/compile\n" +
 		"step ship/publish needs build/compile\n"

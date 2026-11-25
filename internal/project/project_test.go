@@ -328,7 +328,7 @@ func TestResolve(t *testing.T) {
 func TestResolve_NoFlowsSaysSo(t *testing.T) {
 	p, _ := Open(newRoot(t))
 	_, err := p.Resolve("x")
-	if err == nil || !strings.Contains(err.Error(), "no pipelines") {
+	if err == nil || !strings.Contains(err.Error(), "no flows") {
 		t.Fatalf("err = %v", err)
 	}
 }
