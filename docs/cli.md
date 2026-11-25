@@ -253,3 +253,4 @@ shows a run.
 | Variable | Meaning |
 |---|---|
 | `TRUSS_HOME` | Where the daemon keeps its state. Default: `.truss` in your home directory. |
+| `TRUSS_DAEMON_ADDRESS`, `TRUSS_DAEMON_MAX_RUNS`, `TRUSS_DAEMON_HISTORY` | Daemon settings; they win over `config.yaml` and lose to a flag. See [Configuration](daemon.md#configuration). |

@@ -39,6 +39,10 @@ func (in invocation) daemon(ctx context.Context) int {
 	if (sub == "stop" || sub == "status" || sub == "uninstall") && len(flags) != 0 {
 		return in.usage()
 	}
+	if _, ok := flags["history"]; ok && sub != "start" && sub != "run" {
+		// A login item does not carry --history: it belongs in config.yaml.
+		return in.fail(errors.New("--history goes with daemon start or run; for the daemon that starts at login, set history in config.yaml (see truss daemon config)"))
+	}
 	if text, ok := flags["max-runs"]; ok {
 		if n, err := strconv.Atoi(text); err != nil || n < 1 {
 			return in.fail(fmt.Errorf("--max-runs must be a whole number of at least 1, got %q", text))
@@ -53,12 +57,17 @@ func (in invocation) daemon(ctx context.Context) int {
 	case "run":
 		// The settings resolve here, in the process that serves: flag, then
 		// environment, then config.yaml, then default (spec 027).
-		cfg, err := config.Resolve(h.Config(), flags, in.env)
+		cfg, err := resolveConfig(h, flags, in.env)
 		if err != nil {
 			return in.fail(err)
 		}
 		return in.daemonRun(ctx, h, cfg)
 	case "start":
+		// Check here too, so a bad file or flag is reported on the screen,
+		// not only in the log of a daemon that stopped at once.
+		if _, err := resolveConfig(h, flags, in.env); err != nil {
+			return in.fail(err)
+		}
 		return in.daemonStart(ctx, h, in.args[1:])
 	case "stop":
 		return in.daemonStop(ctx, h)
@@ -229,7 +238,7 @@ func (in invocation) daemonConfig(args []string) int {
 	if err != nil {
 		return in.fail(err)
 	}
-	cfg, err := config.Resolve(h.Config(), nil, in.env)
+	cfg, err := resolveConfig(h, nil, in.env)
 	if err != nil {
 		return in.fail(err)
 	}
@@ -252,11 +261,11 @@ func (in invocation) daemonConfig(args []string) int {
 		}
 		return writeJSON(in.stdout, out)
 	}
-	state := "(not there; every value is a default or from the environment)"
+	state := " (not there; every value is a default or from the environment)"
 	if cfg.Exists {
 		state = ""
 	}
-	fmt.Fprintf(in.stdout, "file  %s %s\n\n", clean(cfg.Path), state)
+	fmt.Fprintf(in.stdout, "file  %s%s\n\n", clean(cfg.Path), state)
 	rows := [][]string{{"SETTING", "VALUE", "SOURCE"}}
 	for _, v := range cfg.Values {
 		rows = append(rows, []string{v.Key, v.Value, v.Source})
@@ -271,4 +280,19 @@ func (in invocation) daemonConfig(args []string) int {
 	fmt.Fprintln(in.stdout, "A flag wins over a variable, which wins over the file.")
 	fmt.Fprintln(in.stdout, "Changes take effect when the daemon starts again.")
 	return 0
+}
+
+// resolveConfig resolves the daemon's settings and checks the address rule
+// of spec 006 (loopback only), naming where a bad value came from.
+func resolveConfig(h home.Dir, flags map[string]string, env []string) (config.Config, error) {
+	cfg, err := config.Resolve(h.Config(), flags, env)
+	if err != nil {
+		return cfg, err
+	}
+	for _, v := range cfg.Values {
+		if v.Key == "address" && daemon.CheckAddress(v.Value) != nil {
+			return cfg, fmt.Errorf("address (from %s): must be a loopback host:port, such as 127.0.0.1:7878; the daemon only serves this machine", v.Describe())
+		}
+	}
+	return cfg, nil
 }

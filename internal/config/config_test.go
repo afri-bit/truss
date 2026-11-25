@@ -60,11 +60,12 @@ func TestResolve_FlagOverEnvironmentOverFileOverDefault(t *testing.T) {
 
 func TestResolve_RejectsBadInputAndNamesIt(t *testing.T) {
 	for text, want := range map[string]string{
-		"max_run: 2\n":   `unknown setting "max_run"`,
-		"history: 0\n":   "history (from config.yaml): must be a whole number of at least 1",
-		"address: [a]\n": "address must be a single value",
-		"- a\n":          "must be a mapping",
-		"history: [oops": "invalid YAML",
+		"max_run: 2\n":               `unknown setting "max_run"`,
+		"history: 0\n":               "history (from config.yaml): must be a whole number of at least 1",
+		"address: [a]\n":             "address must be a single value",
+		"- a\n":                      "must be a mapping",
+		"history: [oops":             "invalid YAML",
+		"max_runs: 2\nmax_runs: 9\n": "max_runs is set twice",
 	} {
 		if _, err := Resolve(write(t, text), nil, nil); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%q: err = %v, want %q", text, err, want)

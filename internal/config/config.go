@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"sort"
@@ -45,8 +46,8 @@ type Setting struct {
 	check func(string) (string, error)
 }
 
-// Settings lists every setting, in the order `truss daemon config` prints them.
-var Settings = []Setting{
+// settings lists every setting, in the order `truss daemon config` prints them.
+var settings = []Setting{
 	{Key: "address", Flag: "address", Env: "TRUSS_DAEMON_ADDRESS", Default: "127.0.0.1:7878",
 		Help: "where the daemon listens; loopback only", check: nonEmpty},
 	{Key: "max_runs", Flag: "max-runs", Env: "TRUSS_DAEMON_MAX_RUNS", Default: "4",
@@ -104,7 +105,7 @@ func Resolve(path string, flags map[string]string, env []string) (Config, error)
 		}
 	}
 	c := Config{Path: path, Exists: exists}
-	for _, s := range Settings {
+	for _, s := range settings {
 		v := Value{Setting: s, Value: s.Default, Source: SourceDefault}
 		if fv, ok := file[s.Key]; ok {
 			v.Value, v.Source = fv, SourceFile
@@ -112,7 +113,7 @@ func Resolve(path string, flags map[string]string, env []string) (Config, error)
 		if ev, ok := envMap[s.Env]; ok && ev != "" {
 			v.Value, v.Source = ev, s.Env
 		}
-		if fl, ok := flags[s.Flag]; ok {
+		if fl, ok := flags[s.Flag]; ok && fl != "" {
 			v.Value, v.Source = fl, SourceFlag
 		}
 		norm, err := s.check(v.Value)
@@ -150,9 +151,20 @@ func read(path string) (map[string]string, bool, error) {
 	if info.Size() > maxFileBytes {
 		return nil, false, fmt.Errorf("%s is too large (the limit is %d bytes)", FileName, maxFileBytes)
 	}
-	data, err := os.ReadFile(path) // #nosec G304 -- the TRUSS home's own file, Lstat-checked above
+	f, err := os.Open(path) // #nosec G304 -- the TRUSS home's own file, Lstat-checked above
 	if err != nil {
 		return nil, false, fmt.Errorf("read %s: %w", FileName, err)
+	}
+	defer func() { _ = f.Close() }()
+	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() {
+		return nil, false, fmt.Errorf("%s is not a regular file", FileName)
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxFileBytes+1))
+	if err != nil {
+		return nil, false, fmt.Errorf("read %s: %w", FileName, err)
+	}
+	if len(data) > maxFileBytes {
+		return nil, false, fmt.Errorf("%s is too large (the limit is %d bytes)", FileName, maxFileBytes)
 	}
 	out := map[string]string{}
 	if len(bytes.TrimSpace(data)) == 0 {
@@ -170,12 +182,15 @@ func read(path string) (map[string]string, bool, error) {
 		return nil, false, fmt.Errorf("%s must be a mapping of settings", FileName)
 	}
 	known := map[string]bool{}
-	for _, s := range Settings {
+	for _, s := range settings {
 		known[s.Key] = true
 	}
 	for i := 0; i+1 < len(root.Content); i += 2 {
 		key, v := root.Content[i].Value, root.Content[i+1]
+		_, twice := out[key]
 		switch {
+		case twice:
+			return nil, false, fmt.Errorf("%s: %s is set twice", FileName, key)
 		case !known[key]:
 			return nil, false, fmt.Errorf("%s: unknown setting %q; known: %s", FileName, key, strings.Join(Keys(), ", "))
 		case v.Kind != yaml.ScalarNode:
@@ -188,8 +203,8 @@ func read(path string) (map[string]string, bool, error) {
 
 // Keys returns the setting keys, sorted.
 func Keys() []string {
-	keys := make([]string, 0, len(Settings))
-	for _, s := range Settings {
+	keys := make([]string, 0, len(settings))
+	for _, s := range settings {
 		keys = append(keys, s.Key)
 	}
 	sort.Strings(keys)
@@ -211,3 +226,7 @@ func atLeastOne(v string) (string, error) {
 	}
 	return strconv.Itoa(n), nil
 }
+
+// Describe says where a value came from, for an error: "config.yaml", "the
+// default", "--max-runs" or "the environment variable TRUSS_DAEMON_MAX_RUNS".
+func (v Value) Describe() string { return describe(v.Source, v.Setting) }
