@@ -116,59 +116,82 @@ func splitHint(msg string) (text, hint string) {
 	return msg[:open], inner
 }
 
-// completion prints a completion script for a shell.
+// flowArgs are the commands whose next word may be a flow name; runs also
+// takes the subcommand show there.
+var flowArgs = []string{"run", "validate", "register", "unregister", "pause", "resume", "trigger", "runs", "cache"}
+
+// completion prints a completion script for a shell. Flow names are the
+// .yaml and .yml files of .truss/flows/ in the current folder, the project
+// TRUSS uses (spec 025).
 func (in invocation) completion() int {
 	if len(in.args) != 1 {
 		return in.usage()
 	}
 	words := strings.Join(commands, " ")
-	var b strings.Builder
 	keys := make([]string, 0, len(subcommands))
 	for k := range subcommands {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
+	subs := func(k string) string { return strings.Join(subcommands[k], " ") }
+	var b strings.Builder
 	switch in.args[0] {
 	case "bash":
-		b.WriteString("# truss completion for bash. Load with: source <(truss completion bash)\n_truss() {\n")
-		b.WriteString("  local cur=${COMP_WORDS[COMP_CWORD]} cmd=${COMP_WORDS[1]}\n")
-		b.WriteString("  if [ \"$COMP_CWORD\" -eq 1 ]; then COMPREPLY=($(compgen -W \"" + words + "\" -- \"$cur\")); return; fi\n")
+		b.WriteString("# truss completion for bash. Load with: eval \"$(truss completion bash)\"\n")
+		b.WriteString("_truss_flows() {\n  local f\n  for f in .truss/flows/*.yaml .truss/flows/*.yml; do\n")
+		b.WriteString("    [ -f \"$f\" ] || continue\n    f=${f##*/}\n    printf '%s\\n' \"${f%.*}\"\n  done\n}\n")
+		b.WriteString("_truss() {\n  local cur=${COMP_WORDS[COMP_CWORD]} cmd=${COMP_WORDS[1]} IFS=$'\\n'\n")
+		b.WriteString("  if [ \"$COMP_CWORD\" -eq 1 ]; then COMPREPLY=($(compgen -W \"" + strings.ReplaceAll(words, " ", "\n") + "\" -- \"$cur\")); return; fi\n")
 		b.WriteString("  if [ \"$COMP_CWORD\" -eq 2 ]; then case \"$cmd\" in\n")
+		b.WriteString("    runs) COMPREPLY=($(compgen -W \"show\n$(_truss_flows)\" -- \"$cur\")); return;;\n")
 		for _, k := range keys {
-			fmt.Fprintf(&b, "    %s) COMPREPLY=($(compgen -W \"%s\" -- \"$cur\")); return;;\n", k, strings.Join(subcommands[k], " "))
+			if k == "runs" {
+				continue
+			}
+			fmt.Fprintf(&b, "    %s) COMPREPLY=($(compgen -W \"%s\" -- \"$cur\")); return;;\n", k, strings.ReplaceAll(subs(k), " ", "\n"))
 		}
 		b.WriteString("  esac; fi\n")
-		b.WriteString("  local flows=$(ls .truss/flows 2>/dev/null | sed -n 's/\\.ya\\{0,1\\}ml$//p')\n")
-		b.WriteString("  COMPREPLY=($(compgen -W \"$flows\" -- \"$cur\"))\n}\ncomplete -o default -F _truss truss\n")
+		b.WriteString("  COMPREPLY=($(compgen -W \"$(_truss_flows)\" -- \"$cur\"))\n}\ncomplete -o default -F _truss truss\n")
 	case "zsh":
-		b.WriteString("#compdef truss\n# truss completion for zsh. Load with: source <(truss completion zsh)\n_truss() {\n")
+		b.WriteString("#compdef truss\n# truss completion for zsh. Load with: eval \"$(truss completion zsh)\"\n")
+		b.WriteString("(( $+functions[compdef] )) || { autoload -Uz compinit && compinit }\n")
+		b.WriteString("_truss() {\n  local -a flows\n  flows=(.truss/flows/*.(yaml|yml)(N:t:r))\n")
 		b.WriteString("  if (( CURRENT == 2 )); then compadd -- " + words + "; return; fi\n")
 		b.WriteString("  if (( CURRENT == 3 )); then case $words[2] in\n")
+		b.WriteString("    runs) compadd -- show $flows; return;;\n")
 		for _, k := range keys {
-			fmt.Fprintf(&b, "    %s) compadd -- %s; return;;\n", k, strings.Join(subcommands[k], " "))
+			if k == "runs" {
+				continue
+			}
+			fmt.Fprintf(&b, "    %s) compadd -- %s; return;;\n", k, subs(k))
 		}
-		b.WriteString("  esac; fi\n")
-		b.WriteString("  compadd -- ${${(f)\"$(ls .truss/flows 2>/dev/null)\"}%.y(a|)ml}\n  _files\n}\ncompdef _truss truss\n")
+		b.WriteString("  esac; fi\n  compadd -- $flows\n  _files\n}\ncompdef _truss truss\n")
 	case "fish":
 		b.WriteString("# truss completion for fish. Load with: truss completion fish | source\n")
+		b.WriteString("function __truss_flows\n  for f in .truss/flows/*.yaml .truss/flows/*.yml\n")
+		b.WriteString("    string replace -r '\\.ya?ml$' '' -- (basename $f)\n  end\nend\n")
 		b.WriteString("complete -c truss -f -n '__fish_use_subcommand' -a '" + words + "'\n")
 		for _, k := range keys {
-			fmt.Fprintf(&b, "complete -c truss -f -n '__fish_seen_subcommand_from %s' -a '%s'\n", k, strings.Join(subcommands[k], " "))
+			fmt.Fprintf(&b, "complete -c truss -f -n '__fish_seen_subcommand_from %s; and test (count (commandline -opc)) -eq 2' -a '%s'\n", k, subs(k))
 		}
-		b.WriteString("complete -c truss -n 'not __fish_use_subcommand' -a '(ls .truss/flows 2>/dev/null | string replace -r \"\\.ya?ml$\" \"\")'\n")
+		b.WriteString("complete -c truss -f -n '__fish_seen_subcommand_from " + strings.Join(flowArgs, " ") + "; and test (count (commandline -opc)) -eq 2' -a '(__truss_flows)'\n")
+		b.WriteString("complete -c truss -f -n '__fish_seen_subcommand_from flows pipelines; and test (count (commandline -opc)) -eq 3' -a '(__truss_flows)'\n")
 	case "powershell":
 		b.WriteString("# truss completion for PowerShell. Load with: truss completion powershell | Out-String | Invoke-Expression\n")
-		b.WriteString("Register-ArgumentCompleter -Native -CommandName truss -ScriptBlock {\n  param($word, $ast, $cursor)\n")
-		b.WriteString("  $parts = $ast.CommandElements | ForEach-Object { $_.ToString() }\n")
+		b.WriteString("Register-ArgumentCompleter -Native -CommandName 'truss', 'truss.exe' -ScriptBlock {\n  param($word, $ast, $cursor)\n")
+		b.WriteString("  $parts = @($ast.CommandElements | ForEach-Object { $_.ToString() })\n")
 		b.WriteString("  $commands = '" + words + "' -split ' '\n  $subs = @{\n")
 		for _, k := range keys {
-			fmt.Fprintf(&b, "    '%s' = '%s' -split ' '\n", k, strings.Join(subcommands[k], " "))
+			fmt.Fprintf(&b, "    '%s' = '%s' -split ' '\n", k, subs(k))
 		}
-		b.WriteString("  }\n  $n = $parts.Count; if ($word -ne '') { $n -= 1 }\n")
+		b.WriteString("  }\n")
+		b.WriteString("  $flows = @(Get-ChildItem -Path .truss/flows -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.yaml', '.yml' } | ForEach-Object { $_.BaseName })\n")
+		b.WriteString("  $n = $parts.Count; if ($word -ne '') { $n -= 1 }\n")
 		b.WriteString("  if ($n -le 1) { $list = $commands }\n")
+		b.WriteString("  elseif ($n -eq 2 -and $parts[1] -eq 'runs') { $list = @('show') + $flows }\n")
 		b.WriteString("  elseif ($n -eq 2 -and $subs.ContainsKey($parts[1])) { $list = $subs[$parts[1]] }\n")
-		b.WriteString("  else { $list = Get-ChildItem .truss/flows -File -ErrorAction SilentlyContinue | ForEach-Object { $_.BaseName } }\n")
-		b.WriteString("  $list | Where-Object { $_ -like \"$word*\" } | ForEach-Object { [System.Management.Automation.CompletionResult]::new($_) }\n}\n")
+		b.WriteString("  else { $list = $flows }\n")
+		b.WriteString("  $list | Where-Object { $_.StartsWith($word, [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { [System.Management.Automation.CompletionResult]::new($_) }\n}\n")
 	default:
 		return in.usage()
 	}

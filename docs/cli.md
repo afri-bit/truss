@@ -83,13 +83,13 @@ command and exits `1`. `truss help exit-codes` lists the exit codes.
 ### Shell completion
 
 `truss completion bash|zsh|fish|powershell` prints a script that completes commands, subcommands
-and the flow names of the project in the current folder. Load it once per shell, or add the line
+and the flow names (`.yaml` and `.yml` files of `.truss/flows/`) of the project in the current folder. Load it once per shell, or add the line
 to your shell profile:
 
 | Shell | Line |
 |---|---|
-| bash | `source <(truss completion bash)` |
-| zsh | `source <(truss completion zsh)` |
+| bash | `eval "$(truss completion bash)"` |
+| zsh | `eval "$(truss completion zsh)"` (it runs `compinit` if your profile has not) |
 | fish | `truss completion fish \| source` |
 | PowerShell | `truss completion powershell \| Out-String \| Invoke-Expression` |
 

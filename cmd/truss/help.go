@@ -128,8 +128,8 @@ Open TRUSS Desktop. --no-open prints the address only; --demo shows sample data.
 
 Print a script that completes commands, subcommands and the flow names of this
 folder's project. Load it once per shell, or add the line to your shell profile:
-  bash        source <(truss completion bash)
-  zsh         source <(truss completion zsh)
+  bash        eval "$(truss completion bash)"
+  zsh         eval "$(truss completion zsh)"
   fish        truss completion fish | source
   PowerShell  truss completion powershell | Out-String | Invoke-Expression
 `,
@@ -171,6 +171,9 @@ func (in invocation) help(topic []string) int {
 	}
 	text, ok := helpTopics[key]
 	if !ok {
+		if contains(commands, key) {
+			return in.usage() // a command without a topic, such as help itself
+		}
 		return in.unknownCommand(key)
 	}
 	fmt.Fprint(in.stdout, text)

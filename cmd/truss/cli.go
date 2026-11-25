@@ -61,7 +61,7 @@ Registered flows (these need the daemon):
   pipelines                           list registered flows
   pause <name> | resume <name>        stop or restart a flow's schedules
   trigger <name> [--follow]           start a run now
-  runs [<name>] [--status <s>] [--active] [--limit <n>]
+  runs [<name>] [--status <s>] [--active] [-n <n>]
                                       list runs, newest first
   logs <run-id> [--follow]            show a run log
   cancel <run-id>                     end a queued or running run
@@ -91,12 +91,18 @@ type invocation struct {
 // fail prints an error and returns exit code 1. Advice at the end of the
 // message, "(start it with: ...)", goes on a hint line of its own.
 func (in invocation) fail(err error) int {
-	text, hint := splitHint(err.Error())
-	fmt.Fprintf(in.stderr, "error: %s\n", text)
-	if hint != "" {
-		fmt.Fprintf(in.stderr, "hint: %s\n", hint)
-	}
+	printError(in.stderr, err.Error())
 	return 1
+}
+
+// printError writes an error line, and a hint line when the message ends
+// with advice (spec 025).
+func printError(w io.Writer, msg string) {
+	text, hint := splitHint(msg)
+	fmt.Fprintf(w, "error: %s\n", text)
+	if hint != "" {
+		fmt.Fprintf(w, "hint: %s\n", hint)
+	}
 }
 
 // usage reports wrong arguments and returns exit code 1: the command's own
@@ -193,6 +199,10 @@ func RunWithInput(ctx context.Context, args []string, cwd string, env []string, 
 		return in.environment(ctx)
 	case "completion":
 		return in.completion()
+	case "help", "version":
+		// help and version with extra words are usage errors (spec 002).
+		fmt.Fprint(stderr, usageText)
+		return 1
 	}
 	if strings.HasPrefix(args[0], "-") {
 		return in.usage()

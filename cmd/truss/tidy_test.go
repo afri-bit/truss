@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"os/exec"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -78,7 +80,7 @@ func TestTidy_CompletionScripts(t *testing.T) {
 	s := newSession(t, false)
 	for shell, marker := range map[string]string{
 		"bash": "complete -o default -F _truss truss", "zsh": "compdef _truss truss",
-		"fish": "complete -c truss", "powershell": "Register-ArgumentCompleter -Native -CommandName truss",
+		"fish": "complete -c truss", "powershell": "Register-ArgumentCompleter -Native -CommandName 'truss', 'truss.exe'",
 	} {
 		out := s.ok("completion", shell)
 		if !strings.Contains(out, marker) || !strings.Contains(out, "register") || !strings.Contains(out, "uninstall") {
@@ -88,21 +90,112 @@ func TestTidy_CompletionScripts(t *testing.T) {
 	if code, _, errOut := s.truss("completion", "tcsh"); code != 1 || !isUsageError(errOut) {
 		t.Fatalf("tcsh: %d %q", code, errOut)
 	}
-	// The bash script is valid bash.
-	if bash, err := exec.LookPath("bash"); err == nil {
-		cmd := exec.Command(bash, "-n")
-		cmd.Stdin = strings.NewReader(s.ok("completion", "bash"))
+	// Each script parses in its shell, where that shell is installed (CI's
+	// Windows runner has pwsh).
+	for shell, check := range map[string][]string{
+		"bash": {"bash", "-n"}, "zsh": {"zsh", "-n"}, "fish": {"fish", "--no-execute"},
+		"powershell": {"pwsh", "-NoProfile", "-Command", "$null = [scriptblock]::Create([Console]::In.ReadToEnd())"},
+	} {
+		bin, err := exec.LookPath(check[0])
+		if err != nil {
+			t.Logf("%s not installed; the %s script is not parsed", check[0], shell)
+			continue
+		}
+		cmd := exec.Command(bin, check[1:]...)
+		cmd.Stdin = strings.NewReader(s.ok("completion", shell))
 		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("bash -n: %v %s", err, out)
+			t.Errorf("%s does not parse the %s script: %v %s", check[0], shell, err, out)
+		}
+	}
+}
+
+// The bash script completes commands, subcommands and flow names (with
+// spaces) of the current folder.
+func TestTidy_BashCompletionCompletes(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil || runtime.GOOS == "windows" {
+		t.Skip("needs bash on a Unix system")
+	}
+	s := newSession(t, false)
+	s.write(".truss/flows/build.yaml", "x")
+	s.write(".truss/flows/my flow.yml", "x")
+	s.write(".truss/flows/README.md", "x")
+	script := s.ok("completion", "bash")
+	for line, want := range map[string]string{
+		"truss reg":     "register",
+		"truss daemon ": "install logs run start status stop uninstall",
+		"truss runs ":   "build my flow show",
+		"truss run ":    "build my flow",
+		"truss run b":   "build",
+	} {
+		words := strings.Fields(line)
+		if strings.HasSuffix(line, " ") {
+			words = append(words, "")
+		}
+		quoted := make([]string, len(words))
+		for i, w := range words {
+			quoted[i] = "'" + w + "'"
+		}
+		prog := script + "\nCOMP_WORDS=(" + strings.Join(quoted, " ") + "); COMP_CWORD=" + strconv.Itoa(len(words)-1) +
+			"; _truss; printf '%s\\n' \"${COMPREPLY[@]}\" | sort"
+		cmd := exec.Command(bash, "-c", prog)
+		cmd.Dir = s.dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%q: %v %s", line, err, out)
+		}
+		if got := strings.Join(strings.Split(strings.TrimSpace(string(out)), "\n"), " "); got != want {
+			t.Errorf("%q completes to %q, want %q", line, got, want)
+		}
+	}
+}
+
+func TestTidy_HelpAndVersionWithExtraWordsPrintTheUsage(t *testing.T) {
+	s := newSession(t, false)
+	for _, args := range [][]string{{"version", "x"}, {"help", "help"}, {"help", "version"}, {"help", "-x"}} {
+		code, out, errOut := s.truss(args...)
+		if args[1] == "-x" {
+			if code != 1 || !strings.Contains(errOut, "unknown command") {
+				t.Errorf("%v: %d %q", args, code, errOut)
+			}
+			continue
+		}
+		if code != 1 || out != "" || errOut != usageText {
+			t.Errorf("%v: exit %d, stdout %q, stderr %q", args, code, out, errOut)
+		}
+	}
+}
+
+func TestTidy_RunErrorsGetAHintLineToo(t *testing.T) {
+	s := newSession(t, false)
+	s.write("f.yaml", "version: \"1\"\nflow: {name: f}\nsteps:\n  - id: a\n    run: echo a\n")
+	code, _, errOut := s.truss("run", "f.yaml", "--track")
+	if code != 1 || !strings.Contains(errOut, "the TRUSS daemon is not running\nhint: start it with: truss daemon start\n") {
+		t.Fatalf("exit %d, stderr %q", code, errOut)
+	}
+}
+
+// commands, the help topics and the dispatcher agree.
+func TestTidy_CommandTableMatchesHelp(t *testing.T) {
+	for topic := range helpTopics {
+		if topic != "exit-codes" && !contains(commands, topic) {
+			t.Errorf("help topic %q is not in commands", topic)
+		}
+	}
+	for alias := range helpAliases {
+		if !contains(commands, alias) {
+			t.Errorf("help alias %q is not in commands", alias)
+		}
+	}
+	for c := range subcommands {
+		if !contains(commands, c) {
+			t.Errorf("subcommands of %q, which is not in commands", c)
 		}
 	}
 }
 
 func TestTidy_EveryCommandIsKnown(t *testing.T) {
 	for _, c := range commands {
-		if c == "help" || c == "version" {
-			continue
-		}
 		s := newSession(t, false)
 		if _, _, errOut := s.truss(c, "--definitely-not-a-flag", "x", "y", "z"); strings.Contains(errOut, "unknown command") {
 			t.Errorf("%s is in commands but RunWithInput does not know it", c)

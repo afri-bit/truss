@@ -4,8 +4,11 @@
   "tier": 2,
   "branch": "feature/025-cli-tidy",
   "status": "in_progress",
-  "step": "implemented; review next",
-  "steps_done": [],
+  "step": "review findings fixed; delta review next",
+  "steps_done": [
+    "implemented",
+    "reviewer and portability findings fixed"
+  ],
   "requirements": [],
   "specs": [
     "specs/025-cli-tidy/spec.md"
@@ -13,8 +16,10 @@
   "owner_agent": "orchestrator",
   "blockers": [],
   "open_questions": [],
-  "next_actions": [],
+  "next_actions": [
+    "delta and security review, then PR"
+  ],
   "pr": null,
   "created": "2026-11-25T15:28:03Z",
-  "updated": "2026-11-25T15:28:03Z"
+  "updated": "2026-11-25T15:39:00Z"
 }

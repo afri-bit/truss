@@ -38,8 +38,10 @@ mistake in it. Advice was buried in parentheses at the end of an error. There wa
 - **FR-003** An error whose message ends with advice in parentheses that contains ` with: ` prints
   the message on the `error:` line and the advice on a `hint:` line.
 - **FR-004** `truss completion bash|zsh|fish|powershell` prints a completion script for commands,
-  subcommands and the names of `.truss/flows/*.yaml` in the current folder; any other shell is a
-  usage error.
+  subcommands (and, after `runs`, `show` or a flow) and the names of the `.yaml` and `.yml`
+  files of `.truss/flows/` in the current folder; any other shell is a usage error. `truss version`
+  and `truss help` with extra words print the whole usage, as before. Errors of `truss run` get
+  the hint line too.
 - **FR-005** `truss runs -n <n>` is `--limit <n>`; giving both is an error.
 - **FR-006** `truss help exit-codes` lists the exit codes: 0 success, 1 anything else.
 - **FR-007** Command names, flags, standard output, JSON and exit codes are unchanged. TRUSS prints
@@ -49,6 +51,12 @@ mistake in it. Advice was buried in parentheses at the end of an error. There wa
 
 Only standard error changes, for usage errors and for errors with advice. Exit codes stay. Spec 002
 FR-014 ("print usage, exit non-zero") still holds: the usage printed is the command's own.
+
+## Tested where
+
+The bash script is parsed and exercised in the Go tests on Unix. zsh, fish and PowerShell
+scripts are parsed when the shell is installed (CI's Windows runner has pwsh); they are not
+exercised by a test.
 
 ## Not done
 
