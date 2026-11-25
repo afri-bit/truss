@@ -111,8 +111,8 @@ func resolveStepEnv(base []string, step pipeline.Step, attempt int) ([]string, s
 // that was just killed can hold a file a little longer, so it tries again
 // for up to a second.
 func removeTempDir(dir string) {
-	for i := 0; i < 10; i++ {
-		if err := os.RemoveAll(dir); err == nil {
+	for i := 0; ; i++ {
+		if err := os.RemoveAll(dir); err == nil || runtime.GOOS != "windows" || i == 9 {
 			return
 		}
 		time.Sleep(100 * time.Millisecond)

@@ -52,12 +52,16 @@ way to define a variable once for a project.
   On Windows names that differ only in case are one variable, across layers too.
 - **FR-004a** A `dir` that uses a variable that is not set, or is empty, fails the step before it
   starts ("dir uses ${NAME}, which is not set"), instead of turning `${INBOX}/x` into `/x`.
+- **FR-004b** An expanded value is at most 128 KiB; a longer one fails the step before it starts,
+  naming the variable, not the value.
 - **FR-005** A `${` without `}` or a `${...}` that is not a variable name is a validation error. The
   message never quotes the value.
 - **FR-006** `TRUSS_TEMP_DIR` is a new folder per run, removed when the run ends; if it cannot be
   made the run goes on without the variable.
 - **FR-007** `truss flows show <flow> <step>` shows the directory a run would use, expanded the
-  same way (a `dir` that uses a per-run variable says so instead), and lists the built-ins: known ones with their value
+  same way (a `dir` that reaches a per-run variable says so instead; one that reaches your
+  environment is shown only with `--values`, and not then when the name looks sensitive or the
+  value holds a stored secret), and lists the built-ins: known ones with their value
   (`SOURCE` `truss`, `STATE` `set`), per-run ones as `each run` (JSON `each-run`), and `project` as
   a source of a variable.
 

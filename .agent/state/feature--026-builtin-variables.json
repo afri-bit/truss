@@ -3,11 +3,12 @@
   "title": "Built-in variables and expansion",
   "tier": 2,
   "branch": "feature/026-builtin-variables",
-  "status": "in_progress",
-  "step": "review findings fixed; delta review next",
+  "status": "in_review",
+  "step": "delta and security findings fixed; PR",
   "steps_done": [
     "implemented with tests and docs",
-    "reviewer and portability findings fixed"
+    "reviewer and portability findings fixed",
+    "security findings fixed"
   ],
   "requirements": [],
   "specs": [
@@ -19,7 +20,7 @@
   "next_actions": [
     "review, then PR"
   ],
-  "pr": null,
+  "pr": "https://github.com/afri-bit/truss/pull/29",
   "created": "2026-11-25T15:40:01Z",
-  "updated": "2026-11-25T15:52:54Z"
+  "updated": "2026-11-25T16:03:58Z"
 }
