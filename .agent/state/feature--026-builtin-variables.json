@@ -20,7 +20,7 @@
   "next_actions": [
     "review, then PR"
   ],
-  "pr": null,
+  "pr": "https://github.com/afri-bit/truss/pull/29",
   "created": "2026-11-25T15:40:01Z",
-  "updated": "2026-11-25T16:03:21Z"
+  "updated": "2026-11-25T16:03:58Z"
 }
