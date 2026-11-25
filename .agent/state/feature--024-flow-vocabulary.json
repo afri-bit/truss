@@ -3,8 +3,8 @@
   "title": "One vocabulary: flow",
   "tier": 2,
   "branch": "feature/024-flow-vocabulary",
-  "status": "in_progress",
-  "step": "review findings fixed; delta review next",
+  "status": "in_review",
+  "step": "PR opened; reviews approve",
   "steps_done": [
     "implemented",
     "reviewer and spec-reviewer findings fixed"
@@ -19,7 +19,7 @@
   "next_actions": [
     "delta review, then PR"
   ],
-  "pr": null,
+  "pr": "https://github.com/afri-bit/truss/pull/27",
   "created": "2026-11-25T15:21:34Z",
-  "updated": "2026-11-25T15:26:55Z"
+  "updated": "2026-11-25T15:29:29Z"
 }
