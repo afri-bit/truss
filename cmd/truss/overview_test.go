@@ -313,7 +313,7 @@ func TestRuns_BadInputIsExplained(t *testing.T) {
 		"cannot be used together":     {"runs", "--active", "--status", "failed"},
 		"no run \"nope\"":             {"runs", "show", "nope"},
 		"there are no runs yet":       {"runs", "show", "last"},
-		"only goes with the id":       {"runs", "show", "abc", "--pipeline", "x"},
+		"--pipeline only goes with":   {"runs", "show", "abc", "--pipeline", "x"},
 		"--flow only goes with":       {"runs", "show", "abc", "--flow", "x"},
 		"give one":                    {"runs", "show", "last", "--flow", "x", "--pipeline", "x"},
 		"--limit must be a whole num": {"runs", "--limit", "x"},

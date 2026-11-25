@@ -560,6 +560,7 @@ if [ "$code" -ne 0 ] || [ ! -e "$work/project/app/marker.txt" ]; then
 else
 	pass "flow key"
 fi
+rm -rf "$work"
 
 # Jobs: the steps of a job run in order and a job waits for the jobs it needs.
 new_dir
