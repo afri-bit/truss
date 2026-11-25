@@ -60,7 +60,7 @@ is kept as the record of what the release needed.
 
 ## v0.2.0: debug a flow, and a richer terminal
 
-v0.2.0 adds what makes TRUSS useful when a flow fails: look at one step, see everything it needs,
+v0.2.0 was tagged on 2026-11-19. It adds what makes TRUSS useful when a flow fails: look at one step, see everything it needs,
 and run just that step with inputs of your choice. Alongside it come the changes made after
 v0.1.0 was tagged (the table in v0.1.0 listed three of them before; they belong here).
 
@@ -78,9 +78,9 @@ v0.1.0 was tagged (the table in v0.1.0 listed three of them before; they belong 
 ### Release checklist
 
 - [x] The pull request of `023-step-debugging` is merged into `main`.
-- [ ] CI is green on Linux, macOS and Windows. The step view and the debug run have only run on macOS locally; Windows gets its first proof here.
+- [x] CI is green on Linux, macOS and Windows. The step view and the debug run have only run on macOS locally; Windows gets its first proof here.
 - [x] `release/0.2.0`: `0.2.0-beta` becomes `0.2.0` in `go.mod`, `cmd/truss` and `internal/webui/VERSION`; `[Unreleased]` becomes `[0.2.0]` with the date; the release check passes.
-- [ ] `release/0.2.0` is merged into `main` through a pull request, then the maintainer pushes the tag.
+- [x] `release/0.2.0` is merged into `main` through a pull request, then the maintainer pushes the tag (v0.2.0, published 2026-11-19).
 
 ### Not in v0.2.0
 
@@ -89,9 +89,49 @@ the last failure, saving a debug log, debug runs through the daemon, event trigg
 other shells) and AI integration (an MCP server). Each needs its own decision and spec; see the
 roadmap below.
 
+## v0.3.0: set it and forget it
+
+v0.3.0 makes TRUSS something you can leave running: it runs your flows reliably, starts them on a
+schedule or when files change, tells you how they went, speaks one vocabulary, and has
+documentation a new user can follow without reading everything. Scope agreed with the maintainer
+on 2026-11-25.
+
+### In this release
+
+| Capability | What it means | Spec | State |
+|---|---|---|---|
+| One vocabulary | "Flow" is the user-facing word everywhere: the file key `flow:` (`pipeline:` still accepted), CLI help and output, Desktop, docs. `truss pipelines` stays as an alias of `truss flows`; the API paths stay | `024-flow-vocabulary` | Planned |
+| A neat command line | The commands keep their names; they gain the same flags everywhere (`--json`, `-f`, `-n`, `-q`, `--no-color`, `NO_COLOR`), one error format with a hint, "did you mean", grouped help, shell completion and a documented exit-code table | `025-cli-tidy` | Planned |
+| Built-in variables | `TRUSS_PROJECT_DIR`, `TRUSS_FLOW`, `TRUSS_JOB`, `TRUSS_STEP`, `TRUSS_ATTEMPT`, `TRUSS_RUN_ID`, `TRUSS_TRIGGER`, `TRUSS_TEMP_DIR`, `TRUSS_OS`, `TRUSS_ARCH` in every run, local or daemon; `TRUSS_*` names are reserved; `${NAME}` expands environment variables in `dir`, `workdir` and `env` values; a project-wide `env` in `truss.yaml` | `026-builtin-variables` | Planned |
+| Daemon configuration | `~/.truss/config.yaml` (address, max runs, history retention, timeouts, log size, notification defaults); flag over environment over file over default; `truss daemon config` shows each value and its source | `027-daemon-config` | Planned |
+| Robust runs | A step is asked to stop before it is killed (`kill_timeout`); no step outlives a crashed daemon; `daemon stop --wait`; crash-safe state; one daemon per TRUSS home; bounded log and history size | `028-robust-runs` | Planned |
+| Local hooks | `on.file` starts a flow when files or folders change (polling, debounced); `on.run` starts a flow when another flow ends; both run in the daemon only | `029-local-hooks` | Planned |
+| Notifications | `notify:` on failure, success, recovery or change, as a desktop notification, a webhook (Slack, Discord, Teams, generic) or a command | `030-notifications` | Planned |
+| `truss init` | A wizard that writes `truss.yaml` and a first flow from a template, with a schedule, a hook or notifications; `--yes` for scripts | `031-truss-init` | Planned |
+| User documentation | The docs site in sections a user can follow: Overview, Get started, Guides, Concepts, Reference, Help; contributor material out of the user's way | `032-user-docs` | Planned |
+
+### Decisions (maintainer, 2026-11-25)
+
+- The word is **flow**. `pipeline` stays accepted where it is a released contract (file key,
+  `truss pipelines`, API paths) and is no longer used in new text.
+- The command line keeps today's commands. It is tidied, not renamed.
+- `${NAME}` expands environment variables by default; the `TRUSS_` prefix is reserved for TRUSS.
+- File hooks poll; they add no dependency. A hook only fires while the daemon runs: changes made
+  while it was stopped do not start a run.
+- Notifications use the operating system's own tools. Email, and a tray or taskbar icon showing
+  that the daemon runs, come later (the icon needs a new dependency and cgo).
+- Packaging (Homebrew, Scoop, `go install`, an install script) is decided after this release's
+  features.
+
+### Not in v0.3.0
+
+Passing data between steps (`TRUSS_OUTPUT`), a shell per step, CI integration (`setup-truss`,
+`--job`, test reports), the MCP server, approval gates, webhooks from outside, a daemon reachable
+beyond localhost, email notifications, the tray icon, packaging. See the roadmap.
+
 ## Roadmap
 
-What comes after v0.2.0, roughly in this order. Scope and order may change: a release holds only
+What comes after v0.3.0, roughly in this order. Scope and order may change: a release holds only
 what its section above lists. A box is ticked when the work is merged and has a spec. Each item
 needs its own `specs/<feature>/spec.md`; the ones that change a contract or the execution of a
 process are tier 2 and get an ADR.
@@ -101,23 +141,32 @@ process are tier 2 and get an ADR.
 - [x] v0.1.0: local runs, the daemon and schedules, secrets, TRUSS Desktop, the project layout
 - [x] v0.2.0: inspect a step and run part of a flow, the layered command line, the readable run log, flows that follow their file, the Flows list view, the docs site
 
-**v0.3.0: debug further, and a first step towards agents**
+**v0.3.0**
 
-- [ ] **Debug, phase 2.** An interactive shell in a step's exact environment (`--shell`), stepping through a flow (`--break`), `--dry-run`, resume from the last failure, save a debug log (`--log`), the last result of a step in `flows show`, and a way to try a step that runs only after a failure (`if: failure()`). `--shell` starts a process the user did not declare as a step, so it needs a line in the execution-safety rules and an ADR.
-- [ ] **`requires:` on a step.** The YAML declares what the step needs from outside (variables, files), so inspect can flag what is missing without reading the script the step runs. A pipeline schema change.
-- [ ] **A shell per step, and step outputs.** `shell: bash | sh | pwsh | cmd` on a step, and `TRUSS_OUTPUT` to pass data between steps. It also covers the "pipeline file portable across host shells" item.
-- [ ] **Hooks, local first.** A flow starts when another flow ends (`on.run`) or when files change (`on.file`). Both need no network.
-- [ ] **`truss mcp`.** An MCP server over stdio, a thin client of the daemon API. It runs registered flows only (never an arbitrary command) and is read-only by default, so an agent can inspect a failed step and rerun just that step.
+- [ ] Robust runs, local hooks, notifications, one vocabulary, a neat command line, `truss init`, user documentation: see its section above
+
+**v0.4.0: run it everywhere**
+
+- [ ] **Packaging.** Homebrew, Scoop, a tested `go install`, an install script with checksums; a tray or taskbar icon that shows the daemon runs (own ADR: new dependency, cgo).
+- [ ] **Data between steps.** A step writes `NAME=value` to `$TRUSS_OUTPUT`; steps and jobs that `needs` it see the value.
+- [ ] **A shell per step.** `shell: bash | sh | pwsh | cmd`, so a flow file runs on every host.
+- [ ] **CI integration.** Keep GitHub Actions or Jenkins and call `truss run`: secrets from the environment, a `setup-truss` action, log groups, `--job`, JUnit and JSON results.
+
+**v0.5.0: agents**
+
+- [ ] **`truss mcp`.** An MCP server over stdio, a thin client of the daemon API. It runs registered flows only (never an arbitrary command) and is read-only by default.
+- [ ] **An approval gate**, recipes for running an agent as a step, a failure summary ready for an LLM.
+- [ ] **Debug, phase 2.** `--shell`, `--break`, `--dry-run`, resume from the last failure, `requires:` on a step.
 
 **Later**
 
 - [ ] **Per-step platforms.** `runner: docker` for a step, using the docker CLI and the project folder mounted as the workspace (no new dependency, no image holding every tool), cancellation by container name. Then remote workers, so a flow keeps one environment while each step runs where its tool lives. Moving the environment between steps means the workspace, the variables and the step outputs; a general file sync waits for remote workers.
-- [ ] **Hooks from outside.** Webhooks as triggers.
+- [ ] **Hooks from outside.** Webhooks as triggers, once the daemon is reachable beyond localhost.
 - [ ] **A daemon reachable beyond localhost.** TLS (or a documented SSH tunnel), scoped tokens (read-only against control), and an explicit `--allow-remote`. The daemon runs shell commands for whoever holds its token, so this needs an ADR and a security review, and comes before any remote worker.
-- [ ] **Agents.** Recipes for running an agent as a step, an approval gate, then SDKs. TRUSS runs agents and is called by them; it is not an LLM framework.
-- [ ] **Desktop.** A packaged window with a tray icon, notifications and start at login.
-- [ ] **Pipelines.** Matrix builds and artifacts.
-- [ ] **Ecosystem.** SDKs and CI-provider bridges, so the same file runs in CI.
+- [ ] **Agents.** SDKs. TRUSS runs agents and is called by them; it is not an LLM framework.
+- [ ] **Desktop.** A packaged window.
+- [ ] **Flows.** Matrix builds and artifacts.
+- [ ] **Ecosystem.** CI-provider plugins beyond the v0.4.0 integration.
 
 ## How to change this file
 
