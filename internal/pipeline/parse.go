@@ -356,11 +356,16 @@ func parseEnv(p *Pipeline, val *yaml.Node, label string) map[string]string {
 		switch {
 		case !envName.MatchString(name):
 			p.issue("%s: %q is not a valid variable name", label, name)
+		case Reserved(name):
+			p.issue("%s: %s is set by TRUSS in every run and cannot be set here", label, name)
 		case v.Kind != yaml.ScalarNode:
 			p.issue("%s: value of %s must be a single value", label, name)
 		case v.Tag == "!!null":
 			env[name] = ""
 		default:
+			if err := CheckTemplate(v.Value); err != nil {
+				p.issue("%s: value of %s: %v", label, name, err)
+			}
 			env[name] = v.Value
 		}
 	}
@@ -382,6 +387,8 @@ func parseSecrets(p *Pipeline, val *yaml.Node, label string) []string {
 		switch {
 		case entry.Kind != yaml.ScalarNode || entry.Tag != "!!str" || !envName.MatchString(entry.Value):
 			p.issue("%s: entry %d is not a valid secret name (letters, digits and '_', not starting with a digit)", label, pos+1)
+		case Reserved(entry.Value):
+			p.issue("%s: %s is set by TRUSS in every run and cannot be a secret name", label, entry.Value)
 		case seen[entry.Value]:
 			p.issue("%s: %q is listed twice", label, entry.Value)
 		default:
@@ -396,6 +403,12 @@ func parseString(p *Pipeline, val *yaml.Node, label string) string {
 	if val.Kind != yaml.ScalarNode || val.Tag != "!!str" || strings.TrimSpace(val.Value) == "" {
 		p.issue("%s must be a non-empty string", label)
 		return ""
+	}
+	// Directories may use ${NAME} (spec 026); other strings are taken as written.
+	if strings.HasSuffix(label, "dir") {
+		if err := CheckTemplate(val.Value); err != nil {
+			p.issue("%s: %v", label, err)
+		}
 	}
 	return val.Value
 }

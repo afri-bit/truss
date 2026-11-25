@@ -431,6 +431,14 @@ func readDefinition(path string) (pipeline.Pipeline, pipeline.ExecutionPlan, err
 	if def.Name == "" {
 		def.Name = project.FileStem(path) // spec 016 FR-008
 	}
+	// A flow of a project gets the project-wide env (spec 026).
+	if root, ok := project.RootOf(path); ok {
+		proj, err := project.Open(root)
+		if err != nil {
+			return def, pipeline.ExecutionPlan{}, err
+		}
+		def.ProjectEnv = proj.Env
+	}
 	if err := pipeline.Validate(def); err != nil {
 		return def, pipeline.ExecutionPlan{}, err
 	}
@@ -465,6 +473,7 @@ func (d *Daemon) submit(name, trigger string, scheduledFor time.Time) (api.Run, 
 		Pipeline:     name,
 		Definition:   cur.def,
 		Dir:          workingDir(e.Path),
+		ProjectDir:   workingDir(e.Path),
 		DataDir:      data,
 		CacheDir:     cache,
 		Trigger:      trigger,

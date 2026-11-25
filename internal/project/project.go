@@ -14,10 +14,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
 
+	"github.com/afri-bit/truss/internal/pipeline"
 	"github.com/afri-bit/truss/internal/registry"
 	"gopkg.in/yaml.v3"
 )
@@ -44,6 +46,9 @@ type Project struct {
 	Root        string
 	Name        string
 	Description string
+	// Env is the project-wide env of truss.yaml (spec 026): variables every
+	// flow of the project gets, below the flow's own env.
+	Env map[string]string
 }
 
 // Open reads and validates the truss.yaml in root. It never looks in parent
@@ -117,7 +122,7 @@ func parseMetadata(data []byte) (Project, error) {
 			return Project{}, errors.New("the file must be a mapping with version and project")
 		}
 	}
-	fields, err := mappingFields(root, "at top level", map[string]bool{"version": true, "project": true})
+	fields, err := mappingFields(root, "at top level", map[string]bool{"version": true, "project": true, "env": true})
 	if err != nil {
 		return Project{}, err
 	}
@@ -146,6 +151,13 @@ func parseMetadata(data []byte) (Project, error) {
 			return Project{}, errors.New("project.description must be text")
 		}
 		p.Description = d.Value
+	}
+	if e, ok := fields["env"]; ok {
+		env, err := parseEnv(e)
+		if err != nil {
+			return Project{}, err
+		}
+		p.Env = env
 	}
 	return p, nil
 }
@@ -434,4 +446,35 @@ func RootOf(path string) (string, bool) {
 		}
 	}
 	return root, true
+}
+
+var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// parseEnv reads the project-wide env: names to single values, with the
+// rules of a flow file's env (spec 026). Errors name the variable, never a
+// value.
+func parseEnv(n *yaml.Node) (map[string]string, error) {
+	if n.Kind != yaml.MappingNode {
+		return nil, errors.New("env must be a mapping of names to values")
+	}
+	env := make(map[string]string, len(n.Content)/2)
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		name, v := n.Content[i].Value, n.Content[i+1]
+		switch {
+		case !envName.MatchString(name):
+			return nil, fmt.Errorf("env: %q is not a valid variable name", name)
+		case pipeline.Reserved(name):
+			return nil, fmt.Errorf("env: %s is set by TRUSS in every run and cannot be set here", name)
+		case v.Kind != yaml.ScalarNode:
+			return nil, fmt.Errorf("env: value of %s must be a single value", name)
+		case v.Tag == "!!null":
+			env[name] = ""
+		default:
+			if err := pipeline.CheckTemplate(v.Value); err != nil {
+				return nil, fmt.Errorf("env: value of %s: %w", name, err)
+			}
+			env[name] = v.Value
+		}
+	}
+	return env, nil
 }

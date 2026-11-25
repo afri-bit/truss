@@ -41,8 +41,13 @@ func flatten(p Pipeline) []Step {
 	if len(p.Jobs) == 0 {
 		steps := make([]Step, len(p.Steps))
 		for i, s := range p.Steps {
-			s.EnvSource = envSource(layer{"pipeline", p.Env}, layer{"step", s.Env})
-			s.Env = mergeEnv(p.Env, s.Env)
+			s.EnvSource = envSource(layer{"project", p.ProjectEnv}, layer{"pipeline", p.Env}, layer{"step", s.Env})
+			// A step of a debug slice (Slice) is already planned and keeps its
+			// layers; it comes with no flow or project env of its own.
+			if s.EnvLayers == nil {
+				s.EnvLayers = layers(p.ProjectEnv, p.Env, s.Env)
+			}
+			s.Env = mergeEnv(p.ProjectEnv, p.Env, s.Env)
 			s.Secrets = mergeNames(p.Secrets, s.Secrets)
 			if s.Dir == "" {
 				s.Dir = p.Workdir
@@ -67,8 +72,9 @@ func flatten(p Pipeline) []Step {
 			s.ID = joinID(job.ID, s.ID)
 			s.Job, s.JobFirst, s.JobIf = job.ID, i == 0, job.If
 			s.Needs = needs
-			s.EnvSource = envSource(layer{"pipeline", p.Env}, layer{"job " + job.ID, job.Env}, layer{"step", s.Env})
-			s.Env = mergeEnv(p.Env, job.Env, s.Env)
+			s.EnvSource = envSource(layer{"project", p.ProjectEnv}, layer{"pipeline", p.Env}, layer{"job " + job.ID, job.Env}, layer{"step", s.Env})
+			s.EnvLayers = layers(p.ProjectEnv, p.Env, job.Env, s.Env)
+			s.Env = mergeEnv(p.ProjectEnv, p.Env, job.Env, s.Env)
 			s.Secrets = mergeNames(p.Secrets, job.Secrets, s.Secrets)
 			// The nearest setting wins: step, job, then pipeline workdir.
 			if s.Dir == "" {
@@ -143,4 +149,15 @@ func ready(s Step, placed map[string]bool) bool {
 		}
 	}
 	return true
+}
+
+// layers keeps the non-empty variable layers, lowest first.
+func layers(all ...map[string]string) []map[string]string {
+	var out []map[string]string
+	for _, l := range all {
+		if len(l) > 0 {
+			out = append(out, l)
+		}
+	}
+	return out
 }

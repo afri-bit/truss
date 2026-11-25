@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -27,12 +28,14 @@ const (
 )
 
 // States of an environment row, as the JSON names them. The text form says
-// "not set" and "daemon only".
+// "not set" and "each run".
 const (
-	stateSet        = "set"
-	stateNotSet     = "not-set"
-	stateMissing    = "missing"
-	stateDaemonOnly = "daemon-only"
+	stateSet     = "set"
+	stateNotSet  = "not-set"
+	stateMissing = "missing"
+	// stateEachRun is a built-in variable whose value each run sets anew,
+	// such as the run id (spec 026).
+	stateEachRun = "each-run"
 )
 
 // masked is what the screen shows instead of a value it must not print.
@@ -160,7 +163,8 @@ func (in invocation) stepView(file pipelineFile, def pipeline.Pipeline, id strin
 	d.Step = stepInfo{ID: step.ID, Job: step.Job, Run: step.Run, Dir: step.Dir,
 		Needs: nonNil(step.Needs), NeededBy: nonNil(plan.NeededBy(step.ID)),
 		Retries: step.Retries, ContinueOn: step.ContinueOnError}
-	if dir, err := engine.StepDir(root, step.Dir); err != nil {
+	stepDir, _ := pipeline.Expand(step.Dir, func(name string) string { v, _ := envLookup(in.env)(name); return v })
+	if dir, err := engine.StepDir(root, stepDir); err != nil {
 		d.Step.DirError = err.Error()
 	} else {
 		d.Step.RunDir = dir
@@ -253,12 +257,30 @@ func (in invocation) stepView(file pipelineFile, def pipeline.Pipeline, id strin
 		v := t.value
 		d.Environment = append(d.Environment, envRow{Name: t.name, Source: "truss run", Kind: kindTruss, State: stateSet, Value: &v})
 	}
-	for _, name := range []string{"TRUSS_RUN_ID", "TRUSS_PIPELINE", "TRUSS_TRIGGER"} {
+	// The built-in variables of every run (spec 026): those known now with
+	// their value, the rest as set by each run.
+	stepID := step.ID
+	if step.Job != "" {
+		stepID = strings.TrimPrefix(stepID, step.Job+"/")
+	}
+	builtins := []struct{ name, value string }{
+		{"TRUSS_FLOW", plan.Name}, {"TRUSS_PIPELINE", plan.Name}, {"TRUSS_STEP", stepID},
+		{"TRUSS_JOB", step.Job}, {"TRUSS_PROJECT_DIR", root}, {"TRUSS_OS", runtime.GOOS}, {"TRUSS_ARCH", runtime.GOARCH},
+	}
+	for _, t := range builtins {
+		if t.value == "" || taken[pipeline.EnvKey(t.name)] {
+			continue
+		}
+		taken[pipeline.EnvKey(t.name)] = true
+		v := t.value
+		d.Environment = append(d.Environment, envRow{Name: t.name, Source: "truss", Kind: kindTruss, State: stateSet, Value: &v})
+	}
+	for _, name := range []string{"TRUSS_RUN_ID", "TRUSS_TRIGGER", "TRUSS_ATTEMPT", "TRUSS_TEMP_DIR"} {
 		if taken[pipeline.EnvKey(name)] {
 			continue
 		}
 		taken[pipeline.EnvKey(name)] = true
-		d.Environment = append(d.Environment, envRow{Name: name, Source: "daemon", Kind: kindTruss, State: stateDaemonOnly})
+		d.Environment = append(d.Environment, envRow{Name: name, Source: "truss", Kind: kindTruss, State: stateEachRun})
 	}
 
 	hostEnv := envLookup(in.env)
