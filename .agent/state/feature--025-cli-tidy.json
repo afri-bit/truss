@@ -3,11 +3,12 @@
   "title": "A neat command line",
   "tier": 2,
   "branch": "feature/025-cli-tidy",
-  "status": "in_progress",
-  "step": "review findings fixed; delta review next",
+  "status": "in_review",
+  "step": "all review findings fixed; PR",
   "steps_done": [
     "implemented",
-    "reviewer and portability findings fixed"
+    "reviewer and portability findings fixed",
+    "security findings fixed"
   ],
   "requirements": [],
   "specs": [
@@ -21,5 +22,5 @@
   ],
   "pr": null,
   "created": "2026-11-25T15:28:03Z",
-  "updated": "2026-11-25T15:39:00Z"
+  "updated": "2026-11-25T15:45:47Z"
 }

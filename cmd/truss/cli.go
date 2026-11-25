@@ -199,8 +199,9 @@ func RunWithInput(ctx context.Context, args []string, cwd string, env []string, 
 		return in.environment(ctx)
 	case "completion":
 		return in.completion()
-	case "help", "version":
-		// help and version with extra words are usage errors (spec 002).
+	case "version":
+		// version with extra words is a usage error (spec 002); help with
+		// extra words is handled by in.help.
 		fmt.Fprint(stderr, usageText)
 		return 1
 	}

@@ -44,8 +44,10 @@ mistake in it. Advice was buried in parentheses at the end of an error. There wa
   the hint line too.
 - **FR-005** `truss runs -n <n>` is `--limit <n>`; giving both is an error.
 - **FR-006** `truss help exit-codes` lists the exit codes: 0 success, 1 anything else.
-- **FR-007** Command names, flags, standard output, JSON and exit codes are unchanged. TRUSS prints
-  no colour.
+- **FR-007** Command names, flags, standard output, JSON and exit codes are unchanged, except the
+  help text, which lists `completion` and `-n`. TRUSS prints no colour.
+- **FR-008** Completion treats file names as data: nothing in a name is run or expanded, names are
+  inserted quoted, and names starting with `-` are not offered.
 
 ## Compatibility
 

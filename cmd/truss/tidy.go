@@ -118,7 +118,7 @@ func splitHint(msg string) (text, hint string) {
 
 // flowArgs are the commands whose next word may be a flow name; runs also
 // takes the subcommand show there.
-var flowArgs = []string{"run", "validate", "register", "unregister", "pause", "resume", "trigger", "runs", "cache"}
+var flowArgs = []string{"run", "validate", "register", "unregister", "pause", "resume", "trigger", "runs"}
 
 // completion prints a completion script for a shell. Flow names are the
 // .yaml and .yml files of .truss/flows/ in the current folder, the project
@@ -140,9 +140,13 @@ func (in invocation) completion() int {
 		// Flow names are data: they never go through compgen -W, which would
 		// expand $(...) in a file name, and they are inserted quoted.
 		b.WriteString("# truss completion for bash. Load with: eval \"$(truss completion bash)\"\n")
-		b.WriteString("_truss_add_flows() {\n  local f n\n  for f in .truss/flows/*.yaml .truss/flows/*.yml; do\n")
+		b.WriteString("_truss_add_flows() {\n  local f n fg=0\n  [ -d .truss/flows ] || return 0\n")
+		b.WriteString("  shopt -q failglob && { fg=1; shopt -u failglob; }\n")
+		b.WriteString("  for f in .truss/flows/*; do\n    case \"$f\" in *.yaml|*.yml) ;; *) continue;; esac\n")
 		b.WriteString("    [ -f \"$f\" ] || continue\n    n=${f##*/}; n=${n%.*}\n")
-		b.WriteString("    case \"$n\" in \"$1\"*) COMPREPLY+=(\"$(printf '%q' \"$n\")\");; esac\n  done\n}\n")
+		b.WriteString("    case \"$n\" in -*) continue;; esac\n")
+		b.WriteString("    case \"$n\" in \"$1\"*) COMPREPLY+=(\"$(printf '%q' \"$n\")\");; esac\n  done\n")
+		b.WriteString("  [ \"$fg\" = 1 ] && shopt -s failglob\n  return 0\n}\n")
 		b.WriteString("_truss() {\n  local cur=${COMP_WORDS[COMP_CWORD]} cmd=${COMP_WORDS[1]}\n  COMPREPLY=()\n")
 		b.WriteString("  if [ \"$COMP_CWORD\" -eq 1 ]; then COMPREPLY=($(compgen -W \"" + words + "\" -- \"$cur\")); return; fi\n")
 		b.WriteString("  if [ \"$COMP_CWORD\" -eq 2 ]; then case \"$cmd\" in\n")
@@ -177,8 +181,9 @@ func (in invocation) completion() int {
 		for _, k := range keys {
 			fmt.Fprintf(&b, "complete -c truss -f -n '__fish_seen_subcommand_from %s; and test (count (commandline -opc)) -eq 2' -a '%s'\n", k, subs(k))
 		}
-		b.WriteString("complete -c truss -f -n '__fish_seen_subcommand_from " + strings.Join(flowArgs, " ") + "; and test (count (commandline -opc)) -eq 2' -a '(__truss_flows)'\n")
-		b.WriteString("complete -c truss -f -n '__fish_seen_subcommand_from flows pipelines; and test (count (commandline -opc)) -eq 3' -a '(__truss_flows)'\n")
+		// No -f here: run, validate and register also take a file path.
+		b.WriteString("complete -c truss -n '__fish_seen_subcommand_from " + strings.Join(flowArgs, " ") + "; and test (count (commandline -opc)) -eq 2' -a '(__truss_flows)'\n")
+		b.WriteString("complete -c truss -f -n '__fish_seen_subcommand_from flows pipelines cache; and test (count (commandline -opc)) -eq 3' -a '(__truss_flows)'\n")
 	case "powershell":
 		b.WriteString("# truss completion for PowerShell. Load with: truss completion powershell | Out-String | Invoke-Expression\n")
 		b.WriteString("Register-ArgumentCompleter -Native -CommandName 'truss', 'truss.exe' -ScriptBlock {\n  param($word, $ast, $cursor)\n")
@@ -188,7 +193,7 @@ func (in invocation) completion() int {
 			fmt.Fprintf(&b, "    '%s' = '%s' -split ' '\n", k, subs(k))
 		}
 		b.WriteString("  }\n")
-		b.WriteString("  $flows = @(Get-ChildItem -Path .truss/flows -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.yaml', '.yml' } | ForEach-Object { $_.BaseName })\n")
+		b.WriteString("  $flows = @(Get-ChildItem -Path .truss/flows -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.yaml', '.yml' -and -not $_.BaseName.StartsWith('-') } | ForEach-Object { $_.BaseName })\n")
 		b.WriteString("  $n = $parts.Count; if ($word -ne '') { $n -= 1 }\n")
 		b.WriteString("  if ($n -le 1) { $list = $commands }\n")
 		b.WriteString("  elseif ($n -eq 2 -and $parts[1] -eq 'runs') { $list = @('show') + $flows }\n")
@@ -196,7 +201,7 @@ func (in invocation) completion() int {
 		b.WriteString("  else { $list = $flows }\n")
 		b.WriteString("  $list | Where-Object { $_.StartsWith($word, [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object {\n")
 		b.WriteString("    $text = $_\n")
-		b.WriteString("    if ($text -notmatch '^[A-Za-z0-9._-]+$') { $text = \"'\" + $text.Replace(\"'\", \"''\") + \"'\" }\n")
+		b.WriteString("    if ($text -cnotmatch '^[A-Za-z0-9._][A-Za-z0-9._-]*\\z') { $text = \"'\" + [System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($_) + \"'\" }\n")
 		b.WriteString("    [System.Management.Automation.CompletionResult]::new($text, $_, 'ParameterValue', $_)\n  }\n}\n")
 	default:
 		return in.usage()

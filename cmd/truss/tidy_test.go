@@ -160,7 +160,7 @@ func TestTidy_BashCompletionRunsNothingFromAFileName(t *testing.T) {
 		t.Skip("needs bash on a Unix system")
 	}
 	s := newSession(t, false)
-	for _, name := range []string{"$(touch PWNED1)", "`touch PWNED2`", "${HOME}", "a;b", "it's"} {
+	for _, name := range []string{"$(touch PWNED1)", "`touch PWNED2`", "${HOME}", "a;b", "it's", "-rf"} {
 		s.write(".truss/flows/"+name+".yaml", "x")
 	}
 	prog := s.ok("completion", "bash") + "\nCOMP_WORDS=(truss run ''); COMP_CWORD=2; _truss; printf '%s\\n' \"${COMPREPLY[@]}\""
@@ -179,6 +179,15 @@ func TestTidy_BashCompletionRunsNothingFromAFileName(t *testing.T) {
 		if !strings.Contains(string(out), want+"\n") {
 			t.Errorf("completion lacks the quoted %s:\n%s", want, out)
 		}
+	}
+	if strings.Contains(string(out), "-rf") {
+		t.Errorf("a name starting with - was offered:\n%s", out)
+	}
+	// failglob does not break completion.
+	cmd = exec.Command(bash, "-c", "shopt -s failglob\n"+s.ok("completion", "bash")+"\nCOMP_WORDS=(truss run ''); COMP_CWORD=2; _truss; echo n=${#COMPREPLY[@]}; shopt -q failglob && echo still")
+	cmd.Dir = s.dir
+	if out, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(out), "n=5\nstill") {
+		t.Errorf("with failglob: %v %s", err, out)
 	}
 }
 
@@ -217,6 +226,11 @@ func TestTidy_CommandTableMatchesHelp(t *testing.T) {
 	for alias := range helpAliases {
 		if !contains(commands, alias) {
 			t.Errorf("help alias %q is not in commands", alias)
+		}
+	}
+	for _, c := range flowArgs {
+		if !contains(commands, c) {
+			t.Errorf("flowArgs has %q, which is not in commands", c)
 		}
 	}
 	for c := range subcommands {
