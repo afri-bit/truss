@@ -10,8 +10,34 @@ truss <command> [arguments]
 New to the command line? [Using the command line](cli-guide.md) is a tour with recipes. This page is
 the reference.
 
-Every command exits `0` on success and `1` on any error. Errors are one line on standard error
-that starts with `error:`. An unknown command or wrong arguments print the usage text and exit `1`.
+Every command exits `0` on success and `1` on any error (`truss help exit-codes`). An error is a
+line on standard error that starts with `error:`, sometimes followed by a `hint:` line with what to
+do next:
+
+```console
+$ truss runs
+error: the TRUSS daemon is not running
+hint: start it with: truss daemon start
+```
+
+A mistyped command gets a suggestion, and wrong arguments show that command's usage instead of the
+whole list:
+
+```console
+$ truss regster build
+error: unknown command "regster"
+hint: did you mean "register"?
+usage: truss <command> [arguments]
+Run "truss help" to see every command.
+
+$ truss daemon restart
+error: truss daemon has no "restart"; did you mean "start"?
+usage: truss daemon start|stop|status|run|install|uninstall|logs
+Run "truss help daemon" for details.
+```
+
+TRUSS prints no colour, so `NO_COLOR` and redirected output need no special care. Scripts should
+read `--json`, not the tables: their wording and columns may change between minor versions.
 
 ## Look around
 
@@ -51,8 +77,21 @@ Home       /home/me/.truss
 
 `truss help` prints all commands. `truss help <command>` or `truss <command> --help` explains one
 (for example `truss help flows`). `truss run --help` and `truss validate --help` are not
-help: their argument is a flow name or a path, so a file may be named like a flag. `truss help <unknown>` prints the usage and
-exits `1`.
+help: their argument is a flow name or a path, so a file may be named like a flag. `truss help <unknown>` is an unknown
+command and exits `1`. `truss help exit-codes` lists the exit codes.
+
+### Shell completion
+
+`truss completion bash|zsh|fish|powershell` prints a script that completes commands, subcommands
+and the flow names of the project in the current folder. Load it once per shell, or add the line
+to your shell profile:
+
+| Shell | Line |
+|---|---|
+| bash | `source <(truss completion bash)` |
+| zsh | `source <(truss completion zsh)` |
+| fish | `truss completion fish \| source` |
+| PowerShell | `truss completion powershell \| Out-String \| Invoke-Expression` |
 
 ## Without the daemon
 
@@ -206,7 +245,7 @@ flows](daemon.md#registering-flows)).
 A flow may be called `show`: `truss runs show` alone still lists its runs, and only `truss runs show <something>`
 shows a run.
 
-`-f` is short for `--follow`. Interrupting a followed log stops the printing, not the run.
+`-f` is short for `--follow`, and `-n` for `--limit` in `truss runs`. Interrupting a followed log stops the printing, not the run.
 
 ## Environment
 

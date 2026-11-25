@@ -9,6 +9,11 @@ Dates below are when a release was made. 0.1.0 is the first release.
 
 ## [Unreleased]
 
+### Added
+
+- Shell completion and a neater command line  
+  `truss completion bash|zsh|fish|powershell` completes commands, subcommands and flow names. A mistyped command gets a suggestion (`did you mean "register"?`); wrong arguments show that command's usage instead of the whole list; advice in an error moves to a `hint:` line; `truss runs -n` is `--limit`; `truss help exit-codes` lists the exit codes. Commands, flags, standard output, JSON and exit codes are unchanged; only standard error of these errors changes (specs/025-cli-tidy, ADR 0022).
+
 ### Changed
 
 - One word: flow  

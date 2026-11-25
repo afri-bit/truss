@@ -122,7 +122,7 @@ func TestRunTrack_InvalidDefinitionNeverReachesTheDaemon(t *testing.T) {
 
 func TestRunTrack_TooManyArgumentsPrintUsage(t *testing.T) {
 	s := newSession(t, false)
-	if code, _, errOut := s.truss("run", "a", "b", "--track"); code != 1 || errOut != usageText {
+	if code, _, errOut := s.truss("run", "a", "b", "--track"); code != 1 || !isUsageError(errOut) {
 		t.Fatalf("exit %d, stderr %q", code, errOut)
 	}
 }

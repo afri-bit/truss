@@ -69,26 +69,42 @@ Registered flows (these need the daemon):
 Files only (no daemon needed):
   cache clear <name>                  remove a flow's cache folder; the next run recreates it
 
-  help [<command>] | version          truss help <command> explains one command
+  completion bash|zsh|fish|powershell print a shell completion script
+  help [<command>] | version          truss help <command> explains one command;
+                                      truss help exit-codes lists the exit codes
 `
 
 // invocation is everything one CLI call may use. Commands write only to
 // stdout and stderr and return the process exit code.
 type invocation struct {
-	args   []string
-	cwd    string
-	env    []string
-	stdin  io.Reader // nil reads as empty
-	stdout io.Writer
-	stderr io.Writer
+	// command is the first word, set once it is a known command; usage
+	// errors then show that command's usage instead of the whole list.
+	command string
+	args    []string
+	cwd     string
+	env     []string
+	stdin   io.Reader // nil reads as empty
+	stdout  io.Writer
+	stderr  io.Writer
 }
 
+// fail prints an error and returns exit code 1. Advice at the end of the
+// message, "(start it with: ...)", goes on a hint line of its own.
 func (in invocation) fail(err error) int {
-	fmt.Fprintf(in.stderr, "error: %s\n", err.Error())
+	text, hint := splitHint(err.Error())
+	fmt.Fprintf(in.stderr, "error: %s\n", text)
+	if hint != "" {
+		fmt.Fprintf(in.stderr, "hint: %s\n", hint)
+	}
 	return 1
 }
 
+// usage reports wrong arguments and returns exit code 1: the command's own
+// usage when it has one, else the whole list.
 func (in invocation) usage() int {
+	if in.command != "" && in.commandUsage(in.command) {
+		return 1
+	}
 	fmt.Fprint(in.stderr, usageText)
 	return 1
 }
@@ -117,6 +133,9 @@ func RunWithInput(ctx context.Context, args []string, cwd string, env []string, 
 		return in.usage()
 	}
 	in.args = args[1:]
+	if contains(commands, args[0]) {
+		in.command = args[0]
+	}
 	switch args[0] {
 	case "run":
 		// --track, --with-needs, --step, --from and --env are the options of
@@ -172,8 +191,13 @@ func RunWithInput(ctx context.Context, args []string, cwd string, env []string, 
 		return in.schedules(ctx)
 	case "env":
 		return in.environment(ctx)
+	case "completion":
+		return in.completion()
 	}
-	return in.usage()
+	if strings.HasPrefix(args[0], "-") {
+		return in.usage()
+	}
+	return in.unknownCommand(args[0])
 }
 
 func isHelp(args []string) bool {

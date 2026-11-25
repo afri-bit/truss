@@ -199,7 +199,7 @@ func TestCLI_BadArgumentsPrintUsage(t *testing.T) {
 	}
 	for _, args := range cases {
 		code, out, errOut := s.truss(args...)
-		if code != 1 || errOut != usageText || out != "" {
+		if code != 1 || !isUsageError(errOut) || out != "" {
 			t.Errorf("truss %v: exit %d, stdout %q, stderr %q", args, code, out, errOut)
 		}
 	}

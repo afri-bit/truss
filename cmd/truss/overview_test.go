@@ -176,7 +176,7 @@ func TestFlows_NeedAProjectAndKnowTheirCommands(t *testing.T) {
 		t.Fatalf("no project: %d %q", code, errOut)
 	}
 	for _, args := range [][]string{{"flows", "nope"}, {"flows", "show"}, {"flows", "graph", "a", "b"}, {"flows", "list", "x"}, {"flows", "--nope"}} {
-		if code, out, errOut := s.truss(args...); code != 1 || errOut != usageText || out != "" {
+		if code, out, errOut := s.truss(args...); code != 1 || !isUsageError(errOut) || out != "" {
 			t.Errorf("truss %v: %d %q %q", args, code, out, errOut)
 		}
 	}
@@ -393,7 +393,7 @@ func TestEnv_ShowsWhereThingsLive(t *testing.T) {
 			t.Errorf("env lacks %q:\n%s", want, out)
 		}
 	}
-	if code, _, errOut := s.truss("env", "x"); code != 1 || errOut != usageText {
+	if code, _, errOut := s.truss("env", "x"); code != 1 || !isUsageError(errOut) {
 		t.Fatalf("env x: %d %q", code, errOut)
 	}
 }
@@ -431,7 +431,7 @@ func TestDaemonLogs(t *testing.T) {
 	if code, _, errOut := s.truss("daemon", "logs", "-n", "0"); code != 1 || !strings.Contains(errOut, "--lines must be") {
 		t.Fatalf("-n 0: %d %q", code, errOut)
 	}
-	if code, _, errOut := s.truss("daemon", "logs", "extra"); code != 1 || errOut != usageText {
+	if code, _, errOut := s.truss("daemon", "logs", "extra"); code != 1 || !isUsageError(errOut) {
 		t.Fatalf("extra: %d %q", code, errOut)
 	}
 }
@@ -486,7 +486,7 @@ func TestHelp_Topics(t *testing.T) {
 		t.Error("pause has no help of its own and must show register's")
 	}
 	for _, args := range [][]string{{"help", "nope"}, {"help", "flows", "show"}} {
-		if code, out, errOut := s.truss(args...); code != 1 || out != "" || errOut != usageText {
+		if code, out, errOut := s.truss(args...); code != 1 || out != "" || !isUsageError(errOut) {
 			t.Fatalf("truss %v: %d %q %q", args, code, out, errOut)
 		}
 	}
