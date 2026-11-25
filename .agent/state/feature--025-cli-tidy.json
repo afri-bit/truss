@@ -20,7 +20,7 @@
   "next_actions": [
     "delta and security review, then PR"
   ],
-  "pr": null,
+  "pr": "https://github.com/afri-bit/truss/pull/28",
   "created": "2026-11-25T15:28:03Z",
-  "updated": "2026-11-25T15:45:47Z"
+  "updated": "2026-11-25T15:53:36Z"
 }
