@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -163,8 +164,10 @@ func (in invocation) stepView(file pipelineFile, def pipeline.Pipeline, id strin
 	d.Step = stepInfo{ID: step.ID, Job: step.Job, Run: step.Run, Dir: step.Dir,
 		Needs: nonNil(step.Needs), NeededBy: nonNil(plan.NeededBy(step.ID)),
 		Retries: step.Retries, ContinueOn: step.ContinueOnError}
-	stepDir, _ := pipeline.Expand(step.Dir, func(name string) string { v, _ := envLookup(in.env)(name); return v })
-	if dir, err := engine.StepDir(root, stepDir); err != nil {
+	projectDir := cmp.Or(projectRootOf(file.path), root)
+	if dir, err := viewDir(in.env, step, plan.Name, projectDir, st); err != nil {
+		d.Step.DirError = err.Error()
+	} else if dir, err := engine.StepDir(root, dir); err != nil {
 		d.Step.DirError = err.Error()
 	} else {
 		d.Step.RunDir = dir
@@ -265,7 +268,7 @@ func (in invocation) stepView(file pipelineFile, def pipeline.Pipeline, id strin
 	}
 	builtins := []struct{ name, value string }{
 		{"TRUSS_FLOW", plan.Name}, {"TRUSS_PIPELINE", plan.Name}, {"TRUSS_STEP", stepID},
-		{"TRUSS_JOB", step.Job}, {"TRUSS_PROJECT_DIR", root}, {"TRUSS_OS", runtime.GOOS}, {"TRUSS_ARCH", runtime.GOARCH},
+		{"TRUSS_JOB", step.Job}, {"TRUSS_PROJECT_DIR", projectDir}, {"TRUSS_OS", runtime.GOOS}, {"TRUSS_ARCH", runtime.GOARCH},
 	}
 	for _, t := range builtins {
 		if t.value == "" || taken[pipeline.EnvKey(t.name)] {
@@ -430,4 +433,54 @@ func sourceLabel(source string) string {
 		return "flow"
 	}
 	return source
+}
+
+// viewDir expands a step's dir the way a run would: the host environment,
+// the built-ins known before a run, then the step's layers (spec 026). A dir
+// that uses a variable each run sets anew cannot be shown.
+func viewDir(hostEnv []string, step pipeline.Step, flow, projectDir string, st project.State) (string, error) {
+	jobless := strings.TrimPrefix(step.ID, step.Job+"/")
+	known := map[string]string{
+		"TRUSS_FLOW": flow, "TRUSS_PIPELINE": flow, "TRUSS_STEP": jobless, "TRUSS_JOB": step.Job,
+		"TRUSS_PROJECT_DIR": projectDir, "TRUSS_OS": runtime.GOOS, "TRUSS_ARCH": runtime.GOARCH,
+		"TRUSS_DATA_DIR": st.Data, "TRUSS_CACHE_DIR": st.Cache,
+	}
+	perRun := map[string]bool{"TRUSS_RUN_ID": true, "TRUSS_TRIGGER": true, "TRUSS_ATTEMPT": true, "TRUSS_TEMP_DIR": true}
+	var later string
+	host := envLookup(hostEnv)
+	base := func(name string) string {
+		up := strings.ToUpper(name)
+		if perRun[up] && later == "" {
+			later = up
+		}
+		if v, ok := known[up]; ok {
+			return v
+		}
+		v, _ := host(name)
+		return v
+	}
+	vars, err := pipeline.ExpandLayers(base, step.EnvLayers...)
+	if err != nil {
+		return "", err
+	}
+	var unset string
+	dir, err := pipeline.Expand(step.Dir, func(name string) string {
+		v, ok := vars[name]
+		if !ok {
+			v = base(name)
+		}
+		if v == "" && unset == "" {
+			unset = name
+		}
+		return v
+	})
+	switch {
+	case err != nil:
+		return "", err
+	case later != "" && strings.Contains(step.Dir, "$"):
+		return "", fmt.Errorf("dir depends on %s, which each run sets", later)
+	case unset != "":
+		return "", fmt.Errorf("dir uses ${%s}, which is not set", unset)
+	}
+	return dir, nil
 }

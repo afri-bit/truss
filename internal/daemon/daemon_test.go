@@ -854,3 +854,24 @@ func mkdirs(t *testing.T, dir string) string {
 	}
 	return dir
 }
+
+// Spec 026: a daemon run of a project flow gets the project env and the
+// project root as TRUSS_PROJECT_DIR, as a local run does.
+func TestDaemon_AProjectFlowGetsTheProjectEnv(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	root := filepath.Join(t.TempDir(), "envproject")
+	writeDefinition(t, mkdirs(t, root), "truss.yaml", "version: \"1\"\nproject:\n  name: envproject\nenv:\n  WHERE: ${TRUSS_PROJECT_DIR}/sub\n")
+	show := "echo $WHERE"
+	if runtime.GOOS == "windows" {
+		show = "echo %WHERE%"
+	}
+	flow := writeDefinition(t, mkdirs(t, filepath.Join(root, ".truss", "flows")), "env.yaml",
+		"version: \"1\"\nflow:\n  name: projenv\nsteps:\n  - id: where\n    run: "+show+"\n")
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: flow}); err != nil {
+		t.Fatal(err)
+	}
+	if got := pwdLine(t, c, "projenv"); got != filepath.Join(root, "sub") {
+		t.Fatalf("WHERE = %q, want %q", got, filepath.Join(root, "sub"))
+	}
+}

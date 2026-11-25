@@ -31,11 +31,15 @@ way to define a variable once for a project.
 - **FR-001** Every run sets `TRUSS_FLOW`, `TRUSS_PIPELINE` (same value), `TRUSS_OS`, `TRUSS_ARCH`,
   `TRUSS_RUN_ID`, `TRUSS_TRIGGER`, `TRUSS_PROJECT_DIR` and `TRUSS_TEMP_DIR`, and per step
   `TRUSS_STEP` (the id as written), `TRUSS_JOB` (for a step of a job) and `TRUSS_ATTEMPT` (1, 2, ...).
+  `TRUSS_PROJECT_DIR` is the root of the flow's project wherever the run is started from, or the
+  run's directory for a flow outside a project. Paths are not resolved through links.
   A local run's id is `local-<YYYYMMDD-HHMMSS>-<6 hex>` unless it is tracked; its trigger is `local`.
   Built-ins win over a variable of the same name inherited from the caller.
 - **FR-002** The names of FR-001 are reserved: a flow file's `env` (any level), the project file's
   `env` and a `secrets` list may not use them, in any letter case; validation says so.
   `TRUSS_DATA_DIR` and `TRUSS_CACHE_DIR` stay settable. Other `TRUSS_` names are not reserved.
+  `--env` of a debug run may set a built-in, on purpose: it lets a user try a step as the daemon
+  would run it (`--env TRUSS_TRIGGER=schedule`).
 - **FR-003** `truss.yaml` may hold `env`, with a flow file's rules. It is the lowest layer, under
   the flow's `env`, for every flow of the project, for local and daemon runs.
 - **FR-004** `${NAME}` in an `env` value (project, flow, job, step), a `dir` or `workdir` is replaced
@@ -43,13 +47,17 @@ way to define a variable once for a project.
   that layer; `${NAME}` in the value of `NAME`, and a name the layer does not set, take the value
   from below (lower layers, built-ins, then the run environment). Unset is empty. A loop fails the
   step before it starts, with a diagnostic and no exit code. `$$` is `$`; any other `$` is kept.
-  Secrets are added after expansion and are never expanded into another variable. `--env` values
-  are taken as written.
+  Secrets are added after expansion: a stored secret is never expanded into another variable (a
+  host variable of the same name is, like any host variable). `--env` values are taken as written.
+  On Windows names that differ only in case are one variable, across layers too.
+- **FR-004a** A `dir` that uses a variable that is not set, or is empty, fails the step before it
+  starts ("dir uses ${NAME}, which is not set"), instead of turning `${INBOX}/x` into `/x`.
 - **FR-005** A `${` without `}` or a `${...}` that is not a variable name is a validation error. The
   message never quotes the value.
 - **FR-006** `TRUSS_TEMP_DIR` is a new folder per run, removed when the run ends; if it cannot be
   made the run goes on without the variable.
-- **FR-007** `truss flows show <flow> <step>` lists the built-ins: known ones with their value
+- **FR-007** `truss flows show <flow> <step>` shows the directory a run would use, expanded the
+  same way (a `dir` that uses a per-run variable says so instead), and lists the built-ins: known ones with their value
   (`SOURCE` `truss`, `STATE` `set`), per-run ones as `each run` (JSON `each-run`), and `project` as
   a source of a variable.
 

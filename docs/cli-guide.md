@@ -174,11 +174,17 @@ STAGE            step              set          staging
 NPM_TOKEN        secret store      missing      -
 TRUSS_DATA_DIR   truss run         set          .truss/state/ci/data
 TRUSS_CACHE_DIR  truss run         set          .truss/state/ci/data/cache
-TRUSS_FLOW       truss             set          ci
-TRUSS_STEP       truss             set          package
-TRUSS_JOB        truss             set          build
-TRUSS_RUN_ID     truss             each run     -
-TRUSS_TRIGGER    truss             each run     -
+TRUSS_FLOW         truss             set          ci
+TRUSS_PIPELINE     truss             set          ci
+TRUSS_STEP         truss             set          package
+TRUSS_JOB          truss             set          build
+TRUSS_PROJECT_DIR  truss             set          .
+TRUSS_OS           truss             set          linux
+TRUSS_ARCH         truss             set          amd64
+TRUSS_RUN_ID       truss             each run     -
+TRUSS_TRIGGER      truss             each run     -
+TRUSS_ATTEMPT      truss             each run     -
+TRUSS_TEMP_DIR     truss             each run     -
 REGISTRY_URL     host environment  not set      -
 ```
 

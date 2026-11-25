@@ -166,3 +166,10 @@ func writeGitignore(path string, stderr io.Writer) {
 		fmt.Fprintf(stderr, "warning: could not write %s: %s\n", filepath.ToSlash(filepath.Join(".truss", filepath.Base(path))), err.Error())
 	}
 }
+
+// projectRootOf returns the root of the project whose .truss/flows/ holds
+// path, or "" for a file outside a project.
+func projectRootOf(path string) string {
+	root, _ := project.RootOf(path)
+	return root
+}

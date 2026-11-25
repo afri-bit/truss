@@ -92,3 +92,43 @@ func TestRun_AnExpansionLoopFailsTheStepWithoutStartingIt(t *testing.T) {
 		t.Fatalf("run = %+v", got)
 	}
 }
+
+func TestRun_ARetrySeesItsAttempt(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "first")
+	run := "echo $TRUSS_ATTEMPT; if [ ! -e \"" + marker + "\" ]; then : > \"" + marker + "\"; exit 1; fi"
+	if runtime.GOOS == "windows" {
+		run = "echo %TRUSS_ATTEMPT%& if not exist \"" + marker + "\" (type nul > \"" + marker + "\" & exit 1)"
+	}
+	p := pipeline.Pipeline{Version: "1", Name: "retry", Steps: []pipeline.Step{{ID: "a", Run: run, Retries: 1}}}
+	got, err := Run(context.Background(), p, t.TempDir(), os.Environ(), nil)
+	if err != nil || got.Status != pipeline.StatusSucceeded {
+		t.Fatalf("run = %+v, err = %v", got, err)
+	}
+	if out := strings.TrimSpace(got.Steps[0].Output); out != "2" {
+		t.Fatalf("last attempt printed %q, want 2", out)
+	}
+}
+
+func TestRun_ADirFromAnUnsetVariableFailsTheStep(t *testing.T) {
+	p := pipeline.Pipeline{Version: "1", Name: "d", Steps: []pipeline.Step{{ID: "a", Run: "echo never", Dir: "${NOT_SET_ANYWHERE}/x"}}}
+	got, err := Run(context.Background(), p, t.TempDir(), os.Environ(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != pipeline.StatusFailed || got.Steps[0].ExitCode != nil || !strings.Contains(got.Steps[0].Error, "${NOT_SET_ANYWHERE}, which is not set") {
+		t.Fatalf("run = %+v", got)
+	}
+}
+
+func TestRun_AConditionSeesBuiltInsAndExpandedValues(t *testing.T) {
+	cond, err := pipeline.ParseCondition("env.WHERE == 'built/x'")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := pipeline.Pipeline{Version: "1", Name: "built", Env: map[string]string{"WHERE": "${TRUSS_FLOW}/x"},
+		Steps: []pipeline.Step{{ID: "a", Run: "echo ran", If: cond}}}
+	got, err := Run(context.Background(), p, t.TempDir(), os.Environ(), nil)
+	if err != nil || got.Status != pipeline.StatusSucceeded || len(got.Steps) != 1 || got.Steps[0].Status != pipeline.StatusSucceeded {
+		t.Fatalf("run = %+v, err = %v", got, err)
+	}
+}

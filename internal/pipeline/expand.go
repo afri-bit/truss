@@ -57,7 +57,8 @@ func expand(value string, lookup func(string) (string, error)) (string, error) {
 			}
 			name := value[i+2 : i+2+end]
 			if !envName.MatchString(name) {
-				return "", fmt.Errorf("${%s} is not a variable name (letters, digits and '_', not starting with a digit)", name)
+				// The text inside ${} is part of a value: never quote it.
+				return "", errors.New("a ${...} holds something that is not a variable name (letters, digits and '_', not starting with a digit)")
 			}
 			v, err := lookup(name)
 			if err != nil {
@@ -77,12 +78,20 @@ func expand(value string, lookup func(string) (string, error)) (string, error) {
 // other names of the same layer, in any order; ${NAME} in the value of NAME
 // itself, and any name the layer does not set, is looked up in what the
 // layers below and base give. A cycle is an error. The result holds every
-// name the layers set, expanded.
+// name the layers set, expanded, under the spelling of the highest layer that
+// sets it. On a host that ignores the case of names (Windows), names that
+// differ only in case are one variable.
 func ExpandLayers(base func(string) string, layers ...map[string]string) (map[string]string, error) {
-	out := map[string]string{}
+	return expandLayers(foldEnvNames, base, layers...)
+}
+
+type entry struct{ name, value string }
+
+func expandLayers(fold bool, base func(string) string, layers ...map[string]string) (map[string]string, error) {
+	out := map[string]entry{} // by envKey
 	below := func(name string) string {
-		if v, ok := out[name]; ok {
-			return v
+		if e, ok := out[envKey(fold, name)]; ok {
+			return e.value
 		}
 		return base(name)
 	}
@@ -90,21 +99,33 @@ func ExpandLayers(base func(string) string, layers ...map[string]string) (map[st
 		if len(layer) == 0 {
 			continue
 		}
+		// One layer may hold a name twice in different case only on a host
+		// that keeps case; on Windows the later spelling, sorted, wins.
+		names := make([]string, 0, len(layer))
+		for name := range layer {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		raw := map[string]entry{}
+		for _, name := range names {
+			raw[envKey(fold, name)] = entry{name, layer[name]}
+		}
 		done := map[string]string{}
 		state := map[string]int{} // 1: in progress, 2: done
-		var resolve func(name string) (string, error)
-		resolve = func(name string) (string, error) {
-			if v, ok := done[name]; ok {
+		var resolve func(key string) (string, error)
+		resolve = func(key string) (string, error) {
+			if v, ok := done[key]; ok {
 				return v, nil
 			}
-			if state[name] == 1 {
-				return "", fmt.Errorf("the variables %s refer to each other in a loop", name)
+			if state[key] == 1 {
+				return "", fmt.Errorf("the variables %s refer to each other in a loop", raw[key].name)
 			}
-			state[name] = 1
-			v, err := expand(layer[name], func(ref string) (string, error) {
-				if ref != name {
-					if _, ok := layer[ref]; ok {
-						return resolve(ref)
+			state[key] = 1
+			v, err := expand(raw[key].value, func(ref string) (string, error) {
+				rk := envKey(fold, ref)
+				if rk != key {
+					if _, ok := raw[rk]; ok {
+						return resolve(rk)
 					}
 				}
 				return below(ref), nil
@@ -112,23 +133,27 @@ func ExpandLayers(base func(string) string, layers ...map[string]string) (map[st
 			if err != nil {
 				return "", err
 			}
-			state[name] = 2
-			done[name] = v
+			state[key] = 2
+			done[key] = v
 			return v, nil
 		}
-		names := make([]string, 0, len(layer))
-		for name := range layer {
-			names = append(names, name)
+		keys := make([]string, 0, len(raw))
+		for k := range raw {
+			keys = append(keys, k)
 		}
-		sort.Strings(names)
-		for _, name := range names {
-			if _, err := resolve(name); err != nil {
+		sort.Strings(keys)
+		for _, k := range keys {
+			if _, err := resolve(k); err != nil {
 				return nil, err
 			}
 		}
-		for name, v := range done {
-			out[name] = v
+		for k, v := range done {
+			out[k] = entry{raw[k].name, v}
 		}
 	}
-	return out, nil
+	result := make(map[string]string, len(out))
+	for _, e := range out {
+		result[e.name] = e.value
+	}
+	return result, nil
 }

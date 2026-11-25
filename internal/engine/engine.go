@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -90,7 +89,7 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 	// over a variable of the same name in the caller's environment.
 	tempDir := makeTempDir()
 	if tempDir != "" {
-		defer func() { _ = os.RemoveAll(tempDir) }()
+		defer removeTempDir(tempDir)
 	}
 	env = append(append([]string(nil), env...), runVars(cfg.run, plan.Name, tempDir)...)
 

@@ -249,8 +249,14 @@ steps:
   starts.
 - `$$` is a literal `$`. A `$` before anything else stays as written, so `$HOME` is left for the
   shell of the step.
-- Secrets are not expanded: `${TOKEN}` never copies a secret into another variable.
-- `--env NAME=VALUE` on the command line is taken as written.
+- Stored secrets are not expanded: `${TOKEN}` never copies a secret from the store into another
+  variable. A variable of your own environment with that name is used like any other, and only
+  stored secrets are hidden in output.
+- A `dir` that uses a variable that is not set fails the step, rather than running somewhere else.
+- `--env NAME=VALUE` on the command line is taken as written, and may set a built-in, to try a
+  step as the daemon would run it.
+- The value reaches the step as an environment variable. In `run`, quote it as your shell needs:
+  `cd "$INBOX"`.
 
 ### Built-in variables
 
@@ -266,7 +272,7 @@ TRUSS sets these in every run, by hand, by the daemon or tracked. A file may not
 | `TRUSS_ATTEMPT` | `1`, then `2` and up for each retry. |
 | `TRUSS_RUN_ID` | The run's id; a local run that the daemon does not track gets `local-<time>-<random>`. |
 | `TRUSS_TRIGGER` | `manual`, `schedule`, `catch-up`, or `local` for `truss run`. |
-| `TRUSS_PROJECT_DIR` | The project root, or the run's directory for a flow outside a project. |
+| `TRUSS_PROJECT_DIR` | The flow's project root, wherever you start the run, or the run's directory for a flow outside a project. |
 | `TRUSS_TEMP_DIR` | A folder for this run only, removed when the run ends. |
 | `TRUSS_OS`, `TRUSS_ARCH` | `linux`, `darwin` or `windows`, and `amd64` or `arm64`. |
 | `TRUSS_DATA_DIR`, `TRUSS_CACHE_DIR` | Folders that outlive runs ([below](#data-and-cache-folders)). A file may set these two. |

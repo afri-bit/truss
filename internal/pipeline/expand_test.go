@@ -79,3 +79,36 @@ func TestReserved(t *testing.T) {
 		}
 	}
 }
+
+// On Windows names that differ only in case are one variable: the higher
+// layer wins and a self-reference sees the lower layer whatever its case.
+func TestExpandLayers_FoldsCaseWhereTheHostDoes(t *testing.T) {
+	base := func(name string) string { // a Windows host: case does not matter
+		if strings.EqualFold(name, "PATH") {
+			return "/sys"
+		}
+		return ""
+	}
+	got, err := expandLayers(true, base,
+		map[string]string{"PATH": "/tools:${PATH}"},
+		map[string]string{"Path": "/x:${Path}", "dir": "${PATH}"},
+		map[string]string{"PATH": "/override"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got["PATH"] != "/override" || got["dir"] != "/x:/tools:/sys" {
+		t.Fatalf("got %v", got)
+	}
+	// Without folding they are two variables.
+	got, err = expandLayers(false, host(map[string]string{"Path": "/sys"}), map[string]string{"PATH": "a"}, map[string]string{"Path": "b:${Path}"})
+	if err != nil || got["PATH"] != "a" || got["Path"] != "b:/sys" {
+		t.Fatalf("no fold: %v %v", got, err)
+	}
+}
+
+func TestExpand_ErrorNeverQuotesTheValue(t *testing.T) {
+	err := CheckTemplate("key=${sk-live-abc123}")
+	if err == nil || strings.Contains(err.Error(), "sk-live") {
+		t.Fatalf("err = %v", err)
+	}
+}

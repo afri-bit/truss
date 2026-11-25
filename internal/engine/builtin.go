@@ -1,11 +1,13 @@
 package engine
 
 import (
+	"fmt"
 	"os"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/afri-bit/truss/internal/pipeline"
 )
@@ -85,11 +87,36 @@ func resolveStepEnv(base []string, step pipeline.Step, attempt int) ([]string, s
 	for _, name := range names {
 		env = append(env, name+"="+vars[name])
 	}
-	dir, err := pipeline.Expand(step.Dir, envLookup(env))
+	// A directory built from a variable that is not set would quietly turn
+	// "${INBOX}/x" into "/x"; that fails the step instead (spec 026).
+	look := envLookup(env)
+	var unset string
+	dir, err := pipeline.Expand(step.Dir, func(name string) string {
+		v := look(name)
+		if v == "" && unset == "" {
+			unset = name
+		}
+		return v
+	})
 	if err != nil {
 		return nil, "", err
 	}
+	if unset != "" {
+		return nil, "", fmt.Errorf("dir uses ${%s}, which is not set", unset)
+	}
 	return env, dir, nil
+}
+
+// removeTempDir removes the run's temporary folder. On Windows a process
+// that was just killed can hold a file a little longer, so it tries again
+// for up to a second.
+func removeTempDir(dir string) {
+	for i := 0; i < 10; i++ {
+		if err := os.RemoveAll(dir); err == nil {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // makeTempDir creates the run's temporary folder. A failure leaves
