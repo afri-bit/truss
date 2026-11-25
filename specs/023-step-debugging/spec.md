@@ -58,7 +58,7 @@ steps around it, with inputs of their choice.
   - **truss**: `TRUSS_DATA_DIR` and `TRUSS_CACHE_DIR` (the state folders of this flow, as
     `truss run` sets them: `SOURCE` `truss run`, `STATE` `set`; the text form shows them relative to
     the project, the JSON the absolute path) and `TRUSS_RUN_ID`, `TRUSS_PIPELINE` and
-    `TRUSS_TRIGGER` (`SOURCE` `daemon`, `STATE` `daemon only`: only the daemon sets them, `VALUE`
+    `TRUSS_TRIGGER` (`SOURCE` `daemon`, `STATE` `daemon only`: only the daemon sets them, `VALUE` *Changed by [spec 026](../026-builtin-variables/spec.md): every run sets them; the table shows `SOURCE` `truss`, `STATE` `each run` (JSON `each-run`), and the other built-ins with their value.*
     `-`).
   - **referenced**: a whole name in upper case, digits and `_` (starting with a letter or `_`,
     and not `_` alone) that the command reads as `$NAME`, `${NAME}`, `${NAME:-...}`, `%NAME%`
