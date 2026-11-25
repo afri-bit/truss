@@ -41,6 +41,9 @@ version: "1"
 project:
   name: my-project                       # required
   description: Build and release tools   # optional
+
+env:                                     # optional; for every flow of the project
+  REGION: eu
 ```
 
 | Field | Meaning |
@@ -48,6 +51,7 @@ project:
 | `version` | The string `"1"`. |
 | `project.name` | Required. The same characters as a registry name: it starts with a letter or digit, then letters, digits, `.`, `_` or `-`. |
 | `project.description` | Optional free text. |
+| `env` | Optional. Variables every flow of the project gets, under the flow's own `env`. Same rules as a flow's [`env`](#env), `${NAME}` included. |
 
 Any other field is an error. The error names the field and where it appears, never its value.
 A `truss.yaml` in the project root with `steps` or `jobs` is rejected: those belong in a file in `.truss/flows/`.
@@ -215,8 +219,60 @@ A mapping of variable names to values, allowed at the top level, on a job, and o
 Later levels win: step over job over flow over the environment the run started from.
 Values are taken as text, so `RETRIES: 3` sets the string `3`.
 
-Every run started by the daemon also sets `TRUSS_RUN_ID`, `TRUSS_PIPELINE` and `TRUSS_TRIGGER`
-(`manual`, `schedule` or `catch-up`).
+The project file `truss.yaml` may hold an `env` too: it is the lowest level, under the flow's own,
+for every flow of the project ([Project file](#project-file)).
+
+### Using one variable in another: `${NAME}`
+
+A value of `env`, and a `dir` or `workdir`, may use other variables with `${NAME}`:
+
+```yaml
+# truss.yaml
+env:
+  DATA: ${HOME}/data            # from your environment
+
+# .truss/flows/sync.yaml
+env:
+  INBOX: ${DATA}/inbox          # from the project
+  PATH: ${TRUSS_PROJECT_DIR}/bin:${PATH}
+steps:
+  - id: sort
+    dir: ${INBOX}
+    run: ./sort-photos
+```
+
+- `${NAME}` takes the value from the same level, a lower level, the built-in variables or the
+  environment TRUSS started in. A variable that is not set gives an empty text.
+- `${NAME}` inside the value of `NAME` itself is the value from below, so
+  `PATH: ${TRUSS_PROJECT_DIR}/bin:${PATH}` adds to your `PATH`.
+- Order within a level does not matter. Two variables that use each other fail the step before it
+  starts.
+- `$$` is a literal `$`. A `$` before anything else stays as written, so `$HOME` is left for the
+  shell of the step.
+- Secrets are not expanded: `${TOKEN}` never copies a secret into another variable.
+- `--env NAME=VALUE` on the command line is taken as written.
+
+### Built-in variables
+
+TRUSS sets these in every run, by hand, by the daemon or tracked. A file may not set them
+(`truss validate` says so), and they win over a variable of the same name in your environment.
+
+| Variable | Value |
+|---|---|
+| `TRUSS_FLOW` | The flow's name (the registered name for the daemon). |
+| `TRUSS_PIPELINE` | The same, under its older name. |
+| `TRUSS_STEP` | The step's id as written in the file. |
+| `TRUSS_JOB` | The job's id; set only for a step of a job. |
+| `TRUSS_ATTEMPT` | `1`, then `2` and up for each retry. |
+| `TRUSS_RUN_ID` | The run's id; a local run that the daemon does not track gets `local-<time>-<random>`. |
+| `TRUSS_TRIGGER` | `manual`, `schedule`, `catch-up`, or `local` for `truss run`. |
+| `TRUSS_PROJECT_DIR` | The project root, or the run's directory for a flow outside a project. |
+| `TRUSS_TEMP_DIR` | A folder for this run only, removed when the run ends. |
+| `TRUSS_OS`, `TRUSS_ARCH` | `linux`, `darwin` or `windows`, and `amd64` or `arm64`. |
+| `TRUSS_DATA_DIR`, `TRUSS_CACHE_DIR` | Folders that outlive runs ([below](#data-and-cache-folders)). A file may set these two. |
+
+Other names starting with `TRUSS_` are yours to use, but later versions may add built-ins; pick
+another prefix to be safe.
 
 Do not put secrets in `env`: the file is plain text. Use [`secrets`](#secrets).
 
