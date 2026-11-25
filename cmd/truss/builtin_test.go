@@ -120,3 +120,36 @@ func TestBuiltins_TheStepViewExpandsTheDir(t *testing.T) {
 		t.Fatalf("b: %+v", b.Step)
 	}
 }
+
+// Review of spec 026: only what the dir reaches counts, and a value from the
+// environment shows only with --values, never when it looks sensitive.
+func TestBuiltins_TheStepViewDirIsPreciseAndCareful(t *testing.T) {
+	s := newSession(t, false)
+	s.write("truss.yaml", "version: \"1\"\nproject:\n  name: demo\nenv:\n  INBOX: ${TRUSS_PROJECT_DIR}/in\n")
+	s.write("in/keep", "")
+	s.write(".truss/flows/v.yaml", "version: \"1\"\nflow: {name: v}\nenv:\n  LOG: run-${TRUSS_RUN_ID}.log\nsteps:\n"+
+		"  - id: a\n    run: echo a\n    dir: ${INBOX}\n"+
+		"  - id: h\n    run: echo h\n    dir: ${WORKROOT}\n"+
+		"  - id: k\n    run: echo k\n    dir: ${API_TOKEN}\n")
+	root, _ := filepath.Abs(s.dir)
+	s.env = append(s.env, "WORKROOT="+filepath.Join(root, "in"), "API_TOKEN="+filepath.Join(root, "in"))
+	type step struct {
+		RunDir   string `json:"run_dir"`
+		DirError string `json:"dir_error"`
+	}
+	show := func(id string, extra ...string) step {
+		return decode[struct{ Step step }](t, s.ok(append([]string{"flows", "show", "v", id, "--json"}, extra...)...)).Step
+	}
+	if a := show("a"); a.RunDir != filepath.Join(root, "in") || a.DirError != "" {
+		t.Errorf("a: %+v (a layer using TRUSS_RUN_ID must not matter)", a)
+	}
+	if h := show("h"); h.RunDir != "" || !strings.Contains(h.DirError, "add --values") {
+		t.Errorf("h without --values: %+v", h)
+	}
+	if h := show("h", "--values"); h.RunDir != filepath.Join(root, "in") {
+		t.Errorf("h with --values: %+v", h)
+	}
+	if k := show("k", "--values"); k.RunDir != "" || !strings.Contains(k.DirError, "not shown") {
+		t.Errorf("k: %+v", k)
+	}
+}

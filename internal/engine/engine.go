@@ -300,6 +300,11 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 		if err == nil {
 			stepEnvironment = withSecrets(stepEnvironment, step.Secrets, stored)
 			workDir, err = StepDir(dir, stepDir)
+			if err != nil && stepDir != step.Dir {
+				// Name the dir as written: the expanded one may hold a value
+				// of the environment (spec 026).
+				err = fmt.Errorf("the working directory %s cannot be used: it does not exist or is not a folder", step.Dir)
+			}
 		}
 		if err == nil {
 			proc, err = executor.Start(base, executor.Request{Run: step.Run, Dir: workDir, Env: stepEnvironment, Out: out, ErrOut: errOut})

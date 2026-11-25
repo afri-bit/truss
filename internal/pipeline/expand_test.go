@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -109,6 +110,17 @@ func TestExpandLayers_FoldsCaseWhereTheHostDoes(t *testing.T) {
 func TestExpand_ErrorNeverQuotesTheValue(t *testing.T) {
 	err := CheckTemplate("key=${sk-live-abc123}")
 	if err == nil || strings.Contains(err.Error(), "sk-live") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestExpandLayers_AValueCannotGrowWithoutLimit(t *testing.T) {
+	layer := map[string]string{"A0": strings.Repeat("x", 1024)}
+	for i := 1; i <= 30; i++ {
+		layer[fmt.Sprintf("A%d", i)] = fmt.Sprintf("${A%d}${A%d}", i-1, i-1)
+	}
+	_, err := ExpandLayers(host(nil), layer)
+	if err == nil || !strings.Contains(err.Error(), "grows past 128 KiB") {
 		t.Fatalf("err = %v", err)
 	}
 }

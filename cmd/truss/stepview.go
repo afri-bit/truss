@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -165,13 +166,6 @@ func (in invocation) stepView(file pipelineFile, def pipeline.Pipeline, id strin
 		Needs: nonNil(step.Needs), NeededBy: nonNil(plan.NeededBy(step.ID)),
 		Retries: step.Retries, ContinueOn: step.ContinueOnError}
 	projectDir := cmp.Or(projectRootOf(file.path), root)
-	if dir, err := viewDir(in.env, step, plan.Name, projectDir, st); err != nil {
-		d.Step.DirError = err.Error()
-	} else if dir, err := engine.StepDir(root, dir); err != nil {
-		d.Step.DirError = err.Error()
-	} else {
-		d.Step.RunDir = dir
-	}
 	if step.Timeout > 0 {
 		d.Step.Timeout = step.Timeout.String()
 	}
@@ -222,6 +216,13 @@ func (in invocation) stepView(file pipelineFile, def pipeline.Pipeline, id strin
 			}
 		}
 		return false
+	}
+	if dir, err := viewDir(in.env, step, plan.Name, projectDir, st, showValues, holdsSecret); err != nil {
+		d.Step.DirError = err.Error()
+	} else if dir, err := engine.StepDir(root, dir); err != nil {
+		d.Step.DirError = err.Error()
+	} else {
+		d.Step.RunDir = dir
 	}
 
 	// What a step receives, later winning: the base environment of the run
@@ -437,50 +438,87 @@ func sourceLabel(source string) string {
 
 // viewDir expands a step's dir the way a run would: the host environment,
 // the built-ins known before a run, then the step's layers (spec 026). A dir
-// that uses a variable each run sets anew cannot be shown.
-func viewDir(hostEnv []string, step pipeline.Step, flow, projectDir string, st project.State) (string, error) {
+// that reaches a variable each run sets anew cannot be shown. A dir that
+// reaches the host environment is shown only with --values, and then not
+// when a value it read looks sensitive or holds a stored secret.
+func viewDir(hostEnv []string, step pipeline.Step, flow, projectDir string, st project.State,
+	showValues bool, holdsSecret func(string) bool) (string, error) {
 	jobless := strings.TrimPrefix(step.ID, step.Job+"/")
-	known := map[string]string{
+	key := pipeline.EnvKey
+	known := map[string]string{}
+	for name, v := range map[string]string{
 		"TRUSS_FLOW": flow, "TRUSS_PIPELINE": flow, "TRUSS_STEP": jobless, "TRUSS_JOB": step.Job,
 		"TRUSS_PROJECT_DIR": projectDir, "TRUSS_OS": runtime.GOOS, "TRUSS_ARCH": runtime.GOARCH,
 		"TRUSS_DATA_DIR": st.Data, "TRUSS_CACHE_DIR": st.Cache,
+	} {
+		known[key(name)] = v
 	}
-	perRun := map[string]bool{"TRUSS_RUN_ID": true, "TRUSS_TRIGGER": true, "TRUSS_ATTEMPT": true, "TRUSS_TEMP_DIR": true}
-	var later string
+	// Values that cannot be shown travel through the expansion as markers,
+	// so only what the dir really reaches counts.
+	const perRunMark, hostMark = "\x00", "\x01"
+	perRun := map[string]bool{}
+	for _, name := range []string{"TRUSS_RUN_ID", "TRUSS_TRIGGER", "TRUSS_ATTEMPT", "TRUSS_TEMP_DIR"} {
+		perRun[key(name)] = true
+	}
+	sensitive := false
 	host := envLookup(hostEnv)
 	base := func(name string) string {
-		up := strings.ToUpper(name)
-		if perRun[up] && later == "" {
-			later = up
+		if perRun[key(name)] {
+			return perRunMark + name + perRunMark
 		}
-		if v, ok := known[up]; ok {
+		if v, ok := known[key(name)]; ok {
 			return v
 		}
 		v, _ := host(name)
-		return v
+		if v == "" {
+			return ""
+		}
+		if sensitiveName.MatchString(name) {
+			sensitive = true
+		}
+		return hostMark + v + hostMark
 	}
 	vars, err := pipeline.ExpandLayers(base, step.EnvLayers...)
 	if err != nil {
 		return "", err
 	}
+	lookupVars := func(name string) (string, bool) {
+		for k, v := range vars {
+			if key(k) == key(name) {
+				return v, true
+			}
+		}
+		return "", false
+	}
 	var unset string
 	dir, err := pipeline.Expand(step.Dir, func(name string) string {
-		v, ok := vars[name]
+		v, ok := lookupVars(name)
 		if !ok {
 			v = base(name)
 		}
-		if v == "" && unset == "" {
+		if strings.Trim(v, hostMark) == "" && unset == "" {
 			unset = name
 		}
 		return v
 	})
-	switch {
-	case err != nil:
+	if err != nil {
 		return "", err
-	case later != "" && strings.Contains(step.Dir, "$"):
-		return "", fmt.Errorf("dir depends on %s, which each run sets", later)
-	case unset != "":
+	}
+	if i := strings.Index(dir, perRunMark); i >= 0 {
+		name, _, _ := strings.Cut(dir[i+1:], perRunMark)
+		return "", fmt.Errorf("dir depends on %s, which each run sets", name)
+	}
+	if unset != "" {
 		return "", fmt.Errorf("dir uses ${%s}, which is not set", unset)
+	}
+	if strings.Contains(dir, hostMark) {
+		dir = strings.ReplaceAll(dir, hostMark, "")
+		switch {
+		case !showValues:
+			return "", errors.New("dir uses your environment; add --values to see it")
+		case sensitive || holdsSecret(dir):
+			return "", errors.New("dir uses a value that is not shown (a token-like name or a stored secret)")
+		}
 	}
 	return dir, nil
 }

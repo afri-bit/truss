@@ -35,6 +35,13 @@ func Expand(value string, lookup func(string) string) (string, error) {
 	return expand(value, func(name string) (string, error) { return lookup(name), nil })
 }
 
+// MaxExpanded bounds an expanded value (spec 026): a few lines that double
+// each other would otherwise grow past any memory.
+const MaxExpanded = 128 << 10
+
+// ErrTooLong is returned when an expanded value grows past MaxExpanded.
+var ErrTooLong = fmt.Errorf("grows past %d KiB when its ${...} are expanded", MaxExpanded>>10)
+
 func expand(value string, lookup func(string) (string, error)) (string, error) {
 	if !strings.Contains(value, "$") {
 		return value, nil
@@ -63,6 +70,9 @@ func expand(value string, lookup func(string) (string, error)) (string, error) {
 			v, err := lookup(name)
 			if err != nil {
 				return "", err
+			}
+			if b.Len()+len(v) > MaxExpanded {
+				return "", ErrTooLong
 			}
 			b.WriteString(v)
 			i += 2 + end
@@ -130,6 +140,9 @@ func expandLayers(fold bool, base func(string) string, layers ...map[string]stri
 				}
 				return below(ref), nil
 			})
+			if errors.Is(err, ErrTooLong) {
+				return "", fmt.Errorf("%s %w", raw[key].name, err)
+			}
 			if err != nil {
 				return "", err
 			}
