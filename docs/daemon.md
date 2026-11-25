@@ -36,7 +36,7 @@ schedule 0 9 * * 1-5: next run 2026-11-13 09:00:00
 $ truss trigger nightly --follow       # do not wait for 09:00
 ...
 $ truss runs
-RUN                     PIPELINE  STATUS     TRIGGER  CREATED              DURATION  NOTE
+RUN                     FLOW      STATUS     TRIGGER  CREATED              DURATION  NOTE
 20261112-101502-a3f9c1  nightly   succeeded  manual   2026-11-12 10:15:02  4.2s
 
 $ truss desktop                        # the same, with a UI

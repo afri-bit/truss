@@ -5,7 +5,7 @@
 Extends [`006-daemon-registry-and-scheduling`](../006-daemon-registry-and-scheduling/spec.md) (the
 file stays the source of truth) and [`016-project-layout`](../016-project-layout/spec.md) (a
 pipeline's name is optional and defaults to the file name). User docs:
-[`docs/daemon.md`](../../docs/daemon.md#registering-pipelines). Decision:
+[`docs/daemon.md`](../../docs/daemon.md#registering-flows). Decision:
 [ADR 0017](../../docs/decisions/0017-a-registration-keeps-its-name-the-file-names-it.md).
 Risk class: tier 2 (daemon API and what a name means to clients). Scope decided by the maintainer on
 2026-11-16 (answers: follow the file and keep the history; keep polling, no new dependency).

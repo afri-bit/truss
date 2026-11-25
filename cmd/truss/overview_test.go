@@ -331,7 +331,7 @@ func TestRuns_APipelineNamedShowStillWorks(t *testing.T) {
 	s.write("show.yaml", "version: \"1\"\npipeline: {name: show}\nsteps: [{id: a, run: echo}]\n")
 	s.ok("register", "show.yaml")
 	s.ok("trigger", "show", "--follow")
-	if out := s.ok("runs", "show"); !strings.Contains(out, "show      succeeded") {
+	if out := s.ok("runs", "show"); !regexp.MustCompile(`(?m)^\S+ +show +succeeded`).MatchString(out) {
 		t.Fatalf("runs show = %q", out)
 	}
 }

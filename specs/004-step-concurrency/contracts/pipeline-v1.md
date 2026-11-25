@@ -42,10 +42,10 @@ Reject before any Step command starts, with no new run log, when any earlier rej
 
 | Fault | Diagnostic |
 |---|---|
-| `concurrency` is `0`, negative, a fraction (`1.5`, `1.0`), text (`"two"`, `"3"`), `true`, `0x10`, `0o7`, `1_000`, `+3`, empty, or null | `flow concurrency must be a whole number of at least 1, got "<value>"` |
-| `concurrency` is a list or a mapping | `flow concurrency must be a whole number of at least 1, got a list` / `got a mapping` |
+| `concurrency` is `0`, negative, a fraction (`1.5`, `1.0`), text (`"two"`, `"3"`), `true`, `0x10`, `0o7`, `1_000`, `+3`, empty, or null | `pipeline concurrency must be a whole number of at least 1, got "<value>"` |
+| `concurrency` is a list or a mapping | `pipeline concurrency must be a whole number of at least 1, got a list` / `got a mapping` |
 | An unrecognised field at the top level | `unknown field "<name>" at top level` |
-| An unrecognised field under `pipeline` | `unknown field "<name>" in flow` |
+| An unrecognised field under `pipeline` | `unknown field "<name>" in pipeline` |
 | An unrecognised field in a Step | `unknown field "<name>" in step "<id>"`, or `in step <N>` (1-based) when the Step has no id |
 
 Check order: schema version, unknown field, name, `concurrency`, steps, `id`, `run`, then `needs` (spec 003 order). Existing diagnostics are unchanged. The CLI prints `error: <diagnostic>` on standard error. An existing `.truss/run.log` is unchanged. *Changed by [spec 016](../../016-project-layout/spec.md): The file is `.truss/state/<flow>/run.log`.*

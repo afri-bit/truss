@@ -243,7 +243,7 @@ name a step declares as a secret.
 
 ```console
 $ truss schedules
-NEXT RUN             PIPELINE  CRON         ZONE   MISSED  STATE
+NEXT RUN             FLOW      CRON         ZONE   MISSED  STATE
 2026-11-17 09:20:00  poll      */5 * * * *  local  skip    active
 2026-11-18 01:30:00  nightly   30 1 * * *   UTC    run     active
 ```
@@ -260,7 +260,7 @@ Find runs, then look at one:
 $ truss runs --status failed --limit 5
 $ truss runs show last
 Run        20261117-091500-a1b2c3
-Pipeline   nightly
+Flow       nightly
 Status     failed: nightly failed at test (exit 3)
 Trigger    schedule
 Created    2026-11-17 09:15:00 (4m 2s ago)
@@ -318,10 +318,10 @@ goes to standard output. Lists are `[]` when empty, never `null`. Daemon objects
 # fail a script when the daemon is down
 truss daemon status --json >/dev/null || { echo "daemon down" >&2; exit 1; }
 
-# names of the pipelines whose last run failed
+# names of the flows whose last run failed
 truss pipelines --json | jq -r '.[] | select(.last_run.status == "failed") | .name'
 
-# the newest failed run of one pipeline
+# the newest failed run of one flow
 truss runs nightly --status failed --limit 1 --json | jq -r '.[0].id'
 
 # flows of this project the daemon does not have yet

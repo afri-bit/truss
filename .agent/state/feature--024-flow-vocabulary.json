@@ -4,15 +4,22 @@
   "tier": 2,
   "branch": "feature/024-flow-vocabulary",
   "status": "in_progress",
-  "step": "implemented; verify passes; review next",
-  "steps_done": [],
+  "step": "review findings fixed; delta review next",
+  "steps_done": [
+    "implemented",
+    "reviewer and spec-reviewer findings fixed"
+  ],
   "requirements": [],
-  "specs": [],
+  "specs": [
+    "specs/024-flow-vocabulary/spec.md"
+  ],
   "owner_agent": "orchestrator",
   "blockers": [],
   "open_questions": [],
-  "next_actions": [],
+  "next_actions": [
+    "delta review, then PR"
+  ],
   "pr": null,
   "created": "2026-11-25T15:21:34Z",
-  "updated": "2026-11-25T15:21:34Z"
+  "updated": "2026-11-25T15:26:55Z"
 }

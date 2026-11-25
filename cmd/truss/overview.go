@@ -341,7 +341,7 @@ func renderDashboard(snap snapshot, projectFlows []project.Flow, width int) stri
 		}
 		l := columns(rows, width-4)
 		if more := len(snap.Pipelines) - 8; more > 0 {
-			l = append(l, fmt.Sprintf("... and %d more (truss flows)", more))
+			l = append(l, fmt.Sprintf("... and %d more (truss pipelines)", more))
 		}
 		b.WriteString(box(fmt.Sprintf("Flows (%d)", len(snap.Pipelines)), l, width))
 	}
@@ -622,7 +622,7 @@ func (in invocation) schedules(ctx context.Context) int {
 		fmt.Fprintln(in.stdout, "no schedules: no registered flow has an on.schedule entry")
 		return 0
 	}
-	out := [][]string{{"NEXT RUN", "PIPELINE", "CRON", "ZONE", "MISSED", "STATE"}}
+	out := [][]string{{"NEXT RUN", "FLOW", "CRON", "ZONE", "MISSED", "STATE"}}
 	for _, r := range rows {
 		zone, state := r.Timezone, "active"
 		if zone == "" {

@@ -39,13 +39,26 @@ commands). New users asked whether they were two things. One word removes the qu
 
 ## Compatibility
 
-Every v0.2.0 flow file stays valid. JSON output and the API are unchanged. Human-readable output
-changes wording (FR-003): a script that matches English text such as `registered 2 pipelines` must
-change. The run log is unchanged.
+Every v0.2.0 flow file stays valid, including one that repeats the `pipeline:` block (the last
+one wins, as before). JSON field names, the API paths and the run log are unchanged.
+Human-readable text changes wording (FR-003): table headers, prose output, and the English text
+of errors and run reasons, which also reach JSON as values (`error`, `reason`). Runs recorded
+before keep their old reason text. A script that matches English text, such as
+`registered 2 pipelines` or the `PIPELINE` column, must change; scripts should read `--json`.
+
+This spec changes wording that earlier specs quote. They are not rewritten; this list is the
+record: [004](../004-step-concurrency/spec.md) (validation messages: `flow concurrency ...`,
+`unknown field ... in flow`), [008](../008-workspace-and-cache/spec.md) (`flow workdir ...`),
+[016](../016-project-layout/spec.md) (`no flows`, `flows live in .truss/flows/`,
+`registered N flows`), [022](../022-cli-enrichment/spec.md) (`--flow`, the `Flow` row, the `FLOW`
+column) and [023](../023-step-debugging/spec.md) (the step table shows the source `flow`).
 
 ## Acceptance
 
 - A file with `flow:` and the same file with `pipeline:` produce the same plan (test
   `TestParse_FlowKeyIsTheFlowBlock`).
-- A file with both is rejected (`TestValidate_RejectsBothFlowAndPipeline`).
+- A file with both is rejected, in either order (`TestValidate_RejectsBothFlowAndPipeline`,
+  `TestValidate_RejectsBothInEitherOrder`); a repeated block of one name stays valid
+  (`TestValidate_ARepeatedBlockOfOneNameStaysValid`).
+- The end-to-end script runs a file that uses `flow:` (`flow key`).
 - `--flow` and `--pipeline` select the same run; both together fail (`TestRuns_*`).

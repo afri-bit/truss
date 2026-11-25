@@ -164,7 +164,7 @@ tracking as run 20261112-090000-a1b2c3 (truss logs 20261112-090000-a1b2c3)
 2026-11-12 09:00:00 ==== Setup: the environment the steps run in ====
 ...
 $ truss runs
-RUN                     PIPELINE     STATUS     TRIGGER  CREATED              DURATION  NOTE
+RUN                     FLOW         STATUS     TRIGGER  CREATED              DURATION  NOTE
 20261112-090000-a1b2c3  hello-world  succeeded  local    2026-11-12 09:00:00  0.1s
 ```
 
@@ -180,7 +180,7 @@ RUN                     PIPELINE     STATUS     TRIGGER  CREATED              DU
 
 A command that takes a registered flow's name accepts the name its file gives it now or the name
 it was registered under; they differ after a rename in the file (see [Registering
-flows](daemon.md#registering-pipelines)).
+flows](daemon.md#registering-flows)).
 
 | Command | What it does |
 |---|---|
@@ -198,7 +198,7 @@ flows](daemon.md#registering-pipelines)).
 | `truss trigger <name> --follow` | Requests a run, prints its log live, and exits `0` only if it succeeded. |
 | `truss runs [<name>]` | Lists the newest runs, optionally of one flow. |
 | `truss runs [<name>] --status <s> --active --limit <n> --json` | Filters the list. `<s>` is `queued`, `running`, `succeeded`, `failed`, `cancelled` or `skipped`; `--active` means queued or running; the default limit is 30. |
-| `truss runs show <run-id\|last> [--pipeline <name>] [--json]` | One run: status, reason, trigger, times, each step's status, exit code, time and attempt, and a timeline. `last` is the newest run (of `--pipeline` if given). Exits `0` even for a failed run: it answers a question. |
+| `truss runs show <run-id\|last> [--flow <name>] [--json]` | One run: status, reason, trigger, times, each step's status, exit code, time and attempt, and a timeline. `last` is the newest run (of `--flow` if given; `--pipeline` is its older name). Exits `0` even for a failed run: it answers a question. |
 | `truss logs <run-id>` | Prints a run log. `--follow` keeps printing until the run ends. |
 | `truss cancel <run-id>` | Ends a queued or running run. |
 | `truss cache clear <name>` | Empties the flow's cache folder. Needs no daemon. For a daemon run, see [the daemon page](daemon.md#data-and-cache-folders). |

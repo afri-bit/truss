@@ -17,11 +17,11 @@ import (
 	"github.com/afri-bit/truss/internal/home"
 )
 
-// ErrNotFound means no pipeline is registered under the given name.
-var ErrNotFound = errors.New("pipeline is not registered")
+// ErrNotFound means no flow is registered under the given name.
+var ErrNotFound = errors.New("flow is not registered")
 
 // ErrExists means the name is already taken by another file.
-var ErrExists = errors.New("a pipeline with this name is already registered")
+var ErrExists = errors.New("a flow with this name is already registered")
 
 var validName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
@@ -67,7 +67,7 @@ func Open(path string) (*Registry, error) {
 // CheckName reports whether name can be used as a registration name.
 func CheckName(name string) error {
 	if !validName.MatchString(name) {
-		return fmt.Errorf("pipeline name %q must start with a letter or digit and use only letters, digits, '.', '_' and '-'", name)
+		return fmt.Errorf("flow name %q must start with a letter or digit and use only letters, digits, '.', '_' and '-'", name)
 	}
 	return nil
 }

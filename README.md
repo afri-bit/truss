@@ -158,7 +158,7 @@ $ truss trigger hello --follow
 2026-11-12 09:01:10 summary succeeded steps 1 duration 0.005s
 
 $ truss runs
-RUN                     PIPELINE  STATUS     TRIGGER  CREATED              DURATION  NOTE
+RUN                     FLOW      STATUS     TRIGGER  CREATED              DURATION  NOTE
 20261112-090110-a3f9c1  hello     succeeded  manual   2026-11-12 09:01:10  0s
 ```
 

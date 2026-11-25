@@ -142,7 +142,7 @@ $ truss trigger ci --follow
 2026-11-16 09:02:00 summary succeeded steps 3 duration 0.029s
 
 $ truss runs
-RUN                     PIPELINE  STATUS     TRIGGER  CREATED              DURATION  NOTE
+RUN                     FLOW      STATUS     TRIGGER  CREATED              DURATION  NOTE
 20261116-090200-5c121e  ci        succeeded  manual   2026-11-16 09:02:00  0s
 ```
 

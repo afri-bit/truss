@@ -99,7 +99,7 @@ func Parse(data []byte) (Pipeline, error) {
 			}
 		case "flow", "pipeline":
 			// flow is the name since v0.3.0; pipeline stays accepted.
-			if seenBlock != "" {
+			if seenBlock != "" && seenBlock != key {
 				p.issue("the file has both %s and %s; keep one (flow is the current name)", seenBlock, key)
 			}
 			seenBlock = key

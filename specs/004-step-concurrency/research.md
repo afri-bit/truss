@@ -14,7 +14,7 @@
 
 ## Validation order
 
-- **Decision**: `version`, then unknown field, then `name`, then `concurrency`, then steps, `id`, `run`, then `needs`. Existing messages do not change. New messages: `unknown field "x" at top level`, `unknown field "x" in flow`, `unknown field "x" in step "id"` (or `in step N`, 1-based, when the id is missing), and `flow concurrency must be a whole number of at least 1, got "X"` (`got a list`, `got a mapping` for non-scalars).
+- **Decision**: `version`, then unknown field, then `name`, then `concurrency`, then steps, `id`, `run`, then `needs`. Existing messages do not change. New messages: `unknown field "x" at top level`, `unknown field "x" in pipeline`, `unknown field "x" in step "id"` (or `in step N`, 1-based, when the id is missing), and `pipeline concurrency must be a whole number of at least 1, got "X"` (`got a list`, `got a mapping` for non-scalars).
 - **Rationale**: The version decides which fields are known. A valid limit with a bad graph must still yield the existing Dependency errors (Story 4, scenario 3).
 - **Alternatives considered**: Collect all problems (rejected: the validator returns one error today).
 

@@ -540,6 +540,27 @@ else
 fi
 rm -rf "$work"
 
+# Spec 024: the flow block may be called flow.
+new_dir
+mkdir -p "$work/project/app"
+cat >"$work/project/flowkey.yaml" <<EOF
+version: "1"
+
+flow:
+  name: flowkey
+  workdir: app
+
+steps:
+  - id: touch
+    run: echo ran> marker.txt
+EOF
+run_truss "$work/project" run flowkey.yaml
+if [ "$code" -ne 0 ] || [ ! -e "$work/project/app/marker.txt" ]; then
+	fail "flow key" "want exit 0 and the step run in app"
+else
+	pass "flow key"
+fi
+
 # Jobs: the steps of a job run in order and a job waits for the jobs it needs.
 new_dir
 cat >"$work/project/pipeline.yaml" <<EOF

@@ -605,7 +605,7 @@ views.dashboard = {
                 h("td", null, h("a", { class: "pipe", href: href.pipeline(p.name), onclick: (e) => e.stopPropagation() }, p.name)),
                 h("td", null, h("code", null, p.schedules[0].cron)),
                 h("td", { class: "mono" }, clock(nextOf(p)).slice(-8)), h("td", { class: "num" }, new Date(nextOf(p)) <= new Date() ? "now" : "in " + compact(new Date(nextOf(p)) - new Date()))))))
-              : h("div", { class: "empty" }, h("div", { class: "empty-title" }, "No schedules."), "Add ", h("code", null, "on.schedule"), " to a pipeline file.")))),
+              : h("div", { class: "empty" }, h("div", { class: "empty-title" }, "No schedules."), "Add ", h("code", null, "on.schedule"), " to a flow file.")))),
     ];
   },
 };
@@ -1130,7 +1130,7 @@ function healthChecks() {
   checks.push({ name: "Run slots", detail: st ? `${st.running_runs} running, ${st.queued_runs} queued` : "–", val: st ? `${st.running_runs}/${st.max_parallel_runs}` : "–", state: !st ? "off" : st.queued_runs > 0 ? "warn" : "ok" });
   const sched = shell.pipelines.filter((p) => (p.schedules || []).length);
   const paused = sched.filter((p) => p.paused).length;
-  checks.push({ name: "Scheduler", detail: sched.length ? `${sched.length} scheduled pipeline${sched.length === 1 ? "" : "s"}${paused ? `, ${paused} paused` : ""}` : "nothing scheduled", val: sched.length ? `${sched.length - paused} active` : "idle", state: sched.length ? (paused ? "warn" : "ok") : "off" });
+  checks.push({ name: "Scheduler", detail: sched.length ? `${sched.length} scheduled flow${sched.length === 1 ? "" : "s"}${paused ? `, ${paused} paused` : ""}` : "nothing scheduled", val: sched.length ? `${sched.length - paused} active` : "idle", state: sched.length ? (paused ? "warn" : "ok") : "off" });
   const invalid = shell.pipelines.filter((p) => !p.valid).length;
   checks.push({ name: "Flow files", detail: invalid ? `${invalid} file${invalid === 1 ? "" : "s"} failed validation` : "all files parse", val: `${shell.pipelines.length - invalid}/${shell.pipelines.length}`, state: invalid ? "bad" : "ok" });
   const failedRecent = shell.runs.slice(0, 20).filter((r) => r.status === "failed").length;

@@ -208,7 +208,7 @@ func (in invocation) runs(ctx context.Context) int {
 		return 0
 	}
 	w := tabwriter.NewWriter(in.stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "RUN\tPIPELINE\tSTATUS\tTRIGGER\tCREATED\tDURATION\tNOTE")
+	fmt.Fprintln(w, "RUN\tFLOW\tSTATUS\tTRIGGER\tCREATED\tDURATION\tNOTE")
 	for _, r := range list {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.ID, r.Pipeline, r.Status, r.Trigger, local(&r.CreatedAt), duration(r), clean(r.Reason))
 	}
@@ -242,15 +242,16 @@ func (in invocation) runShow(ctx context.Context, args []string) int {
 		return in.usage()
 	}
 	flowFlag, hasFlow := flags["flow"]
+	given := "--flow"
 	if old, ok := flags["pipeline"]; ok {
 		if hasFlow {
 			return in.fail(errors.New("--flow and --pipeline name the same thing; give one"))
 		}
-		flowFlag, hasFlow = old, true
+		flowFlag, hasFlow, given = old, true, "--pipeline"
 	}
 	flags["pipeline"] = flowFlag
 	if hasFlow && pos[0] != "last" {
-		return in.fail(errors.New("--flow only goes with the id \"last\""))
+		return in.fail(fmt.Errorf("%s only goes with the id \"last\"", given))
 	}
 	c, err := in.dial(ctx)
 	if err != nil {

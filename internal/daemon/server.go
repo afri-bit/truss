@@ -205,7 +205,7 @@ func (d *Daemon) registerPipeline(w http.ResponseWriter, r *http.Request) error 
 	if name == "" {
 		name = def.Name
 		if registry.CheckName(name) != nil {
-			return badRequest("pipeline name %q cannot be used as a registration name; choose one with --name", name)
+			return badRequest("flow name %q cannot be used as a registration name; choose one with --name", name)
 		}
 	} else if err := registry.CheckName(name); err != nil {
 		return badRequest("%s", err.Error())
@@ -239,7 +239,7 @@ func (d *Daemon) registerPipeline(w http.ResponseWriter, r *http.Request) error 
 	// the registration says so.
 	if e.Name == name && e.RegisteredAt.Equal(now) {
 		d.refresh(d.opts.Now())
-		d.logf("pipeline %s: registered %s", e.Name, e.Path)
+		d.logf("flow %s: registered %s", e.Name, e.Path)
 	}
 	return writeJSON(w, http.StatusCreated, d.view(e))
 }
@@ -265,7 +265,7 @@ func (d *Daemon) unregisterPipeline(w http.ResponseWriter, r *http.Request) erro
 		return err
 	}
 	d.refresh(d.opts.Now())
-	d.logf("pipeline %s: unregistered", e.Name)
+	d.logf("flow %s: unregistered", e.Name)
 	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
@@ -283,7 +283,7 @@ func (d *Daemon) pausePipeline(paused bool) func(http.ResponseWriter, *http.Requ
 		// A resumed schedule counts from now: times that passed while it was
 		// paused are not missed runs.
 		d.refresh(d.opts.Now())
-		d.logf("pipeline %s: paused=%t", e.Name, paused)
+		d.logf("flow %s: paused=%t", e.Name, paused)
 		return writeJSON(w, http.StatusOK, d.view(e))
 	}
 }
@@ -297,7 +297,7 @@ func (d *Daemon) triggerRun(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	d.logf("pipeline %s: manual trigger -> run %s (%s)", e.Name, run.ID, run.Status)
+	d.logf("flow %s: manual trigger -> run %s (%s)", e.Name, run.ID, run.Status)
 	return writeJSON(w, http.StatusAccepted, showRun(d.names(), run))
 }
 
@@ -387,7 +387,7 @@ func (d *Daemon) createTrackedRun(w http.ResponseWriter, r *http.Request) error 
 	if err != nil {
 		return err
 	}
-	d.logf("pipeline %s: tracked local run %s started", run.Pipeline, run.ID)
+	d.logf("flow %s: tracked local run %s started", run.Pipeline, run.ID)
 	return writeJSON(w, http.StatusCreated, showRun(d.names(), run))
 }
 

@@ -5,7 +5,7 @@ const columns = [
   {
     title: 'Product',
     links: [
-      ['Pipelines', '#pipelines'],
+      ['Flows', '#pipelines'],
       ['Daemon', '#daemon'],
       ['Schedules', '#schedules'],
       ['Desktop', '#desktop'],
@@ -15,7 +15,7 @@ const columns = [
     title: 'Documentation',
     links: [
       ['Getting started', url('docs/getting-started/')],
-      ['Pipeline file reference', url('docs/pipeline-reference/')],
+      ['Flow file reference', url('docs/pipeline-reference/')],
       ['Command line reference', url('docs/cli/')],
       ['Glossary', url('docs/glossary/')],
     ],
@@ -40,7 +40,7 @@ const columns = [
         <img src={url('favicon.svg')} width="32" height="32" alt="" />
         <span class="brand__name">TRUSS</span>
       </a>
-      <p>Pipelines that live on your machine.</p>
+      <p>Flows that live on your machine.</p>
     </div>
     {
       columns.map((c) => (
