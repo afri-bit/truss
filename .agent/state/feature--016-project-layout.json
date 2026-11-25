@@ -3,8 +3,8 @@
   "title": "Project layout: truss.yaml metadata and .truss/flows",
   "tier": 2,
   "branch": "feature/016-project-layout",
-  "status": "in_progress",
-  "step": "delta reviews done; final fixes",
+  "status": "done",
+  "step": "merged into main (confirmed 2026-11-25)",
   "steps_done": [],
   "requirements": [],
   "specs": [
@@ -25,5 +25,5 @@
   ],
   "pr": null,
   "created": "2026-11-15T22:07:03Z",
-  "updated": "2026-11-15T22:45:36Z"
+  "updated": "2026-11-25T14:58:03Z"
 }

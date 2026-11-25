@@ -3,8 +3,8 @@
   "title": "Release v0.1.0",
   "tier": 0,
   "branch": "release/0.1.0",
-  "status": "in_review",
-  "step": "release branch prepared: changelog section [0.1.0] passes release-check, six targets built and packaged locally, verify.sh green; waiting for the stacked PRs to merge, CI on Windows and macOS, daemon install try-out and the Pages setting; then PR to main and the tag (maintainer)",
+  "status": "done",
+  "step": "merged into main (confirmed 2026-11-25)",
   "steps_done": [],
   "requirements": [],
   "specs": [],
@@ -14,5 +14,5 @@
   "next_actions": [],
   "pr": null,
   "created": "2026-11-16T11:12:01Z",
-  "updated": "2026-11-16T11:12:02Z"
+  "updated": "2026-11-25T14:58:03Z"
 }

@@ -3,8 +3,8 @@
   "title": "Layered CLI: status, dashboard, flows, runs show, daemon logs, help, --json",
   "tier": 2,
   "branch": "feature/022-cli-enrichment",
-  "status": "in_review",
-  "step": "built, verified; reviewer, spec-reviewer, security-reviewer, portability-reviewer plus delta reviews (reviewer, security) done; PR open",
+  "status": "done",
+  "step": "merged into main (confirmed 2026-11-25)",
   "steps_done": [],
   "requirements": [],
   "specs": [],
@@ -14,5 +14,5 @@
   "next_actions": [],
   "pr": null,
   "created": "2026-11-17T00:33:48Z",
-  "updated": "2026-11-17T00:33:48Z"
+  "updated": "2026-11-25T14:58:03Z"
 }

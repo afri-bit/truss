@@ -3,8 +3,8 @@
   "title": "Step debugging: inspect a step, run one step, env table",
   "tier": 2,
   "branch": "feature/023-step-debugging",
-  "status": "in_review",
-  "step": "built, verified; reviewed by reviewer, spec-reviewer, security-reviewer, portability-reviewer; delta reviews to 677d2e1 plus a final test-only commit; branch pushed, the maintainer opens the PR (gh missing)",
+  "status": "done",
+  "step": "merged into main (confirmed 2026-11-25)",
   "steps_done": [],
   "requirements": [],
   "specs": [],
@@ -14,5 +14,5 @@
   "next_actions": [],
   "pr": null,
   "created": "2026-11-19T19:51:06Z",
-  "updated": "2026-11-19T20:23:44Z"
+  "updated": "2026-11-25T14:58:03Z"
 }
