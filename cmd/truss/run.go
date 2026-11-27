@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -29,6 +30,9 @@ type runSpec struct {
 	// debug marks a run of a slice of the flow: its log is printed and not saved
 	// (spec 023).
 	debug bool
+	// projectDir is the root of the flow's project, for TRUSS_PROJECT_DIR;
+	// empty means the run's directory (spec 026).
+	projectDir string
 }
 
 // runLocal runs a pipeline definition in this process, without the daemon.
@@ -52,7 +56,7 @@ func runLocal(ctx context.Context, pos []string, opts runOptions, cwd string, en
 		return 1
 	}
 	def := l.def
-	spec := runSpec{flow: pos[0], debug: opts.debug()}
+	spec := runSpec{flow: pos[0], debug: opts.debug(), projectDir: projectRootOf(file.path)}
 	if opts.debug() || len(opts.env) > 0 {
 		sliced, err := pipeline.Slice(def, opts.selection())
 		if err != nil {
@@ -164,7 +168,11 @@ func execute(ctx, runCtx context.Context, def pipeline.Pipeline, stem, cwd strin
 	if tr != nil {
 		events = newTrackedEvents(log, tr, runCtx)
 	}
-	run, err := engine.Run(runCtx, def, cwd, env, events, engine.WithSecrets(secretLoader(env)))
+	info := engine.RunInfo{ID: localRunID(), Trigger: api.TriggerLocal, ProjectDir: cmp.Or(spec.projectDir, abs)}
+	if tr != nil {
+		info.ID = tr.id
+	}
+	run, err := engine.Run(runCtx, def, cwd, env, events, engine.WithSecrets(secretLoader(env)), engine.WithRun(info))
 	if err != nil {
 		discard()
 		return interrupted(ctx, tr, err, stderr)
@@ -312,4 +320,12 @@ func replaceFile(tmpPath, dest string) error {
 func discardRunLog(tmp *os.File, tmpPath string) {
 	_ = tmp.Close()
 	_ = os.Remove(tmpPath)
+}
+
+// localRunID names a local run that the daemon does not know: the time and
+// a random suffix, like a daemon run id, with "local-" in front (spec 026).
+func localRunID() string {
+	var b [3]byte
+	_, _ = rand.Read(b[:])
+	return "local-" + time.Now().Format("20060102-150405") + "-" + hex.EncodeToString(b[:])
 }

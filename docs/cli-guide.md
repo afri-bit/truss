@@ -174,13 +174,21 @@ STAGE            step              set          staging
 NPM_TOKEN        secret store      missing      -
 TRUSS_DATA_DIR   truss run         set          .truss/state/ci/data
 TRUSS_CACHE_DIR  truss run         set          .truss/state/ci/data/cache
-TRUSS_RUN_ID     daemon            daemon only  -
-TRUSS_PIPELINE   daemon            daemon only  -
-TRUSS_TRIGGER    daemon            daemon only  -
+TRUSS_FLOW         truss             set          ci
+TRUSS_PIPELINE     truss             set          ci
+TRUSS_STEP         truss             set          package
+TRUSS_JOB          truss             set          build
+TRUSS_PROJECT_DIR  truss             set          .
+TRUSS_OS           truss             set          linux
+TRUSS_ARCH         truss             set          amd64
+TRUSS_RUN_ID       truss             each run     -
+TRUSS_TRIGGER      truss             each run     -
+TRUSS_ATTEMPT      truss             each run     -
+TRUSS_TEMP_DIR     truss             each run     -
 REGISTRY_URL     host environment  not set      -
 ```
 
-The table lists what the step can use and where each value comes from: your file (`flow`,
+The table lists what the step can use and where each value comes from: your files (`project`, `flow`,
 `job <id>` or `step`, whichever layer wins), the secret store, TRUSS itself, or your shell
 (`host environment`). Here two things are wrong before anything runs: the secret `NPM_TOKEN` is
 `missing`, and the command reads `$REGISTRY_URL`, which nothing sets.
@@ -191,8 +199,8 @@ The table lists what the step can use and where each value comes from: your file
 - The `host environment` rows come from reading the command text for `$NAME`, `${NAME}`,
   `%NAME%` and `$env:NAME` with upper case names. A script can read variables this does not find.
   Add `--values` to see their values (`***` for token-like names and stored secrets).
-- `TRUSS_RUN_ID`, `TRUSS_PIPELINE` and `TRUSS_TRIGGER` are set only by the daemon. To try a step
-  as if the daemon ran it, give them with `--env`.
+- `TRUSS_RUN_ID`, `TRUSS_TRIGGER`, `TRUSS_ATTEMPT` and `TRUSS_TEMP_DIR` are new in each run (`each run`); the
+  other [built-in variables](pipeline-reference.md#built-in-variables) show their value.
 
 `truss flows show ci build/package --json` prints the same as JSON.
 

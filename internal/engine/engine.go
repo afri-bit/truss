@@ -21,6 +21,7 @@ type Option func(*config)
 
 type config struct {
 	loadSecrets func() (map[string]string, error)
+	run         RunInfo
 }
 
 // WithSecrets supplies the stored secrets, name to value. load is called once
@@ -84,6 +85,14 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 		hidden = append(hidden, v)
 	}
 
+	// Built-in variables (spec 026): after the inherited ones, so they win
+	// over a variable of the same name in the caller's environment.
+	tempDir := makeTempDir()
+	if tempDir != "" {
+		defer removeTempDir(tempDir)
+	}
+	env = append(append([]string(nil), env...), runVars(cfg.run, plan.Name, tempDir)...)
+
 	limit := max(plan.Concurrency, 1)
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -123,7 +132,11 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 	bypass := func(step pipeline.Step) bool { return step.If.AfterFailure() || step.JobIf.AfterFailure() }
 	// holds evaluates a condition against the steps the step needs.
 	holds := func(c *pipeline.Condition, step pipeline.Step) bool {
-		ec := pipeline.EvalContext{Success: true, Env: envLookup(stepEnv(env, step.Env))}
+		stepEnvironment, _, err := resolveStepEnv(env, step, 1)
+		if err != nil {
+			stepEnvironment = stepEnv(env, step.Env)
+		}
+		ec := pipeline.EvalContext{Success: true, Env: envLookup(stepEnvironment)}
 		for _, need := range step.Needs {
 			switch settled[need] {
 			case pipeline.StatusSucceeded:
@@ -281,9 +294,18 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 				out = stepOutput{id: id, events: events}
 			}
 		}
-		stepEnvironment := withSecrets(stepEnv(env, step.Env), step.Secrets, stored)
 		var proc *executor.Process
-		workDir, err := StepDir(dir, step.Dir)
+		stepEnvironment, stepDir, err := resolveStepEnv(env, step, attempt)
+		var workDir string
+		if err == nil {
+			stepEnvironment = withSecrets(stepEnvironment, step.Secrets, stored)
+			workDir, err = StepDir(dir, stepDir)
+			if err != nil && stepDir != step.Dir {
+				// Name the dir as written: the expanded one may hold a value
+				// of the environment (spec 026).
+				err = fmt.Errorf("the working directory %s cannot be used: it does not exist or is not a folder", step.Dir)
+			}
+		}
 		if err == nil {
 			proc, err = executor.Start(base, executor.Request{Run: step.Run, Dir: workDir, Env: stepEnvironment, Out: out, ErrOut: errOut})
 		}

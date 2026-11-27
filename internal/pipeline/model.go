@@ -29,8 +29,13 @@ type Step struct {
 	// ExecutionPlan it is already merged: pipeline, then job, then step.
 	Env map[string]string
 	// EnvSource is set by Plan. It names the layer each variable of Env comes
-	// from: "pipeline", "job <id>" or "step". It is nil when Env is empty.
+	// from: "project", "pipeline", "job <id>" or "step". It is nil when Env is
+	// empty.
 	EnvSource map[string]string
+	// EnvLayers is set by Plan: the variables of each layer as written, lowest
+	// first (project, flow, job, step). The engine expands ${NAME} layer by
+	// layer (spec 026); Env is their merge before expansion.
+	EnvLayers []map[string]string
 	// Secrets names the stored secrets this step receives as environment
 	// variables. In an ExecutionPlan it is already merged: pipeline, then job,
 	// then step, without repeats. Only names are held here, never values.
@@ -123,6 +128,10 @@ type Pipeline struct {
 	Env       map[string]string
 	Secrets   []string
 	Schedules []Schedule
+	// ProjectEnv is the env of the project's truss.yaml (spec 026). It is not
+	// read from the flow file; the caller that knows the project sets it. It
+	// is the lowest layer, below Env.
+	ProjectEnv map[string]string
 
 	nonStringVersion bool
 	stepsNotList     bool

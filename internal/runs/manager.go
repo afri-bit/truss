@@ -7,6 +7,7 @@
 package runs
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -85,7 +86,10 @@ type Request struct {
 	// and TRUSS_CACHE_DIR. The caller creates them.
 	DataDir  string
 	CacheDir string
-	Trigger  string
+	// ProjectDir is the root of the flow's project, handed to steps as
+	// TRUSS_PROJECT_DIR (spec 026). Empty means Dir.
+	ProjectDir string
+	Trigger    string
 	// ScheduledFor is the time a schedule named; zero for manual runs.
 	ScheduledFor time.Time
 }
@@ -602,8 +606,7 @@ func (m *Manager) execute(ctx context.Context, rec *record) {
 	log := runlog.New(out, m.opts.Now)
 	log.Setup(runlog.OSName(runtime.GOOS), runtime.GOARCH, executor.Shell(), req.Dir)
 
-	env := append(append([]string(nil), m.opts.Env...),
-		"TRUSS_RUN_ID="+id, "TRUSS_PIPELINE="+req.Pipeline, "TRUSS_TRIGGER="+req.Trigger)
+	env := append([]string(nil), m.opts.Env...)
 	if req.CacheDir != "" {
 		// A cache clear may have run while this run was queued.
 		_ = os.MkdirAll(req.CacheDir, 0o700)
@@ -615,7 +618,8 @@ func (m *Manager) execute(ctx context.Context, rec *record) {
 		env = append(env, "TRUSS_CACHE_DIR="+req.CacheDir)
 	}
 	result, err := engine.Run(ctx, req.Definition, req.Dir, env, &follower{m: m, rec: rec, log: log},
-		engine.WithSecrets(m.opts.Secrets))
+		engine.WithSecrets(m.opts.Secrets),
+		engine.WithRun(engine.RunInfo{ID: id, Flow: req.Pipeline, Trigger: req.Trigger, ProjectDir: cmp.Or(req.ProjectDir, req.Dir)}))
 
 	m.mu.Lock()
 	defer m.mu.Unlock()

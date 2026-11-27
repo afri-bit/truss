@@ -107,6 +107,14 @@ func load(ctx context.Context, f pipelineFile) (loaded, error) {
 	if l.def.Name == "" {
 		l.def.Name = f.stem
 	}
+	// A flow of a project gets the project-wide env (spec 026).
+	if root, ok := project.RootOf(f.path); ok {
+		proj, err := project.Open(root)
+		if err != nil {
+			return loaded{}, err
+		}
+		l.def.ProjectEnv = proj.Env
+	}
 	if err := pipeline.Validate(l.def); err != nil {
 		return loaded{}, err
 	}
@@ -157,4 +165,11 @@ func writeGitignore(path string, stderr io.Writer) {
 	if err != nil {
 		fmt.Fprintf(stderr, "warning: could not write %s: %s\n", filepath.ToSlash(filepath.Join(".truss", filepath.Base(path))), err.Error())
 	}
+}
+
+// projectRootOf returns the root of the project whose .truss/flows/ holds
+// path, or "" for a file outside a project.
+func projectRootOf(path string) string {
+	root, _ := project.RootOf(path)
+	return root
 }

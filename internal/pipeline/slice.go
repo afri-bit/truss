@@ -160,6 +160,15 @@ func slice(p Pipeline, sel Selection, fold bool) (Pipeline, error) {
 			s.JobIf = nil
 		}
 		s.Env = overrideEnv(s.Env, sel.Env, fold)
+		if len(sel.Env) > 0 {
+			// --env values are taken as written: "$" is escaped so the
+			// expansion of ${NAME} (spec 026) leaves them alone.
+			top := make(map[string]string, len(sel.Env))
+			for name, value := range sel.Env {
+				top[name] = strings.ReplaceAll(value, "$", "$$")
+			}
+			s.EnvLayers = append(append([]map[string]string(nil), s.EnvLayers...), top)
+		}
 		steps = append(steps, s)
 	}
 	return Pipeline{Version: "1", Name: plan.Name, Steps: steps, Concurrency: plan.Concurrency}, nil
