@@ -22,6 +22,29 @@ const (
 	regUnknown = "unknown"
 )
 
+// flowHookDoc is one hook in the JSON of the flows commands: type "file"
+// with paths, ignore and debounce, or type "run" with flow and status.
+type flowHookDoc struct {
+	Type     string   `json:"type"`
+	Paths    []string `json:"paths,omitempty"`
+	Ignore   []string `json:"ignore,omitempty"`
+	Debounce string   `json:"debounce,omitempty"`
+	Flow     string   `json:"flow,omitempty"`
+	Status   []string `json:"status,omitempty"`
+}
+
+// text says when the hook starts the flow, for the screen.
+func (h flowHookDoc) text() string {
+	if h.Type == "run" {
+		return "a run of " + h.Flow + " " + strings.Join(h.Status, " or ")
+	}
+	text := "files change: " + strings.Join(h.Paths, ", ")
+	if len(h.Ignore) > 0 {
+		text += " (ignoring " + strings.Join(h.Ignore, ", ") + ")"
+	}
+	return text + ", after " + h.Debounce
+}
+
 // flowScheduleDoc is one schedule in the JSON of the flows commands.
 type flowScheduleDoc struct {
 	Cron     string `json:"cron"`
@@ -54,16 +77,18 @@ type flowDoc struct {
 	Overlap     string            `json:"overlap,omitempty"`
 	Jobs        int               `json:"jobs"`
 	Schedules   []flowScheduleDoc `json:"schedules"`
-	Env         []string          `json:"env"`
-	Secrets     []string          `json:"secrets"`
-	Steps       []flowStepDoc     `json:"steps"`
+	// Hooks are the flow's on.file and on.run (spec 029).
+	Hooks   []flowHookDoc `json:"hooks"`
+	Env     []string      `json:"env"`
+	Secrets []string      `json:"secrets"`
+	Steps   []flowStepDoc `json:"steps"`
 }
 
 // describeFlow loads one pipeline file for display. A file that does not load
 // is a valid result with Valid false, so one broken flow never hides the rest.
 func describeFlow(ctx context.Context, file pipelineFile, reg []api.Pipeline, daemonUp bool) flowDoc {
 	d := flowDoc{Name: file.stem, File: file.display, Path: file.path, Daemon: regUnknown,
-		Schedules: []flowScheduleDoc{}, Env: []string{}, Secrets: []string{}, Steps: []flowStepDoc{}}
+		Schedules: []flowScheduleDoc{}, Hooks: []flowHookDoc{}, Env: []string{}, Secrets: []string{}, Steps: []flowStepDoc{}}
 	if daemonUp {
 		d.Daemon = regNotRegistered
 		if p, ok := findRegistered(reg, file.path); ok {
@@ -93,6 +118,16 @@ func describeFlow(ctx context.Context, file pipelineFile, reg []api.Pipeline, da
 	d.Jobs = len(l.def.Jobs)
 	for _, s := range l.def.Schedules {
 		d.Schedules = append(d.Schedules, flowScheduleDoc{Cron: s.Cron, Timezone: s.Timezone, Missed: string(s.Missed)})
+	}
+	if h := l.def.FileHook; h != nil {
+		d.Hooks = append(d.Hooks, flowHookDoc{Type: "file", Paths: h.Paths, Ignore: h.Ignore, Debounce: h.Debounce.String()})
+	}
+	for _, h := range l.def.RunHooks {
+		status := h.Status
+		if len(status) == 0 {
+			status = []string{"succeeded"}
+		}
+		d.Hooks = append(d.Hooks, flowHookDoc{Type: "run", Flow: h.Flow, Status: status})
 	}
 	env, secrets := map[string]bool{}, map[string]bool{}
 	for _, s := range plan.Graph {
@@ -252,6 +287,9 @@ func (in invocation) flowsShow(ctx context.Context, args []string) int {
 			zone = s.Timezone
 		}
 		line("Schedule", fmt.Sprintf("%s (%s, missed: %s)", s.Cron, zone, s.Missed))
+	}
+	for _, h := range d.Hooks {
+		line("Starts when", h.text())
 	}
 	fmt.Fprintln(in.stdout)
 	rows := [][]string{{"STEP", "NEEDS", "TIMEOUT", "RETRIES", "IF", "RUN"}}

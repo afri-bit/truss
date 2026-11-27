@@ -13,7 +13,7 @@ import (
 var builtins = map[string]bool{
 	"TRUSS_PROJECT_DIR": true, "TRUSS_FLOW": true, "TRUSS_PIPELINE": true, "TRUSS_JOB": true,
 	"TRUSS_STEP": true, "TRUSS_ATTEMPT": true, "TRUSS_RUN_ID": true, "TRUSS_TRIGGER": true,
-	"TRUSS_TEMP_DIR": true, "TRUSS_OS": true, "TRUSS_ARCH": true,
+	"TRUSS_TEMP_DIR": true, "TRUSS_OS": true, "TRUSS_ARCH": true, "TRUSS_CHANGED_FILES": true,
 }
 
 // Reserved reports whether name is a built-in variable, which a flow file

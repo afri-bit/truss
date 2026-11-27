@@ -295,7 +295,15 @@ func parseTriggers(p *Pipeline, val *yaml.Node) {
 	}
 	for i := 0; i < len(val.Content); i += 2 {
 		field, v := val.Content[i].Value, val.Content[i+1]
-		if field != "schedule" {
+		switch field {
+		case "file":
+			parseFileHook(p, v)
+			continue
+		case "run":
+			parseRunHooks(p, v)
+			continue
+		case "schedule":
+		default:
 			p.noteUnknown(field, "in on")
 			continue
 		}
@@ -562,4 +570,104 @@ func parseKillTimeout(p *Pipeline, v *yaml.Node, label string) time.Duration {
 		p.issue("%s kill_timeout must be at most %s", label, MaxKillTimeout)
 	}
 	return d
+}
+
+// maxDebounce bounds on.file.debounce.
+const maxDebounce = 10 * time.Minute
+
+// parseFileHook reads on.file (spec 029).
+func parseFileHook(p *Pipeline, v *yaml.Node) {
+	if v.Kind != yaml.MappingNode {
+		p.issue("on.file must be a mapping with paths")
+		return
+	}
+	h := &FileHook{Debounce: 2 * time.Second}
+	for j := 0; j < len(v.Content); j += 2 {
+		val := v.Content[j+1]
+		switch field := v.Content[j].Value; field {
+		case "paths":
+			h.Paths = parseStringList(p, val, "on.file paths")
+		case "ignore":
+			h.Ignore = parseStringList(p, val, "on.file ignore")
+		case "debounce":
+			h.Debounce = parseDuration(p, val, "on.file", "debounce")
+			if h.Debounce > maxDebounce {
+				p.issue("on.file debounce must be at most %s", maxDebounce)
+			}
+		default:
+			p.noteUnknown(field, "in on.file")
+		}
+	}
+	if len(h.Paths) == 0 {
+		p.issue("on.file must list one or more paths")
+	}
+	for _, pat := range append(append([]string(nil), h.Paths...), h.Ignore...) {
+		if err := CheckPattern(pat); err != nil {
+			p.issue("on.file: %v", err)
+		}
+	}
+	p.FileHook = h
+}
+
+// parseRunHooks reads on.run: one mapping or a list of them (spec 029).
+func parseRunHooks(p *Pipeline, v *yaml.Node) {
+	items := []*yaml.Node{v}
+	if v.Kind == yaml.SequenceNode {
+		items = v.Content
+	}
+	if len(items) == 0 {
+		p.issue("on.run must name a flow")
+	}
+	for n, item := range items {
+		label := "on.run"
+		if v.Kind == yaml.SequenceNode {
+			label = fmt.Sprintf("on.run %d", n+1)
+		}
+		if item.Kind != yaml.MappingNode {
+			p.issue("%s must be a mapping with a flow", label)
+			continue
+		}
+		var h RunHook
+		for j := 0; j < len(item.Content); j += 2 {
+			val := item.Content[j+1]
+			switch field := item.Content[j].Value; field {
+			case "flow":
+				h.Flow = strings.TrimSpace(parseString(p, val, label+" flow"))
+			case "status":
+				list := []*yaml.Node{val}
+				if val.Kind == yaml.SequenceNode {
+					list = val.Content
+				}
+				for _, s := range list {
+					if st := oneOf(p, s, label+" status", "succeeded", "failed", "any"); st != "" {
+						h.Status = append(h.Status, st)
+					}
+				}
+			default:
+				p.noteUnknown(field, "in "+label)
+			}
+		}
+		if h.Flow == "" {
+			p.issue("%s must name a flow", label)
+			continue
+		}
+		p.RunHooks = append(p.RunHooks, h)
+	}
+}
+
+// parseStringList reads a list of non-empty strings.
+func parseStringList(p *Pipeline, v *yaml.Node, label string) []string {
+	if v.Kind != yaml.SequenceNode {
+		p.issue("%s must be a list", label)
+		return nil
+	}
+	var out []string
+	for _, item := range v.Content {
+		if item.Kind != yaml.ScalarNode || strings.TrimSpace(item.Value) == "" {
+			p.issue("%s must hold non-empty text", label)
+			continue
+		}
+		out = append(out, item.Value)
+	}
+	return out
 }

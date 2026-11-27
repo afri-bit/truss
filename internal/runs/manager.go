@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -59,6 +60,9 @@ type Options struct {
 	MaxParallel int
 	// Keep is how many finished runs stay in the history.
 	Keep int
+	// Finished, when set, is told about every run that ends, with the Chain
+	// of its request. It is called on its own goroutine.
+	Finished func(run api.Run, chain int)
 	// Env is the environment every step starts from ("KEY=value" entries).
 	Env []string
 	// Secrets returns the stored secrets, name to value. It is called at the
@@ -87,6 +91,11 @@ type Request struct {
 	// and TRUSS_CACHE_DIR. The caller creates them.
 	DataDir  string
 	CacheDir string
+	// ChangedFiles are the paths an on.file hook saw change; they reach the
+	// steps as a file named by TRUSS_CHANGED_FILES (spec 029).
+	ChangedFiles []string
+	// Chain counts the on.run hooks that led to this run; 0 for any other.
+	Chain int
 	// ProjectDir is the root of the flow's project, handed to steps as
 	// TRUSS_PROJECT_DIR (spec 026). Empty means Dir.
 	ProjectDir string
@@ -112,6 +121,8 @@ type record struct {
 // Manager queues, executes and remembers runs. It is safe for concurrent use.
 type Manager struct {
 	opts Options
+	// ready is set once Open has read the history; see announce.
+	ready bool
 
 	mu      sync.Mutex
 	records map[string]*record
@@ -182,6 +193,7 @@ func Open(opts Options) (*Manager, error) {
 		}
 	}
 	m.prune()
+	m.ready = true
 	return m, nil
 }
 
@@ -490,7 +502,15 @@ func (m *Manager) add(rec *record) (api.Run, error) {
 	if err := os.MkdirAll(filepath.Join(m.opts.Dir, rec.run.ID), 0o700); err != nil {
 		return api.Run{}, fmt.Errorf("store run: %w", err)
 	}
+	// The list of changed files is kept with the run from the start, so a
+	// queued run still has it after a daemon restart (spec 029). It is
+	// written first: a run that cannot have it is not stored at all.
+	if _, err := m.changedFiles(rec.run.ID, rec.req.ChangedFiles); err != nil {
+		_ = os.RemoveAll(filepath.Join(m.opts.Dir, rec.run.ID))
+		return api.Run{}, fmt.Errorf("store the list of changed files: %w", err)
+	}
 	if err := m.save(rec); err != nil {
+		_ = os.RemoveAll(filepath.Join(m.opts.Dir, rec.run.ID))
 		return api.Run{}, err
 	}
 	m.records[rec.run.ID] = rec
@@ -501,6 +521,7 @@ func (m *Manager) add(rec *record) (api.Run, error) {
 
 // finish closes a run and every step that is still open. The caller holds m.mu.
 func (m *Manager) finish(rec *record, status, reason string) {
+	defer m.announce(rec)
 	now := m.opts.Now()
 	rec.run.Status = status
 	rec.run.Reason = reason
@@ -517,12 +538,42 @@ func (m *Manager) finish(rec *record, status, reason string) {
 	}
 }
 
+// announce tells Options.Finished about a run that ended, once the manager
+// is open: runs closed while it opens (the daemon had stopped) start no hook.
+func (m *Manager) announce(rec *record) {
+	if !m.ready || m.opts.Finished == nil {
+		return
+	}
+	run := rec.run
+	run.Steps = append([]api.Step(nil), run.Steps...)
+	go m.opts.Finished(run, rec.req.Chain)
+}
+
 func (m *Manager) save(rec *record) error {
 	return home.WriteJSON(filepath.Join(m.opts.Dir, rec.run.ID, "run.json"), rec.run)
 }
 
 func (m *Manager) logPath(id string) string {
 	return filepath.Join(m.opts.Dir, id, "run.log")
+}
+
+// changedFiles writes the paths an on.file hook saw change, one per line,
+// next to the run's log, and returns the file's path ("" when there are
+// none). The daemon leaves out names with control characters, so a line is
+// always one path.
+func (m *Manager) changedFiles(id string, paths []string) (string, error) {
+	if len(paths) == 0 {
+		return "", nil
+	}
+	path := m.changedPath(id)
+	if err := os.WriteFile(path, []byte(strings.Join(paths, "\n")+"\n"), 0o600); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func (m *Manager) changedPath(id string) string {
+	return filepath.Join(m.opts.Dir, id, "changed-files.txt")
 }
 
 // activeFor counts the daemon's queued and running runs of a pipeline. The caller holds m.mu.
@@ -608,6 +659,12 @@ func (m *Manager) execute(ctx context.Context, rec *record) {
 	log.Setup(runlog.OSName(runtime.GOOS), runtime.GOARCH, executor.Shell(), req.Dir)
 
 	env := append([]string(nil), m.opts.Env...)
+	changed := ""
+	if path := m.changedPath(id); req.Trigger == api.TriggerFile {
+		if _, err := os.Stat(path); err == nil {
+			changed = path
+		}
+	}
 	if req.CacheDir != "" {
 		// A cache clear may have run while this run was queued.
 		_ = os.MkdirAll(req.CacheDir, 0o700)
@@ -620,7 +677,8 @@ func (m *Manager) execute(ctx context.Context, rec *record) {
 	}
 	result, err := engine.Run(ctx, req.Definition, req.Dir, env, &follower{m: m, rec: rec, log: log, out: outputBudget{left: MaxRunLog}},
 		engine.WithSecrets(m.opts.Secrets),
-		engine.WithRun(engine.RunInfo{ID: id, Flow: req.Pipeline, Trigger: req.Trigger, ProjectDir: cmp.Or(req.ProjectDir, req.Dir)}))
+		engine.WithRun(engine.RunInfo{ID: id, Flow: req.Pipeline, Trigger: req.Trigger, ProjectDir: cmp.Or(req.ProjectDir, req.Dir),
+			ChangedFiles: changed}))
 
 	m.mu.Lock()
 	defer m.mu.Unlock()

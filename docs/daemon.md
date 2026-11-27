@@ -104,6 +104,13 @@ unless you asked for that.
 `truss pause <name>` stops a flow's schedules. Times that pass while it is paused are not
 missed runs; `resume` counts from now.
 
+## Hooks
+
+Besides schedules, a registered flow can start when files change (`on.file`) or when another
+flow's run ends (`on.run`). See [the flow file reference](pipeline-reference.md#onfile-start-when-files-change).
+Hooks act only while the daemon runs; `truss pause` stops them as it stops schedules.
+`truss flows show <flow>` lists them as "Starts when".
+
 ## Concurrency
 
 Three limits work together:
@@ -168,8 +175,9 @@ history   200             default
 | `cancelled` | You cancelled it, or the daemon stopped while it was running. |
 | `skipped` | Requested but never started: a missed schedule, or `overlap: skip`. |
 
-The trigger says why a run exists: `manual`, `schedule`, `catch-up`, or `local` (started in your
-shell with `truss run --track`, only recorded by the daemon).
+The trigger says why a run exists: `manual`, `schedule`, `catch-up`, `file` (watched files
+changed), `run` (another flow's run ended), or `local` (started in your shell with
+`truss run --track`, only recorded by the daemon).
 
 Steps are `pending`, `running`, `succeeded`, `failed`, `stopped` (ended because another step
 failed), `cancelled`, or `skipped` (never started: the run ended first, an `if` condition was false, or a step it
