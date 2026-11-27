@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -106,6 +107,8 @@ func Parse(data []byte) (Pipeline, error) {
 			parsePipelineBlock(&p, val)
 		case "on":
 			parseTriggers(&p, val)
+		case "notify":
+			parseNotify(&p, val)
 		case "env":
 			p.Env = parseEnv(&p, val, "env")
 		case "secrets":
@@ -670,4 +673,97 @@ func parseStringList(p *Pipeline, v *yaml.Node, label string) []string {
 		out = append(out, item.Value)
 	}
 	return out
+}
+
+// parseNotify reads the notify block (spec 030).
+func parseNotify(p *Pipeline, v *yaml.Node) {
+	if v.Kind != yaml.MappingNode {
+		p.issue("notify must be a mapping")
+		return
+	}
+	n := &Notify{}
+	for j := 0; j < len(v.Content); j += 2 {
+		val := v.Content[j+1]
+		switch field := v.Content[j].Value; field {
+		case "on":
+			list := []*yaml.Node{val}
+			if val.Kind == yaml.SequenceNode {
+				list = val.Content
+			}
+			for _, item := range list {
+				if w := oneOf(p, item, "notify on", "failure", "success", "always", "recovered", "changed"); w != "" {
+					n.On = append(n.On, w)
+				}
+			}
+		case "desktop":
+			n.Desktop = parseBool(p, val, "notify desktop")
+		case "run":
+			if val.Kind != yaml.ScalarNode || val.Tag != "!!str" || strings.TrimSpace(val.Value) == "" {
+				p.issue("notify run must be a command")
+				continue
+			}
+			n.Run = val.Value
+		case "webhook":
+			n.Webhook = parseWebhook(p, val)
+		default:
+			p.noteUnknown(field, "in notify")
+		}
+	}
+	if !n.Desktop && n.Webhook == nil && n.Run == "" {
+		p.issue("notify needs desktop, webhook or run")
+	}
+	p.Notify = n
+}
+
+func parseWebhook(p *Pipeline, v *yaml.Node) *Webhook {
+	w := &Webhook{Format: "generic"}
+	switch v.Kind {
+	case yaml.ScalarNode:
+		w.URL = strings.TrimSpace(v.Value)
+	case yaml.MappingNode:
+		for j := 0; j < len(v.Content); j += 2 {
+			val := v.Content[j+1]
+			switch field := v.Content[j].Value; field {
+			case "url":
+				w.URL = strings.TrimSpace(parseString(p, val, "notify webhook url"))
+			case "format":
+				w.Format = oneOf(p, val, "notify webhook format", "generic", "slack", "discord", "teams")
+			default:
+				p.noteUnknown(field, "in notify webhook")
+			}
+		}
+	default:
+		p.issue("notify webhook must be a URL or a mapping with url")
+		return nil
+	}
+	if err := CheckWebhookURL(w.URL); err != nil {
+		p.issue("notify webhook: %v", err)
+	}
+	return w
+}
+
+// CheckWebhookURL accepts "secret:NAME", an https URL, or an http URL to
+// this machine. The message never quotes the URL: it may hold a token.
+func CheckWebhookURL(raw string) error {
+	if name, ok := strings.CutPrefix(raw, "secret:"); ok {
+		if !envName.MatchString(name) {
+			return fmt.Errorf("secret: must be followed by a secret name")
+		}
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return fmt.Errorf("url must be an https:// address or secret:NAME")
+	}
+	host := u.Hostname()
+	switch {
+	case u.Scheme == "https":
+	case u.Scheme == "http" && (host == "localhost" || host == "127.0.0.1" || host == "::1"):
+	default:
+		return fmt.Errorf("url must use https (http only to this machine)")
+	}
+	if u.User != nil {
+		return fmt.Errorf("url must not hold a user name or password; keep the URL in a secret")
+	}
+	return nil
 }

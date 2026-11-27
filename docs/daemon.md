@@ -104,6 +104,13 @@ unless you asked for that.
 `truss pause <name>` stops a flow's schedules. Times that pass while it is paused are not
 missed runs; `resume` counts from now.
 
+## Notifications
+
+A flow with a [`notify`](pipeline-reference.md#notify-hear-how-a-run-ended) block tells you when a
+run fails, recovers or ends as you asked: a desktop notification, a webhook (Slack, Discord, Teams)
+or a command. Missed scheduled times count as failures. A notification that cannot be sent is in
+`truss daemon logs`.
+
 ## Hooks
 
 Besides schedules, a registered flow can start when files change (`on.file`) or when another

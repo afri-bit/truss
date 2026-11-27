@@ -85,12 +85,13 @@ home (and whether TRUSS_HOME set it), the registry, the secrets file, the daemon
 log, this folder's project and whether the daemon runs. It prints no secret names
 and no values.
 `,
-	"run": `truss run <name|path> [--track]
+	"run": `truss run <name|path> [--track] [--notify]
 truss run <name|path> --step <id> [--with-needs]
 truss run <name|path> --from <id>
 truss run <name|path> [...] --env NAME=VALUE
 
 Run a flow here, without the daemon. --track also reports it to the daemon.
+--notify sends the flow's notifications when the run ends.
 
 Debug a flow: --step runs one step (the steps it needs are not run, as if they had
 succeeded; --with-needs runs them too), --from runs a step and every step that needs

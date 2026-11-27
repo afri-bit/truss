@@ -11,6 +11,9 @@ Dates below are when a release was made. 0.1.0 is the first release.
 
 ### Added
 
+- Notifications: hear when a run fails, succeeds or recovers  
+  A `notify` block in a flow file sends a desktop notification, posts to a webhook (Slack, Discord, Teams or JSON; the URL can stay in the secret store as `secret:NAME`) or runs a command, `on` failure (the default, missed schedules included), success, always, recovered or changed. The daemon notifies for registered flows; `truss run --notify` for a local run. A notification that fails is logged and never changes the run (specs/030-notifications, ADR 0027).
+
 - Local hooks: start a flow when files change or another flow ends  
   `on.file` (`paths`, `ignore`, `debounce`) starts a registered flow once files under the paths change and then stay quiet; the run gets `$TRUSS_CHANGED_FILES`, a list of what changed. `on.run` (`flow`, `status`) starts a flow when another flow's run ends as asked. Both act only while the daemon runs and the flow is not paused; their runs have the triggers `file` and `run`. `truss flows show` lists them (specs/029-local-hooks, ADR 0026).
 

@@ -239,8 +239,10 @@ func ignored(patterns []string, rel string) bool {
 	return false
 }
 
-// runFinished starts the flows whose on.run matches a run that ended.
+// runFinished notifies about a run that ended and starts the flows whose
+// on.run matches it.
 func (d *Daemon) runFinished(f finishedRun) {
+	d.notifyRun(f.run)
 	type match struct{ name string }
 	var starts []match
 	// A run that never started (cancelled while queued, skipped, or a file

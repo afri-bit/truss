@@ -98,3 +98,33 @@ func TestPattern_AbsoluteRootsAndCost(t *testing.T) {
 		t.Fatalf("matching took %s", took)
 	}
 }
+
+func TestParse_Notify(t *testing.T) {
+	p, err := Parse([]byte("version: \"1\"\nflow: {name: f}\nnotify:\n  on: [failure, recovered]\n  desktop: true\n  webhook: {url: \"secret:SLACK\", format: slack}\n  run: ./tell.sh\nsteps:\n  - id: a\n    run: echo a\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(p); err != nil {
+		t.Fatal(err)
+	}
+	n := p.Notify
+	if n == nil || len(n.On) != 2 || !n.Desktop || n.Webhook.URL != "secret:SLACK" || n.Webhook.Format != "slack" || n.Run != "./tell.sh" {
+		t.Fatalf("notify = %+v", n)
+	}
+	for src, want := range map[string]string{
+		"notify: {on: failure}\n":                          "notify needs desktop, webhook or run",
+		"notify: {desktop: true, on: often}\n":             "notify on must be one of",
+		"notify: {webhook: \"http://example.com/x\"}\n":    "must use https",
+		"notify: {webhook: \"https://u:p@example.com\"}\n": "user name or password",
+		"notify: {webhook: {url: \"secret:\"}}\n":          "secret: must be followed",
+	} {
+		p, _ := Parse([]byte("version: \"1\"\nflow: {name: f}\n" + src + "steps:\n  - id: a\n    run: echo a\n"))
+		err := Validate(p)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: err = %v, want %q", src, err, want)
+		}
+		if err != nil && strings.Contains(err.Error(), "u:p@") {
+			t.Errorf("%q: the message quotes the URL", src)
+		}
+	}
+}

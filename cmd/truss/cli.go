@@ -30,7 +30,8 @@ Look around (read-only; most take --json):
   env                                 where TRUSS keeps its files; what it sees
 
 Run here, without the daemon:
-  run <name|path> [--track]           run a flow: a name from .truss/flows/ or a file path;
+  run <name|path> [--track] [--notify]
+                                      run a flow: a name from .truss/flows/ or a file path;
                                       --track also reports it to the daemon (needs it)
   run <name|path> --step <id> | --from <id>
                                       debug: run one step, or a step and what needs it;

@@ -270,6 +270,40 @@ example cancelled while queued) starts nothing. While a run of this flow that a 
 queued or running, another one does not start. Flows that start each other in a loop stop after
 10 runs in a row; the daemon log says so.
 
+## `notify`: hear how a run ended
+
+```yaml
+notify:
+  on: [failure, recovered]       # when; default: failure
+  desktop: true                  # a notification of your system
+  webhook:                       # Slack, Discord, Teams or any URL
+    url: secret:SLACK_WEBHOOK    # the URL from the secret store
+    format: slack                # slack, discord, teams, generic (JSON)
+  run: ./scripts/tell-me.sh      # any command, for email, SMS or anything else
+```
+
+| `on` | Notifies when |
+|---|---|
+| `failure` | a run failed, or a scheduled time was missed while the daemon was not running |
+| `success` | a run succeeded |
+| `always` | a run ended (not a skipped one, except a missed schedule) |
+| `recovered` | a run succeeded after the flow's previous run failed |
+| `changed` | a run ended differently from the previous one |
+
+- **Desktop** uses your system's own tool: `notify-send` on Linux (from `libnotify`), the
+  Notification Center on macOS, a toast on Windows. A daemon that starts at login can show them; one
+  run over SSH may not.
+- **Webhook**: an `https://` address, or `secret:NAME` to keep the address in
+  [the secret store](#secrets), as Slack and Discord addresses are secrets. `http://` is allowed only
+  to this machine. TRUSS posts once and tries again once on a server error. `generic` sends
+  `{flow, run_id, status, reason, trigger, previous_status, missed, finished_at}`.
+- **Run** is a command for the host shell, run in the project root with `TRUSS_NOTIFY_FLOW`,
+  `TRUSS_NOTIFY_RUN_ID`, `TRUSS_NOTIFY_STATUS`, `TRUSS_NOTIFY_REASON`, `TRUSS_NOTIFY_TRIGGER`,
+  `TRUSS_NOTIFY_TITLE` and `TRUSS_NOTIFY_TEXT`.
+- The daemon notifies for registered flows. `truss run --notify` notifies for a local run.
+- A notification that cannot be sent is written to the daemon log (or shown by `truss run`). It
+  never changes the run's result. Each channel gives up after 15 seconds.
+
 ## `env`
 
 A mapping of variable names to values, allowed at the top level, on a job, and on a step.

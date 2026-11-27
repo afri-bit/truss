@@ -152,6 +152,28 @@ func (h RunHook) Matches(flow, status string) bool {
 	return false
 }
 
+// Notify says who hears about a flow's runs, and when (spec 030).
+type Notify struct {
+	// On lists when: failure, success, always, recovered, changed. Empty
+	// means failure.
+	On []string
+	// Desktop shows a notification of the operating system.
+	Desktop bool
+	// Webhook, when set, is posted to.
+	Webhook *Webhook
+	// Run is a command for the host shell, run with the outcome in
+	// TRUSS_NOTIFY_* variables.
+	Run string
+}
+
+// Webhook is a URL to post a run's outcome to.
+type Webhook struct {
+	// URL is the address, or "secret:NAME" for a stored secret that holds it.
+	URL string
+	// Format is slack, discord, teams or generic (the default).
+	Format string
+}
+
 // Pipeline is the parsed pipeline model. Parsing it executes nothing.
 // A definition has either Steps or Jobs, never both.
 type Pipeline struct {
@@ -175,6 +197,8 @@ type Pipeline struct {
 	FileHook *FileHook
 	// RunHooks is on.run.
 	RunHooks []RunHook
+	// Notify is the notify block; nil when the flow has none.
+	Notify *Notify
 	// KillTimeout is the flow's kill_timeout for every step that does not set
 	// one (spec 028). Zero means the default.
 	KillTimeout time.Duration
