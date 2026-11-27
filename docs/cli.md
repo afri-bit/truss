@@ -39,6 +39,15 @@ Run "truss help daemon" for details.
 TRUSS prints no colour, so `NO_COLOR` and redirected output need no special care. Scripts should
 read `--json`, not the tables: their wording and columns may change between minor versions.
 
+## Start a project
+
+| Command | What it does |
+|---|---|
+| `truss init [--yes] [--name <project>] [--flow <name>] [--template <t>]` | Sets up this folder: `truss.yaml` and a first flow in `.truss/flows/`. Asks what the flow does (a template suggested from `go.mod`, `package.json`, `pyproject.toml`, `requirements.txt`, `Makefile`), how it starts (by hand, a schedule in plain words or a cron expression, or when files change) and whether to notify on failure. `--yes`, or no terminal, takes every suggestion. Refuses a folder that has a `truss.yaml`; never overwrites a file. |
+| `truss flows new [<name>] [--template <t>] [--yes]` | Adds a flow to this project with the same questions. |
+
+Templates: `go`, `node`, `python`, `make`, `backup`, `shell`.
+
 ## Look around
 
 Read-only commands that answer "what is going on?". They change nothing and never start or stop the

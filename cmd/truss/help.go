@@ -33,6 +33,7 @@ many flows each has and how many run, are paused or are broken. Needs the daemon
 truss flows show <name|path> [--json]
 truss flows show <name|path> <step> [--values] [--json]
 truss flows graph <name|path>
+truss flows new [<name>] [--template <t>] [--yes]
 
 Read the flow files of the project. Nothing runs and the daemon is optional.
   list    every flow with its steps, schedules and whether the daemon has it
@@ -149,6 +150,16 @@ folder's project. Load it once per shell, or add the line to your shell profile:
 
 Read commands such as truss runs show exit 0 for a failed run: they answered.
 Errors go to standard error as "error: ..." with an optional "hint: ..." line.
+`,
+	"init": `truss init [--yes] [--name <project>] [--flow <name>] [--template <t>]
+
+Set up TRUSS in this folder: a truss.yaml and a first flow in .truss/flows/. It
+asks what the flow should do (it suggests a template from the files it finds),
+how it should start (by hand, on a schedule in plain words, or when files
+change) and whether to notify you when it fails. Enter takes the suggestion.
+--yes, or no terminal, takes every suggestion. Templates: go, node, python,
+make, backup, shell. It never overwrites a file. Add more flows with:
+truss flows new <name>
 `,
 	"cache": `truss cache clear <name>
 

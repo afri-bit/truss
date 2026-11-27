@@ -15,6 +15,10 @@ const usageText = `TRUSS runs flows on your machine.
 
 usage: truss <command> [arguments]
 
+Start:
+  init [--yes] [--template <t>]       set up a project here with a first flow (asks a few questions)
+  flows new [<name>] [--template <t>] add a flow to this project
+
 Look around (read-only; most take --json):
   status                              one screen: project, daemon, flows, latest run
   dashboard [--once]                  ASCII dashboard, live on a terminal
@@ -202,6 +206,8 @@ func RunWithInput(ctx context.Context, args []string, cwd string, env []string, 
 		return in.environment(ctx)
 	case "completion":
 		return in.completion()
+	case "init":
+		return in.initProject(ctx)
 	case "version":
 		// version with extra words is a usage error (spec 002); help with
 		// extra words is handled by in.help.

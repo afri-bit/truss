@@ -180,6 +180,8 @@ func (in invocation) flows(ctx context.Context) int {
 		return in.flowsShow(ctx, rest)
 	case "graph":
 		return in.flowsGraph(ctx, rest)
+	case "new":
+		return in.flowsNew(ctx, rest)
 	}
 	return in.usage()
 }

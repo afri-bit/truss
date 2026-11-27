@@ -1,0 +1,20 @@
+{
+  "work_id": "feature--031-truss-init",
+  "title": "truss init",
+  "tier": 1,
+  "branch": "feature/031-truss-init",
+  "status": "in_progress",
+  "step": "implemented; review next",
+  "steps_done": [],
+  "requirements": [],
+  "specs": [
+    "specs/031-truss-init/spec.md"
+  ],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [],
+  "pr": null,
+  "created": "2026-11-27T16:08:54Z",
+  "updated": "2026-11-27T16:08:54Z"
+}

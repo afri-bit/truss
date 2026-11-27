@@ -25,7 +25,31 @@ Or download a prebuilt binary for Linux, macOS or Windows (amd64 and arm64) from
 
 ## Make a project
 
-A project is a folder with a `truss.yaml` file. It names the project and holds nothing that runs.
+The quickest way: run `truss init` in your project's folder. It asks a few questions, each with a
+suggestion you take with Enter, and writes the files below for you:
+
+```console
+$ truss init
+Set up TRUSS in this folder. Press Enter to take the answer in [brackets].
+Name of the project [demo]:
+Name of the flow [build]:
+What should the flow do?
+  1) go - Go module: vet, test and build (found go.mod)
+  ...
+How should it start?
+  1) by hand (truss run build)
+  2) on a schedule
+  3) when files change
+Choose [1]:
+Show a desktop notification when it fails? (y/n) [n]:
+created truss.yaml
+created .truss/flows/build.yaml (Go module: vet, test and build)
+```
+
+`truss init --yes` takes every suggestion. `truss flows new <name>` adds another flow later.
+
+Or write the files yourself. A project is a folder with a `truss.yaml` file. It names the project
+and holds nothing that runs.
 
 ```yaml
 # truss.yaml
