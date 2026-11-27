@@ -39,6 +39,15 @@ Run "truss help daemon" for details.
 TRUSS prints no colour, so `NO_COLOR` and redirected output need no special care. Scripts should
 read `--json`, not the tables: their wording and columns may change between minor versions.
 
+## Start a project
+
+| Command | What it does |
+|---|---|
+| `truss init [--yes] [--name <project>] [--flow <name>] [--template <t>]` | Sets up this folder: `truss.yaml` and a first flow in `.truss/flows/`. Asks what the flow does (a template suggested from `go.mod`, `package.json`, `pyproject.toml`, `requirements.txt`, `setup.py`, `Makefile`), how it starts (by hand, a schedule in plain words or a cron expression, or when files change) and whether to notify on failure. `--yes`, or no terminal, takes every suggestion; Ctrl-C stops it and writes nothing. Refuses a folder that has a `truss.yaml`; never overwrites a file, and leaves nothing half-written. |
+| `truss flows new [<name>] [--template <t>] [--yes]` | Adds a flow to this project with the same questions. |
+
+Templates: `go`, `node`, `python`, `make`, `backup`, `shell`.
+
 ## Look around
 
 Read-only commands that answer "what is going on?". They change nothing and never start or stop the
@@ -101,6 +110,7 @@ to your shell profile:
 | `truss run <name\|path> --track` | The same, and also reports the run to the daemon, which must be running. |
 | `truss run <name\|path> --step <id> [--with-needs]` | A debug run: only that step. The steps it needs are not run and the step starts as if they had succeeded; `--with-needs` runs them too. The log is printed, and the saved `run.log` is not replaced. |
 | `truss run <name\|path> --from <id>` | A debug run of the step and every step that needs it. Jobs after the step keep their `if`; only the job of the step you named loses it. |
+| `truss run <name\|path> --notify` | Sends the flow's [notifications](pipeline-reference.md#notify-hear-how-a-run-ended) when the run ends, as the daemon would. A notification that fails is reported and does not change the exit code. |
 | `truss run <name\|path> --env NAME=VALUE` | Sets or replaces an environment variable for the steps that run, above everything in the file. Repeatable; works with a whole run too. A secret cannot be set this way: use `truss secret set`. |
 | `truss validate [<name\|path>]` | Checks one flow and prints its schedules and steps. With no argument, checks `truss.yaml` and every flow. Runs nothing. |
 | `truss help`, `truss version` | Usage and version. |

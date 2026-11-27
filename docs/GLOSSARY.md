@@ -251,8 +251,14 @@ jobs wait for the jobs they need. In logs a step of a job is named `job/step`.
 ### Trigger
 
 What causes a flow run: `manual` (someone asked), `schedule` (a cron time was reached),
-`catch-up` (a missed cron time that the schedule asked to make up for), or `local` (a run started
-in a shell with `truss run --track`; see Tracked Run).
+`catch-up` (a missed cron time that the schedule asked to make up for), `file` (an `on.file` hook:
+watched files changed), `run` (an `on.run` hook: another flow's run ended), or `local` (a run
+started in a shell with `truss run --track`; see Tracked Run).
+
+### Hook
+
+What starts a registered flow besides a person and a schedule: `on.file` (files change) or `on.run`
+(another flow's run ends). Hooks act only while the daemon runs.
 
 ### Tracked Run
 

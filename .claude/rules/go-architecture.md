@@ -17,6 +17,7 @@ TRUSS is one Go module. The engine is independent of the CLI (constitution princ
 | `internal/executor` | Run one step command on the host shell, report exit code and output | Decide ordering |
 | `internal/runlog` | Format and write the run log | Execute steps |
 | `internal/config` | Read the daemon's `config.yaml`; resolve each setting with its source | Know the daemon or print |
+| `internal/notify` | Decide and send notifications of a run's outcome (desktop, webhook, command) | Print, know the daemon, change a run |
 | `internal/home` | Locate the TRUSS home and its per-pipeline data folders, read and write its JSON files | Hold state |
 | `internal/project` | Find the project (`truss.yaml` in the working directory), parse its metadata, list and resolve flows in `.truss/flows/`, give state paths under `.truss/state/` | Run anything or print; make `internal/pipeline` aware of the layout |
 | `internal/secrets` | Keep named secret values in a private file; remove values from output | Know pipelines or the engine |

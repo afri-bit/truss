@@ -15,6 +15,11 @@ const usageText = `TRUSS runs flows on your machine.
 
 usage: truss <command> [arguments]
 
+Start:
+  init [--yes] [--template <t>] [--name <p>] [--flow <f>]
+                                      set up a project here with a first flow (asks a few questions)
+  flows new [<name>] [--template <t>] add a flow to this project
+
 Look around (read-only; most take --json):
   status                              one screen: project, daemon, flows, latest run
   dashboard [--once]                  ASCII dashboard, live on a terminal
@@ -30,7 +35,8 @@ Look around (read-only; most take --json):
   env                                 where TRUSS keeps its files; what it sees
 
 Run here, without the daemon:
-  run <name|path> [--track]           run a flow: a name from .truss/flows/ or a file path;
+  run <name|path> [--track] [--notify]
+                                      run a flow: a name from .truss/flows/ or a file path;
                                       --track also reports it to the daemon (needs it)
   run <name|path> --step <id> | --from <id>
                                       debug: run one step, or a step and what needs it;
@@ -201,6 +207,8 @@ func RunWithInput(ctx context.Context, args []string, cwd string, env []string, 
 		return in.environment(ctx)
 	case "completion":
 		return in.completion()
+	case "init":
+		return in.initProject(ctx)
 	case "version":
 		// version with extra words is a usage error (spec 002); help with
 		// extra words is handled by in.help.

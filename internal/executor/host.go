@@ -265,6 +265,10 @@ func Shell() string {
 	return "/bin/sh"
 }
 
+// ShellCommand returns the host shell and the arguments that run a command
+// string, as a step's command is run.
+func ShellCommand(run string) (string, []string) { return shellCommand(run) }
+
 func shellCommand(run string) (string, []string) {
 	if runtime.GOOS == "windows" {
 		return Shell(), []string{"/c", run}
