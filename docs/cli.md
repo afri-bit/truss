@@ -101,6 +101,7 @@ to your shell profile:
 | `truss run <name\|path> --track` | The same, and also reports the run to the daemon, which must be running. |
 | `truss run <name\|path> --step <id> [--with-needs]` | A debug run: only that step. The steps it needs are not run and the step starts as if they had succeeded; `--with-needs` runs them too. The log is printed, and the saved `run.log` is not replaced. |
 | `truss run <name\|path> --from <id>` | A debug run of the step and every step that needs it. Jobs after the step keep their `if`; only the job of the step you named loses it. |
+| `truss run <name\|path> --notify` | Sends the flow's [notifications](pipeline-reference.md#notify-hear-how-a-run-ended) when the run ends, as the daemon would. A notification that fails is reported and does not change the exit code. |
 | `truss run <name\|path> --env NAME=VALUE` | Sets or replaces an environment variable for the steps that run, above everything in the file. Repeatable; works with a whole run too. A secret cannot be set this way: use `truss secret set`. |
 | `truss validate [<name\|path>]` | Checks one flow and prints its schedules and steps. With no argument, checks `truss.yaml` and every flow. Runs nothing. |
 | `truss help`, `truss version` | Usage and version. |

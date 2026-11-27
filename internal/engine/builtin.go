@@ -26,6 +26,9 @@ type RunInfo struct {
 	// ProjectDir is the root of the flow's project, or the run's directory
 	// when the flow is not in a project.
 	ProjectDir string
+	// ChangedFiles is the path of a file that lists, one per line, the paths
+	// an on.file hook saw change (spec 029); empty for other runs.
+	ChangedFiles string
 }
 
 // WithRun names the run for the built-in variables.
@@ -47,6 +50,7 @@ func runVars(info RunInfo, flow, tempDir string) []string {
 	for _, v := range []struct{ name, value string }{
 		{"TRUSS_RUN_ID", info.ID}, {"TRUSS_TRIGGER", info.Trigger},
 		{"TRUSS_PROJECT_DIR", info.ProjectDir}, {"TRUSS_TEMP_DIR", tempDir},
+		{"TRUSS_CHANGED_FILES", info.ChangedFiles},
 	} {
 		if v.value != "" {
 			vars = append(vars, v.name+"="+v.value)

@@ -15,6 +15,7 @@ import (
 // runOptions are the options of `truss run`.
 type runOptions struct {
 	track     bool
+	notify    bool
 	withNeeds bool
 	step      string
 	from      string
@@ -64,6 +65,12 @@ func parseRunArgs(args []string) ([]string, runOptions, error) {
 				continue
 			}
 			o.withNeeds = true
+		case "--notify":
+			if inline {
+				pos = append(pos, args[i])
+				continue
+			}
+			o.notify = true
 		case "--step", "--from", "--env":
 			if !inline {
 				if i+1 >= len(args) {
