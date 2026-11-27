@@ -40,9 +40,10 @@ func TestHooks_FileChangesStartOneRun(t *testing.T) {
 	writeDefinition(t, inbox, "a.jpg", "1")
 	writeDefinition(t, inbox, "b.jpg", "2")
 	writeDefinition(t, inbox, "skip.tmp", "3")
-	list := awaitRuns(t, c, "sort", 1)
+	awaitRuns(t, c, "sort", 1)
 	time.Sleep(1500 * time.Millisecond) // no second run for the same burst
-	if list = awaitRuns(t, c, "sort", 1); len(list) != 1 {
+	list := awaitRuns(t, c, "sort", 1)
+	if len(list) != 1 {
 		t.Fatalf("runs = %+v, want one", list)
 	}
 	run := list[0]
