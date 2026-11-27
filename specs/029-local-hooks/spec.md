@@ -35,8 +35,11 @@ dependency; no catch-up of changes made while the daemon was off.
   and folders per flow (the daemon log says when it stops). A name with a control character is
   left out and logged. A pattern may not watch a filesystem root or start with `~`, and has at
   most three `**`; matching costs at most patterns x path segments.
-- **FR-004a** A flow has at most one hook-started run queued or running at a time. File changes
-  seen meanwhile start one run once it ends; an on.run match meanwhile starts nothing.
+- **FR-004a** A flow has at most one hook-started run queued or running at a time. File changes,
+  and on.run matches, seen meanwhile start one run once it ends (decided 2026-11-27 after review:
+  dropping an on.run match would leave the latest build undeployed). A file-hook run that cannot
+  start is tried again after another `debounce`, five times, then its changes are dropped and
+  logged. A pattern that starts with `/` but has no drive on Windows is left out and logged.
 - **FR-005** `on.run` is one mapping or a list: `flow` (required) and `status` (`succeeded`,
   `failed`, `any`, or a list; default `succeeded`; `any` is succeeded, failed or cancelled). When a
   daemon-known run of that flow (by its registered name or the name in its file) that started

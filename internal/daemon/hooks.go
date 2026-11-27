@@ -29,6 +29,10 @@ const (
 // that start each other cannot run for ever.
 const maxChain = 10
 
+// maxHookFailures is how often a file hook tries to start a run that will
+// not start before it drops the changes.
+const maxHookFailures = 5
+
 type fileStamp struct {
 	mod  time.Time
 	size int64
@@ -36,13 +40,14 @@ type fileStamp struct {
 
 // fileWatch is the state of one flow's on.file.
 type fileWatch struct {
-	hook    pipeline.FileHook
-	root    string
-	snap    map[string]fileStamp
-	changed map[string]bool
-	last    time.Time // when the newest change was seen
-	tooMany bool      // the last scan hit a limit; logged once
-	noted   map[string]bool
+	hook     pipeline.FileHook
+	root     string
+	snap     map[string]fileStamp
+	changed  map[string]bool
+	last     time.Time // when the newest change was seen
+	tooMany  bool      // the last scan hit a limit; logged once
+	failures int       // runs that could not start in a row
+	noted    map[string]bool
 }
 
 // scanResult is what one scan found.
@@ -135,11 +140,19 @@ func (d *Daemon) checkFileHooks(now time.Time) {
 		}
 		w.changed = map[string]bool{}
 		if _, err := d.submitHook(t.name, api.TriggerFile, changed, 0); err != nil {
-			d.logf("flow %s: files changed but the run could not start: %v", t.name, err)
-			for _, p := range changed {
-				w.changed[p] = true // try again at the next quiet moment
+			w.failures++
+			if w.failures >= maxHookFailures {
+				d.logf("flow %s: files changed but the run could not start (%d tries, the changes are dropped): %v", t.name, w.failures, err)
+				w.failures = 0
+				continue
 			}
+			d.logf("flow %s: files changed but the run could not start; trying again: %v", t.name, err)
+			for _, p := range changed {
+				w.changed[p] = true
+			}
+			w.last = now // wait another debounce before the next try
 		} else {
+			w.failures = 0
 			d.logf("flow %s: %d file(s) changed -> run", t.name, len(changed))
 		}
 	}
@@ -172,7 +185,11 @@ func scan(root string, hook pipeline.FileHook) scanResult {
 		if !absolute {
 			start = filepath.Join(root, start)
 		}
-		if info, err := os.Lstat(start); err == nil && info.Mode()&fs.ModeSymlink != 0 {
+		if strings.HasPrefix(pipeline.PatternBase(pattern), "/") && !absolute {
+			res.skipped = append(res.skipped, "pattern "+pattern+" needs a drive letter on this system, such as C:/")
+			continue
+		}
+		if linked(root, start, absolute) {
 			res.skipped = append(res.skipped, "does not follow the link "+filepath.ToSlash(base)+"; name the folder it points to")
 			continue
 		}
@@ -216,6 +233,26 @@ func scan(root string, hook pipeline.FileHook) scanResult {
 		})
 	}
 	return res
+}
+
+// linked reports whether the start of a walk goes through a link below the
+// project root (or is a link itself, for an absolute pattern). The root may
+// be reached through links: that is the user's own folder.
+func linked(root, start string, absolute bool) bool {
+	if absolute {
+		info, err := os.Lstat(start)
+		return err == nil && info.Mode()&fs.ModeSymlink != 0
+	}
+	if start == root {
+		return false
+	}
+	realRoot, err1 := filepath.EvalSymlinks(root)
+	realStart, err2 := filepath.EvalSymlinks(start)
+	if err1 != nil || err2 != nil {
+		return false // missing: nothing to walk anyway
+	}
+	rel, err := filepath.Rel(root, start)
+	return err != nil || realStart != filepath.Join(realRoot, rel)
 }
 
 // hookRunWaiting reports whether a run of the flow that a hook started is
@@ -269,17 +306,44 @@ func (d *Daemon) runFinished(f finishedRun) {
 		if e, ok := d.registry.Get(m.name); !ok || e.Paused {
 			continue
 		}
-		if d.hookRunWaiting(m.name) {
-			continue // one waiting hook run per flow, so flows cannot fan out without end
-		}
 		if f.chain+1 > maxChain {
 			d.logf("flow %s: on.run not started: %d flows already started each other in a row (a loop?)", m.name, maxChain)
+			continue
+		}
+		if d.hookRunWaiting(m.name) {
+			// One hook run per flow at a time, so flows cannot fan out; this
+			// one starts when that run ends (FR-004a).
+			if _, ok := d.pendingRuns[m.name]; !ok {
+				d.logf("flow %s: run of %s ended (%s); a run a hook started is still active, so this one waits", m.name, f.run.Pipeline, f.run.Status)
+			}
+			if f.chain+1 > d.pendingRuns[m.name] {
+				d.pendingRuns[m.name] = f.chain + 1
+			}
 			continue
 		}
 		if _, err := d.submitHook(m.name, api.TriggerRun, nil, f.chain+1); err != nil {
 			d.logf("flow %s: run of %s ended (%s) but the run could not start: %v", m.name, f.run.Pipeline, f.run.Status, err)
 		} else {
 			d.logf("flow %s: run of %s ended (%s) -> run", m.name, f.run.Pipeline, f.run.Status)
+		}
+	}
+}
+
+// startPendingRuns starts the on.run runs that waited for a hook run of the
+// same flow to end. Only the Serve goroutine calls it.
+func (d *Daemon) startPendingRuns() {
+	for name, chain := range d.pendingRuns {
+		if d.hookRunWaiting(name) {
+			continue
+		}
+		delete(d.pendingRuns, name)
+		if e, ok := d.registry.Get(name); !ok || e.Paused {
+			continue
+		}
+		if _, err := d.submitHook(name, api.TriggerRun, nil, chain); err != nil {
+			d.logf("flow %s: the waiting on.run run could not start: %v", name, err)
+		} else {
+			d.logf("flow %s: the waiting on.run run started", name)
 		}
 	}
 }

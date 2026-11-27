@@ -247,7 +247,9 @@ further change came for `debounce`. A burst of changes is one run.
 - The daemon looks every second, at no more than 10,000 matching files and 50,000 files and
   folders per flow; narrow `paths` for big trees. It does not follow links: name the real folder.
 - A flow has at most one run started by a hook at a time. Changes made while it runs start one
-  more run when it ends.
+  more run when it ends. A manual or scheduled run of the flow is different: `overlap` decides what
+  a file change during it does.
+- For an absolute entry in `paths`, `ignore` patterns are matched against absolute paths too.
 - Patterns match names as written: `*.jpg` does not match `A.JPG`, even on Windows and macOS.
   A file is "changed" when its time or size changes; some disks keep times to the second, so write
   files in place with care, or write elsewhere and rename them in.
@@ -267,8 +269,8 @@ on:
 `on.run` may be a list to follow several flows. The run's trigger is `run`. A run of `build` that
 ran and ended as asked starts this flow, whatever started `build`; a run that never started (for
 example cancelled while queued) starts nothing. While a run of this flow that a hook started is
-queued or running, another one does not start. Flows that start each other in a loop stop after
-10 runs in a row; the daemon log says so.
+queued or running, the next one waits and starts when it ends; several waiting become one. Flows
+that start each other in a loop stop after 10 runs in a row; the daemon log says so.
 
 ## `env`
 

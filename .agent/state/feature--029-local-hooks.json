@@ -3,10 +3,11 @@
   "title": "Local hooks",
   "tier": 2,
   "branch": "feature/029-local-hooks",
-  "status": "in_progress",
-  "step": "reviewer and security findings fixed; delta review and PR",
+  "status": "in_review",
+  "step": "delta findings fixed; PR",
   "steps_done": [
-    "reviewer and security findings fixed"
+    "reviewer and security findings fixed",
+    "delta findings fixed"
   ],
   "requirements": [],
   "specs": [
@@ -18,5 +19,5 @@
   "next_actions": [],
   "pr": null,
   "created": "2026-11-27T15:31:54Z",
-  "updated": "2026-11-27T15:51:05Z"
+  "updated": "2026-11-27T16:05:21Z"
 }
