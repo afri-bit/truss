@@ -3,8 +3,8 @@
   "title": "Flows page: toggle between cards and list",
   "tier": 1,
   "branch": "feature/021-flows-view-toggle",
-  "status": "in_review",
-  "step": "built, verified, independently reviewed (reviewer and spec-reviewer; delta reviewed up to f9bf09d); ready to push and open as a PR",
+  "status": "done",
+  "step": "merged into main (confirmed 2026-11-25)",
   "steps_done": [
     "spec 021, code, browser tests, docs",
     "verify.sh green; full UI suite green on reruns",
@@ -24,5 +24,5 @@
   ],
   "pr": null,
   "created": "2026-11-16T22:41:05Z",
-  "updated": "2026-11-16T23:21:36Z"
+  "updated": "2026-11-25T14:58:03Z"
 }

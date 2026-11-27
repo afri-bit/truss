@@ -3,8 +3,8 @@
   "title": "Desktop corrections, flows follow files, readable run log",
   "tier": 2,
   "branch": "feature/018-desktop-corrections",
-  "status": "in_review",
-  "step": "run-log headings and Desktop log cards done and reviewed; push, then the maintainer opens the PR (gh missing)",
+  "status": "done",
+  "step": "merged into main (confirmed 2026-11-25)",
   "steps_done": [
     "chart fix, Flows and Re-run, spec 018, docs; verify.sh pass; 30 UI tests pass",
     "review (reviewer, spec-reviewer) and delta review: approve at efb9803",
@@ -42,5 +42,5 @@
   ],
   "pr": null,
   "created": "2026-11-16T15:58:40Z",
-  "updated": "2026-11-16T22:22:16Z"
+  "updated": "2026-11-25T14:58:03Z"
 }
