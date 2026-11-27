@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -128,7 +129,7 @@ func TestInit_CtrlCWritesNothing(t *testing.T) {
 	var out strings.Builder
 	a := newLineAsker(ctx, r, &out)
 	cancel()
-	if _, err := a.askFlow(t.TempDir(), "", ""); err != errStopped {
+	if _, err := a.askFlow(t.TempDir(), "", ""); !errors.Is(err, errStopped) {
 		t.Fatalf("err = %v, want stopped", err)
 	}
 }
