@@ -27,14 +27,22 @@ if (!/^[A-Za-z0-9._/-]+$/.test(BRANCH)) throw new Error(`sync: TRUSS_DOCS_BRANCH
 
 // The pages of the site, in sidebar order (astro.config.mjs lists the same slugs).
 const pages = [
+  { file: 'overview.md', slug: 'overview', title: 'What TRUSS is' },
   { file: 'getting-started.md', slug: 'getting-started', title: 'Getting started' },
-  { file: 'pipeline-reference.md', slug: 'pipeline-reference', title: 'Flow file reference' },
+  { file: 'guide-schedules.md', slug: 'guide-schedules', title: 'Run a flow on a schedule' },
+  { file: 'guide-hooks.md', slug: 'guide-hooks', title: 'Start a flow when something happens' },
+  { file: 'guide-notifications.md', slug: 'guide-notifications', title: 'Get notified' },
+  { file: 'guide-variables.md', slug: 'guide-variables', title: 'Variables and secrets' },
   { file: 'cli-guide.md', slug: 'cli-guide', title: 'Using the command line' },
+  { file: 'guide-platforms.md', slug: 'guide-platforms', title: 'Windows, macOS and Linux' },
+  { file: 'how-a-run-works.md', slug: 'how-a-run-works', title: 'How a run works' },
+  { file: 'GLOSSARY.md', slug: 'glossary', title: 'Glossary' },
+  { file: 'pipeline-reference.md', slug: 'pipeline-reference', title: 'Flow file reference' },
   { file: 'cli.md', slug: 'cli', title: 'Command line reference' },
   { file: 'daemon.md', slug: 'daemon', title: 'The daemon' },
   { file: 'desktop.md', slug: 'desktop', title: 'TRUSS Desktop' },
+  { file: 'troubleshooting.md', slug: 'troubleshooting', title: 'Troubleshooting' },
   { file: 'architecture.md', slug: 'architecture', title: 'Architecture' },
-  { file: 'GLOSSARY.md', slug: 'glossary', title: 'Glossary' },
 ];
 const slugOf = new Map(pages.map((p) => [p.file, p.slug]));
 

@@ -11,6 +11,9 @@ Dates below are when a release was made. 0.1.0 is the first release.
 
 ### Added
 
+- Documentation for users, in sections  
+  The docs gain an overview (what TRUSS is and when to use it), guides for schedules, hooks, notifications, variables and secrets, and Windows/macOS/Linux, a page on how a run works (processes, the environment of a step, stopping) and a troubleshooting page. The site's sidebar reads Start here, Guides, Concepts, Reference, Help (specs/032-user-docs).
+
 - `truss init`: set up a project by answering a few questions  
   `truss init` writes `truss.yaml` and a first flow from a template it suggests from your files (Go, Node.js, Python, Make, a backup, or a plain start), started by hand, on a schedule in plain words or when files change, with a desktop notification on failure if you like. `--yes` takes every suggestion. `truss flows new <name>` adds another flow (specs/031-truss-init).
 

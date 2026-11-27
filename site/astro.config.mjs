@@ -33,21 +33,30 @@ export default defineConfig({
         { tag: 'meta', attrs: { name: 'theme-color', content: '#0c0e12' } },
       ],
       sidebar: [
-        { label: 'Start here', items: [{ slug: 'docs/getting-started' }] },
+        { label: 'Start here', items: [{ slug: 'docs/overview' }, { slug: 'docs/getting-started' }] },
+        {
+          label: 'Guides',
+          items: [
+            { slug: 'docs/guide-schedules' },
+            { slug: 'docs/guide-hooks' },
+            { slug: 'docs/guide-notifications' },
+            { slug: 'docs/guide-variables' },
+            { slug: 'docs/cli-guide' },
+            { slug: 'docs/guide-platforms' },
+          ],
+        },
+        { label: 'Concepts', items: [{ slug: 'docs/how-a-run-works' }, { slug: 'docs/glossary' }] },
         {
           label: 'Reference',
           items: [
             { slug: 'docs/pipeline-reference' },
-            { slug: 'docs/cli-guide' },
             { slug: 'docs/cli' },
             { slug: 'docs/daemon' },
             { slug: 'docs/desktop' },
           ],
         },
-        {
-          label: 'Concepts',
-          items: [{ slug: 'docs/architecture' }, { slug: 'docs/glossary' }],
-        },
+        { label: 'Help', items: [{ slug: 'docs/troubleshooting' }] },
+        { label: 'For contributors', items: [{ slug: 'docs/architecture' }] },
       ],
     }),
   ],
