@@ -47,6 +47,14 @@ type jobObjectExtendedLimitInformation struct {
 	PeakJobMemoryUsed       uintptr
 }
 
+// The struct must have the C size on the architectures TRUSS ships for
+// Windows (amd64, arm64): a build for another one fails here instead of at
+// every step's start.
+var (
+	_ [144 - unsafe.Sizeof(jobObjectExtendedLimitInformation{})]byte
+	_ [unsafe.Sizeof(jobObjectExtendedLimitInformation{}) - 144]byte
+)
+
 const (
 	jobObjectExtendedLimitInformationClass = 9
 	jobObjectLimitKillOnJobClose           = 0x2000

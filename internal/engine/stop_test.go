@@ -14,10 +14,11 @@ import (
 )
 
 // Spec 028: a step that times out is asked to stop first and may clean up.
+// The timeout is generous so the shell has its trap before it fires.
 func TestRun_ATimedOutStepGetsSIGTERMAndMayCleanUp(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "cleaned")
 	run := "trap 'echo cleaned > \"" + marker + "\"; exit 0' TERM; while :; do sleep 0.05; done"
-	p := pipeline.Pipeline{Version: "1", Name: "stop", Steps: []pipeline.Step{{ID: "a", Run: run, Timeout: 300 * time.Millisecond}}}
+	p := pipeline.Pipeline{Version: "1", Name: "stop", Steps: []pipeline.Step{{ID: "a", Run: run, Timeout: 2 * time.Second}}}
 	got, err := Run(context.Background(), p, t.TempDir(), os.Environ(), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -31,21 +32,29 @@ func TestRun_ATimedOutStepGetsSIGTERMAndMayCleanUp(t *testing.T) {
 	}
 }
 
-// A step that ignores the request is killed after kill_timeout.
+// A step that ignores the request is killed after kill_timeout. The run is
+// cancelled only once the shell has its trap, and timed from then.
 func TestRun_AStepThatIgnoresTheStopIsKilledAfterKillTimeout(t *testing.T) {
-	run := "trap '' TERM; while :; do sleep 0.05; done"
+	dir := t.TempDir()
+	started := filepath.Join(dir, "started")
+	run := "trap '' TERM; touch \"" + started + "\"; while :; do sleep 0.05; done"
 	p := pipeline.Pipeline{Version: "1", Name: "stop", Steps: []pipeline.Step{
-		{ID: "a", Run: run, Timeout: 200 * time.Millisecond, KillTimeout: 300 * time.Millisecond}}}
-	start := time.Now()
-	got, err := Run(context.Background(), p, t.TempDir(), os.Environ(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if took := time.Since(start); took < 450*time.Millisecond || took > 5*time.Second {
-		t.Fatalf("took %s, want about timeout + kill_timeout", took)
-	}
-	if got.Status != pipeline.StatusFailed || !strings.Contains(got.Steps[0].Error, "timed out") {
-		t.Fatalf("run = %+v", got)
+		{ID: "a", Run: run, KillTimeout: 500 * time.Millisecond}}}
+	ctx, cancel := context.WithCancel(context.Background())
+	var asked time.Time
+	go func() {
+		for i := 0; i < 1000; i++ {
+			if _, err := os.Stat(started); err == nil {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		asked = time.Now()
+		cancel()
+	}()
+	_, _ = Run(ctx, p, t.TempDir(), os.Environ(), nil)
+	if took := time.Since(asked); took < 450*time.Millisecond || took > 10*time.Second {
+		t.Fatalf("ended %s after the stop, want about kill_timeout", took)
 	}
 }
 

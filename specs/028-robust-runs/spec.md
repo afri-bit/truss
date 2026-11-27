@@ -38,6 +38,13 @@ Run records, the registry and the secret store are written to a temporary file a
 crash leaves the old or the new file, never half of one. A run that was running when the daemon
 stopped is closed as failed at the next start.
 
+## Limits
+
+- A process that left the step's process group on Unix is neither asked nor killed.
+- `kill_timeout` has no effect on Windows.
+- Stopping a run, and `daemon stop`, can now take up to the longest `kill_timeout` of the steps
+  that are running.
+
 ## Not done (follow-ups)
 
 - On Linux and macOS a step can outlive a daemon that crashes or is killed with SIGKILL: TRUSS has
