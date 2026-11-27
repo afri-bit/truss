@@ -248,7 +248,7 @@ func TestValidate_WorkdirMustBeANonEmptyString(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := Validate(p); err == nil || !strings.Contains(err.Error(), "pipeline workdir must be a non-empty string") {
+		if err := Validate(p); err == nil || !strings.Contains(err.Error(), "flow workdir must be a non-empty string") {
 			t.Errorf("workdir %s: err = %v", value, err)
 		}
 	}

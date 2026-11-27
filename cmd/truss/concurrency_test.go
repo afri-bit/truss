@@ -411,7 +411,7 @@ func TestRun_RejectsMisspelledConcurrencyField(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("exit = %d, stderr = %s", code, errOut)
 	}
-	if !strings.HasPrefix(errOut, "error: ") || !strings.Contains(errOut, `unknown field "concurency" in pipeline`) {
+	if !strings.HasPrefix(errOut, "error: ") || !strings.Contains(errOut, `unknown field "concurency" in flow`) {
 		t.Fatalf("stderr = %q", errOut)
 	}
 	if out != "" {

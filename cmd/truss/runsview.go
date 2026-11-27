@@ -56,7 +56,7 @@ func (in invocation) pipelines(ctx context.Context) int {
 		return writeJSON(in.stdout, list)
 	}
 	if len(list) == 0 {
-		fmt.Fprintln(in.stdout, "no pipelines registered (add one with: truss register <path>)")
+		fmt.Fprintln(in.stdout, "no flows registered (add one with: truss register <path>)")
 		return 0
 	}
 	w := tabwriter.NewWriter(in.stdout, 0, 4, 2, ' ', 0)
@@ -82,7 +82,7 @@ func (in invocation) pipelineShow(ctx context.Context, c *api.Client, list []api
 		}
 	}
 	if p == nil {
-		return in.fail(fmt.Errorf("no pipeline named %q is registered (list them with: truss pipelines)", name))
+		return in.fail(fmt.Errorf("no flow named %q is registered (list them with: truss pipelines)", name))
 	}
 	if asJSON {
 		return writeJSON(in.stdout, p)
@@ -93,7 +93,7 @@ func (in invocation) pipelineShow(ctx context.Context, c *api.Client, list []api
 	}
 	now := time.Now()
 	line := func(label, text string) { fmt.Fprintf(in.stdout, "%-12s  %s\n", label, clean(text)) }
-	line("Pipeline", p.Name)
+	line("Flow", p.Name)
 	if p.RegisteredName != "" {
 		line("Registered as", p.RegisteredName)
 	}
@@ -208,7 +208,7 @@ func (in invocation) runs(ctx context.Context) int {
 		return 0
 	}
 	w := tabwriter.NewWriter(in.stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "RUN\tPIPELINE\tSTATUS\tTRIGGER\tCREATED\tDURATION\tNOTE")
+	fmt.Fprintln(w, "RUN\tFLOW\tSTATUS\tTRIGGER\tCREATED\tDURATION\tNOTE")
 	for _, r := range list {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.ID, r.Pipeline, r.Status, r.Trigger, local(&r.CreatedAt), duration(r), clean(r.Reason))
 	}
@@ -235,14 +235,23 @@ func contains(list []string, s string) bool {
 
 // runShow prints the state of one run: its status, its steps with their
 // exit codes and times, and a timeline of when each step ran. The id "last"
-// is the newest run, of one pipeline with --pipeline.
+// is the newest run, of one flow with --flow (or its older name --pipeline).
 func (in invocation) runShow(ctx context.Context, args []string) int {
-	pos, flags, err := options(args, []string{"pipeline"}, []string{"json"})
+	pos, flags, err := options(args, []string{"flow", "pipeline"}, []string{"json"})
 	if err != nil || len(pos) != 1 {
 		return in.usage()
 	}
-	if _, ok := flags["pipeline"]; ok && pos[0] != "last" {
-		return in.fail(errors.New("--pipeline only goes with the id \"last\""))
+	flowFlag, hasFlow := flags["flow"]
+	given := "--flow"
+	if old, ok := flags["pipeline"]; ok {
+		if hasFlow {
+			return in.fail(errors.New("--flow and --pipeline name the same thing; give one"))
+		}
+		flowFlag, hasFlow, given = old, true, "--pipeline"
+	}
+	flags["pipeline"] = flowFlag
+	if hasFlow && pos[0] != "last" {
+		return in.fail(fmt.Errorf("%s only goes with the id \"last\"", given))
 	}
 	c, err := in.dial(ctx)
 	if err != nil {
@@ -278,7 +287,7 @@ func (in invocation) runShow(ctx context.Context, args []string) int {
 func writeRun(w io.Writer, r api.Run, now time.Time, width int) {
 	line := func(label, text string) { fmt.Fprintf(w, "%-9s  %s\n", label, clean(text)) }
 	line("Run", r.ID)
-	line("Pipeline", r.Pipeline)
+	line("Flow", r.Pipeline)
 	status := r.Status
 	if r.Reason != "" {
 		status += ": " + firstLine(r.Reason)

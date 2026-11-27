@@ -25,7 +25,7 @@ func ParseFile(ctx context.Context, path string) (Pipeline, error) {
 	}
 	data, err := readBounded(path)
 	if err != nil {
-		return Pipeline{}, fmt.Errorf("read pipeline definition: %w", err)
+		return Pipeline{}, fmt.Errorf("read flow file: %w", err)
 	}
 	return Parse(data)
 }
@@ -68,7 +68,7 @@ func readBounded(path string) ([]byte, error) {
 // Schema checks are left to Validate.
 func Parse(data []byte) (Pipeline, error) {
 	if len(bytes.TrimSpace(data)) == 0 {
-		return Pipeline{}, fmt.Errorf("invalid YAML: pipeline definition is empty")
+		return Pipeline{}, fmt.Errorf("invalid YAML: the flow file is empty")
 	}
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil {
@@ -79,10 +79,11 @@ func Parse(data []byte) (Pipeline, error) {
 	}
 	root := doc.Content[0]
 	if root.Kind != yaml.MappingNode {
-		return Pipeline{}, fmt.Errorf("invalid YAML: pipeline definition must be a mapping")
+		return Pipeline{}, fmt.Errorf("invalid YAML: a flow file must be a mapping")
 	}
 
 	var p Pipeline
+	var seenBlock string
 	for i := 0; i < len(root.Content); i += 2 {
 		key := root.Content[i].Value
 		val := root.Content[i+1]
@@ -96,7 +97,12 @@ func Parse(data []byte) (Pipeline, error) {
 			} else {
 				p.nonStringVersion = true
 			}
-		case "pipeline":
+		case "flow", "pipeline":
+			// flow is the name since v0.3.0; pipeline stays accepted.
+			if seenBlock != "" && seenBlock != key {
+				p.issue("the file has both %s and %s; keep one (flow is the current name)", seenBlock, key)
+			}
+			seenBlock = key
 			parsePipelineBlock(&p, val)
 		case "on":
 			parseTriggers(&p, val)
@@ -138,11 +144,11 @@ func parsePipelineBlock(p *Pipeline, val *yaml.Node) {
 		case "concurrency":
 			parseConcurrency(p, v)
 		case "workdir":
-			p.Workdir = parseString(p, v, "pipeline workdir")
+			p.Workdir = parseString(p, v, "flow workdir")
 		case "overlap":
-			p.Overlap = Overlap(oneOf(p, v, "pipeline overlap", string(OverlapQueue), string(OverlapSkip), string(OverlapParallel)))
+			p.Overlap = Overlap(oneOf(p, v, "flow overlap", string(OverlapQueue), string(OverlapSkip), string(OverlapParallel)))
 		default:
-			p.noteUnknown(field, "in pipeline")
+			p.noteUnknown(field, "in flow")
 		}
 	}
 }

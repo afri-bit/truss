@@ -90,7 +90,7 @@ func TestStepInspect_EnvironmentTable(t *testing.T) {
 	if !strings.Contains(out, "NAME") || !strings.Contains(out, "SOURCE") || !strings.Contains(out, "STATE") || !strings.Contains(out, "VALUE") {
 		t.Errorf("no table header:\n%s", out)
 	}
-	wantRow(t, out, "REGION", "REGION", "pipeline", "set", "eu")
+	wantRow(t, out, "REGION", "REGION", "flow", "set", "eu")
 	wantRow(t, out, "MODE", "MODE", "step", "set", "step") // the step wins over the job and the pipeline
 	wantRow(t, out, "NPM_TOKEN", "NPM_TOKEN", `secret store`, "missing", "-")
 	wantRow(t, out, "TRUSS_DATA_DIR", "TRUSS_DATA_DIR", `truss run`, "set", `\.truss\S*dbg\S*data`)
@@ -108,7 +108,7 @@ func TestStepInspect_EnvironmentTable(t *testing.T) {
 	if strings.Contains(out, "abc-do-not-print") {
 		t.Errorf("a variable named like a token was printed:\n%s", out)
 	}
-	wantRow(t, out, "API_TOKEN", "API_TOKEN", "pipeline", "set", `\*\*\*`)
+	wantRow(t, out, "API_TOKEN", "API_TOKEN", "flow", "set", `\*\*\*`)
 }
 
 func TestStepInspect_JobSourceIsNamed(t *testing.T) {
@@ -564,7 +564,7 @@ steps:
 			t.Errorf("--values printed %q:\n%s", v, out)
 		}
 	}
-	wantRow(t, out, "PLAIN", "PLAIN", "pipeline", "set", `\*\*\*`)
+	wantRow(t, out, "PLAIN", "PLAIN", "flow", "set", `\*\*\*`)
 	wantRow(t, out, "TRUSSDBG_URL", "TRUSSDBG_URL", `host environment`, "set", `\*\*\*`)
 	// Without --values a declared value is shown, as it is in the file.
 	// Without --values the store is not read: a declared value is shown as it
@@ -594,8 +594,8 @@ steps:
 			t.Errorf("%s has %d rows:\n%s", name, n, out)
 		}
 	}
-	wantRow(t, out, "TRUSS_DATA_DIR", "TRUSS_DATA_DIR", "pipeline", "set", "mine") // the file overrides the base
-	wantRow(t, out, "NPM_TOKEN", "NPM_TOKEN", `secret store`, "missing", "-")      // the secret overrides the file
+	wantRow(t, out, "TRUSS_DATA_DIR", "TRUSS_DATA_DIR", "flow", "set", "mine") // the file overrides the base
+	wantRow(t, out, "NPM_TOKEN", "NPM_TOKEN", `secret store`, "missing", "-")  // the secret overrides the file
 }
 
 func TestReferences(t *testing.T) {

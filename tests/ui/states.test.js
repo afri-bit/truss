@@ -57,7 +57,7 @@ test("an empty daemon shows helpful empty states", async () => {
     await page.getByText("No schedules.").waitFor();
     await page.getByText("No runs yet.").first().waitFor();
     await page.evaluate(() => { location.hash = "#/pipelines"; });
-    await page.getByText("No pipelines registered yet").waitFor();
+    await page.getByText("No flows registered yet").waitFor();
     // Picker over a folder with nothing to show.
     await page.locator("#register-path").fill(require("node:path").join(empty.homeDir, ".secret-dir", "x.yaml"));
     await page.locator("#browse").click();

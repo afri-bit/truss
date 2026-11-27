@@ -23,8 +23,8 @@ theme toggle, settings menu) and the content.
 
 | Page | Shows | You can |
 |---|---|---|
-| **Dashboard** | Counters for today, active runs with progress, runs per hour, system load, health, the next scheduled runs, recent runs. | Jump to any run or pipeline. |
-| **Flows** | Every registered pipeline file, as cards or as a list (switch at the right of the filter; the choice is kept in this browser): state, schedule, next and last run, shape of its step graph. | Register a file (type its path or press **Browse…**), filter, run it now, pause or resume its schedules, unregister it. |
+| **Dashboard** | Counters for today, active runs with progress, runs per hour, system load, health, the next scheduled runs, recent runs. | Jump to any run or flow. |
+| **Flows** | Every registered flow file, as cards or as a list (switch at the right of the filter; the choice is kept in this browser): state, schedule, next and last run, shape of its step graph. | Register a file (type its path or press **Browse…**), filter, run it now, pause or resume its schedules, unregister it. |
 | **Flow** | Its step graph colored by the last run, success rate, configuration, run history. The page follows edits to the file, a new name included; *Registered as* shows the name it was registered under when that differs. | The same actions. |
 | **Runs** | Every run the daemon started or skipped, and every run tracked from a shell, newest first. | Filter by status or text, open one. |
 | **Run** | Progress, the running steps, elapsed time, the step graph with the running step highlighted, step results, the live log as one card per step ([below](#the-run-page)), resources and configuration. | Cancel the run, re-run it, click a step to see only its card, find in the log, open or close every card, wrap, follow. |
@@ -72,7 +72,7 @@ Press Ctrl-C to stop.
 ```
 
 `--demo` needs no daemon. It serves Desktop with sample data that the page generates itself:
-ten pipelines, runs that progress while you watch, a failure, a tolerated failure, a queued run,
+ten flows, runs that progress while you watch, a failure, a tolerated failure, a queued run,
 a paused schedule, an invalid file and a long name, plus a day of history, and sample CPU and memory figures. Run now, Cancel,
 pause, resume, register and unregister work on that data. Nothing is saved and no request leaves
 the page. The header says **Demo data**; **Leave demo** in the settings menu ends it. Only the server

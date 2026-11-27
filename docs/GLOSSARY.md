@@ -4,21 +4,31 @@ This document defines the common terminology used across TRUSS specifications, d
 
 ## Core Terms
 
+### Flow
+
+The top-level workflow defined by the user: one YAML file that describes the work TRUSS should
+execute. A flow contains one or more steps, directly or in jobs. A project keeps its flows in
+`.truss/flows/`; any registered file is a flow too.
+
+"Flow" is the word TRUSS uses in its files, commands, Desktop and docs since v0.3.0 (spec
+`024-flow-vocabulary`).
+
 ### Pipeline
 
-The top-level workflow defined by the user.
+The older name of a flow. It stays where it is a released contract: the `pipeline:` block of a
+flow file (still accepted), the `truss pipelines` command, the daemon API paths and JSON fields
+(`/pipelines`, `pipeline`, `registered_pipeline`) and `TRUSS_PIPELINE`. Do not use it in new
+text.
 
-A pipeline contains one or more steps and describes the work TRUSS should execute.
+### Flow File
 
-### Pipeline Definition
-
-The declarative representation of a pipeline, initially defined in YAML.
+The declarative representation of a flow, in YAML.
 
 ```yaml
 # .truss/flows/build.yaml
 version: "1"
 
-pipeline:
+flow:
   name: build
 
 steps:
@@ -26,22 +36,14 @@ steps:
     run: go test ./...
 ```
 
-### Flow
+### Run
 
-TRUSS Desktop's label for a registered pipeline, and for the page that lists them. It is not a
-separate kind of thing: a Flow is a Pipeline. A project keeps its pipeline files in
-`.truss/flows/`, but any registered file shows up under Flows. The address of that page and the
-daemon API still say `pipelines`.
-
-### Pipeline Run
-
-A single execution instance of a pipeline.
-
-The same pipeline definition can produce multiple pipeline runs.
+A single execution of a flow. The same flow file can produce many runs. (Older text says
+"pipeline run".)
 
 ### Step
 
-An individual unit of work inside a pipeline.
+An individual unit of work inside a flow.
 
 ```yaml
 - id: test
@@ -55,7 +57,7 @@ its log and does not replace the saved run log. See [Debugging a step](cli-guide
 
 ### Step Run
 
-A single execution instance of a step within a pipeline run.
+A single execution instance of a step within a flow run.
 
 ### Command
 
@@ -67,7 +69,7 @@ run: go test ./...
 
 ## Engine
 
-The core TRUSS component responsible for processing and executing pipelines.
+The core TRUSS component responsible for processing and executing flows.
 
 Conceptually:
 
@@ -85,7 +87,7 @@ Result
 
 ### Parser
 
-Converts the external pipeline definition into the internal pipeline model.
+Converts the external flow definition into the internal flow model.
 
 ```text
 YAML → Parser → Pipeline Model
@@ -93,13 +95,13 @@ YAML → Parser → Pipeline Model
 
 ### Pipeline Model
 
-The internal representation of a parsed pipeline.
+The internal representation of a parsed flow.
 
-It represents concepts such as pipelines, steps, commands, dependencies, and configuration.
+It represents concepts such as flows, steps, commands, dependencies, and configuration.
 
 ### Validation
 
-Checks whether a pipeline is structurally and semantically valid before execution.
+Checks whether a flow is structurally and semantically valid before execution.
 
 Examples include:
 
@@ -110,7 +112,7 @@ Examples include:
 
 ### Execution Plan
 
-The representation of how a validated pipeline should be executed.
+The representation of how a validated flow should be executed.
 
 It may contain ordering and dependency information.
 
@@ -149,13 +151,13 @@ This is the first supported execution backend.
 
 ### Container Executor
 
-Executes pipeline work inside a container.
+Executes flow work inside a container.
 
 Planned for a later phase.
 
 ### Remote Executor
 
-Executes pipeline work on another machine or worker.
+Executes flow work on another machine or worker.
 
 Planned for future distributed execution.
 
@@ -181,7 +183,7 @@ Independent steps execute at the same time when their dependencies allow it.
 
 ### Result
 
-The structured outcome of a pipeline or step execution.
+The structured outcome of a flow or step execution.
 
 A result may contain:
 
@@ -193,7 +195,7 @@ A result may contain:
 
 ### Status
 
-The state of a pipeline or step run.
+The state of a flow or step run.
 
 The reported statuses are:
 
@@ -243,12 +245,12 @@ use. Started with `truss daemon start`.
 
 ### Job
 
-A named, ordered list of steps inside a pipeline. The steps of a job run one after another;
+A named, ordered list of steps inside a flow. The steps of a job run one after another;
 jobs wait for the jobs they need. In logs a step of a job is named `job/step`.
 
 ### Trigger
 
-What causes a pipeline run: `manual` (someone asked), `schedule` (a cron time was reached),
+What causes a flow run: `manual` (someone asked), `schedule` (a cron time was reached),
 `catch-up` (a missed cron time that the schedule asked to make up for), or `local` (a run started
 in a shell with `truss run --track`; see Tracked Run).
 
@@ -261,7 +263,7 @@ it in the daemon asks the CLI to stop; the daemon cannot end the process itself.
 
 ### Queued Run
 
-A run waiting for a free slot or for an earlier run of the same pipeline. It survives a daemon
+A run waiting for a free slot or for an earlier run of the same flow. It survives a daemon
 restart and starts afterwards, in the order it was requested.
 
 ### Schedule
@@ -277,36 +279,36 @@ it into one catch-up run.
 
 ### Project
 
-A folder with a Project File at its root. A project holds its pipelines as files in
+A folder with a Project File at its root. A project holds its flows as files in
 `.truss/flows/` and keeps the files a run generates in `.truss/state/`. A run finds the project
 in the working directory only.
 
 ### Project File
 
 The `truss.yaml` at the root of a Project. It holds the project's name and description, and
-nothing that runs. A `truss.yaml` with steps is not a pipeline.
+nothing that runs. A `truss.yaml` with steps is not a flow.
 
 ### Registration
 
-A name and the path of a pipeline file, stored by the daemon. The file stays where it is and
-stays the source of truth. A pipeline of a Project is registered under its pipeline name. That
-**registered name** never changes and keeps the flow's history; when the file renames the pipeline,
+A name and the path of a flow file, stored by the daemon. The file stays where it is and
+stays the source of truth. A flow of a Project is registered under its flow name. That
+**registered name** never changes and keeps the flow's history; when the file renames the flow,
 the daemon shows the new name and accepts either (spec 019).
 
 ### Overlap
 
-What happens when a run is requested while another run of the same pipeline is active:
+What happens when a run is requested while another run of the same flow is active:
 `queue`, `skip`, or `parallel`.
 
 ### Workdir
 
-`pipeline.workdir`: the directory steps start in, relative to where the run starts or absolute.
+`flow.workdir`: the directory steps start in, relative to where the run starts or absolute.
 A run starts in the Project root for `truss run` and for a flow in `.truss/flows/`. A job's or
 step's `dir` replaces it.
 
 ### Data Folder
 
-A folder per pipeline that outlives runs and is never cleaned by TRUSS: `~/.truss/pipelines/<name>/`
+A folder per flow that outlives runs and is never cleaned by TRUSS: `~/.truss/pipelines/<name>/`
 for the daemon, `.truss/state/<name>/data` for `truss run`. Steps find it in `TRUSS_DATA_DIR`.
 
 ### Cache Folder
@@ -353,7 +355,7 @@ PipelineCompleted
 
 ### Artifact
 
-A file or collection of files produced by pipeline execution and intended to be preserved or consumed later.
+A file or collection of files produced by flow execution and intended to be preserved or consumed later.
 
 Examples include binaries, packages, and test reports.
 
@@ -373,7 +375,7 @@ Behavior or structure that users and integrations may depend on.
 
 Examples:
 
-* pipeline YAML schema
+* flow YAML schema
 * CLI behavior
 * execution semantics
 * APIs
@@ -381,7 +383,7 @@ Examples:
 
 ### Execution Semantics
 
-The rules that define how pipelines behave.
+The rules that define how flows behave.
 
 Examples include:
 
@@ -394,11 +396,11 @@ Examples include:
 
 ### Portability
 
-The ability to execute the same logical pipeline across different supported environments without tying it to a specific CI/CD provider.
+The ability to execute the same logical flow across different supported environments without tying it to a specific CI/CD provider.
 
 ### Local First
 
-The principle that pipelines should be runnable locally whenever technically possible.
+The principle that flows should be runnable locally whenever technically possible.
 
 ## TRUSS
 

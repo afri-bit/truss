@@ -509,12 +509,12 @@ func TestDaemon_LogsAChangedFileOnceUntilItChangesAgain(t *testing.T) {
 			time.Sleep(5 * time.Millisecond)
 		}
 	}
-	waitLog("pipeline alpha: file changed, read again (it is named beta)", 1)
+	waitLog("flow alpha: file changed, read again (it is named beta)", 1)
 
 	if err := os.WriteFile(path, []byte("version: \"1\"\nsteps: [broken: yaml\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	waitLog("pipeline alpha: file changed and does not load", 1)
+	waitLog("flow alpha: file changed and does not load", 1)
 	// A write can be seen half done, which logs a different message first. Let that
 	// settle, then count: many ticks pass with the file still broken and nothing is added.
 	time.Sleep(50 * time.Millisecond)
@@ -556,7 +556,7 @@ func TestDaemon_ATriggerThatSeesAnEditFirstLogsIt(t *testing.T) {
 	if run := mustTrigger(t, c, "alpha"); len(run.Steps) != 2 {
 		t.Fatalf("run = %+v, want the edited file", run)
 	}
-	if !strings.Contains(log.String(), "pipeline alpha: file changed, read again") {
+	if !strings.Contains(log.String(), "flow alpha: file changed, read again") {
 		t.Fatalf("the trigger saw the edit and did not log it:\n%s", log.String())
 	}
 }

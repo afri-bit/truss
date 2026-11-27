@@ -1,20 +1,20 @@
-# Pipeline file reference
+# Flow file reference
 
-A pipeline is one YAML file in the `.truss/flows/` folder of a [project](#project-layout). This
+A flow is one YAML file in the `.truss/flows/` folder of a [project](#project-layout). This
 page lists every field of schema version `"1"`. Unknown fields are rejected everywhere, so a
 typo never changes what runs.
 
-Check a pipeline at any time without running it:
+Check a flow at any time without running it:
 
 ```console
 $ truss validate nightly
-.truss/flows/nightly.yaml is valid: pipeline nightly, 3 steps, concurrency 2
+.truss/flows/nightly.yaml is valid: flow nightly, 3 steps, concurrency 2
 ```
 
 ## Project layout
 
 A project is a folder with a project file, `truss.yaml`, at its root. The project file names the
-project and nothing else. Pipelines live beside it, one file each. See
+project and nothing else. Flows live beside it, one file each. See
 [ADR 0015](decisions/0015-project-layout.md) for the reasons.
 
 ```text
@@ -52,10 +52,9 @@ project:
 Any other field is an error. The error names the field and where it appears, never its value.
 A `truss.yaml` in the project root with `steps` or `jobs` is rejected: those belong in a file in `.truss/flows/`.
 
-### Pipeline files (flows)
+### Flow files
 
-- Pipelines are the files directly in `.truss/flows/`, named `<name>.yaml` or `<name>.yml`. The
-  folder is called `flows`; the files are pipelines.
+- Flows are the files directly in `.truss/flows/`, named `<name>.yaml` or `<name>.yml`.
 - The file name without its extension is the name you use on the command line: `truss run build`
   runs `.truss/flows/build.yaml`.
 - Only regular files count. Folders, links, hidden files (names that start with `.`), cloud-sync
@@ -66,12 +65,12 @@ A `truss.yaml` in the project root with `steps` or `jobs` is rejected: those bel
 - A name must start with a letter or digit, then use only letters, digits, `.`, `_` and `-`. It
   must not end in a dot or a space, and it must not be a Windows device name (`CON`, `PRN`, `AUX`,
   `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`).
-- A pipeline file is at most 1 MiB. A larger file, or one that cannot be read or parsed, is an
-  error. TRUSS never skips a broken pipeline.
+- A flow file is at most 1 MiB. A larger file, or one that cannot be read or parsed, is an
+  error. TRUSS never skips a broken flow.
 - `.truss` and `.truss/flows` must be real folders, not links. A flows folder with more than 256
   entries is an error.
 
-A pipeline given by path (`truss run ./other/build.yaml`) has the same 1 MiB size limit. TRUSS follows a link for an explicit path argument.
+A flow given by path (`truss run ./other/build.yaml`) has the same 1 MiB size limit. TRUSS follows a link for an explicit path argument.
 Its name is the file name without its extension.
 
 ### The project root
@@ -82,7 +81,7 @@ Run commands from the project root.
 
 ### State folders
 
-A run keeps its generated files in `.truss/state/<name>/`, where `<name>` is the pipeline's file
+A run keeps its generated files in `.truss/state/<name>/`, where `<name>` is the flow's file
 name without the extension:
 
 | Path | Holds |
@@ -104,7 +103,7 @@ name without the extension:
 # .truss/flows/nightly.yaml
 version: "1"                  # required
 
-pipeline:
+flow:
   name: nightly               # optional; default: the file name
   concurrency: 2              # steps at once; default 1
   overlap: queue              # queue | skip | parallel; default queue
@@ -144,8 +143,8 @@ jobs:                         # either jobs ...
 | Field | Required | Meaning |
 |---|---|---|
 | `version` | yes | The string `"1"`. A bare number `1` is rejected. |
-| `pipeline` | yes | Name and run settings. |
-| `on` | no | What starts the pipeline besides you. |
+| `flow` | yes | Name and run settings. Before v0.3.0 this block was called `pipeline`; that name is still accepted, but a file holds one or the other. |
+| `on` | no | What starts the flow besides you. |
 | `env` | no | Environment variables for every step. |
 | `secrets` | no | Names of stored secrets for every step. |
 | `steps` | one of the two | A list of steps that may depend on each other. |
@@ -153,14 +152,17 @@ jobs:                         # either jobs ...
 
 A file has `steps` or `jobs`, never both.
 
-## `pipeline`
+## `flow`
+
+The flow's name and how it runs. Files written before v0.3.0 call this block `pipeline:`; TRUSS
+reads both, and `truss validate` rejects a file that has both.
 
 | Field | Default | Meaning |
 |---|---|---|
-| `name` | the file name | Optional. Shown in logs and used as the name the daemon knows the pipeline by. Defaults to the file name without its extension. When it differs from the file name, `truss validate` prints a note. |
+| `name` | the file name | Optional. Shown in logs and used as the name the daemon knows the flow by. Defaults to the file name without its extension. When it differs from the file name, `truss validate` prints a note. |
 | `concurrency` | `1` | The most steps that run at the same time. A whole number of at least 1. |
 | `workdir` | the run's directory | The directory steps start in: relative to where the run starts (the project root for `truss run` and for a flow in `.truss/flows/`; otherwise the file's directory), or absolute. A job's or step's `dir` replaces it. The directory must exist, or the step fails with a diagnostic and no exit code. |
-| `overlap` | `queue` | What happens when a run is requested while another run of this pipeline is still active. Used by the daemon. |
+| `overlap` | `queue` | What happens when a run is requested while another run of this flow is still active. Used by the daemon. |
 
 `overlap` values:
 
@@ -172,7 +174,7 @@ A file has `steps` or `jobs`, never both.
 
 ## `on.schedule`
 
-A list of cron triggers. They only fire while the [daemon](daemon.md) runs and the pipeline is
+A list of cron triggers. They only fire while the [daemon](daemon.md) runs and the flow is
 registered. `truss run` ignores them.
 
 | Field | Default | Meaning |
@@ -210,7 +212,7 @@ A schedule counts as on time when it fires within two minutes of its planned tim
 ## `env`
 
 A mapping of variable names to values, allowed at the top level, on a job, and on a step.
-Later levels win: step over job over pipeline over the environment the run started from.
+Later levels win: step over job over flow over the environment the run started from.
 Values are taken as text, so `RETRIES: 3` sets the string `3`.
 
 Every run started by the daemon also sets `TRUSS_RUN_ID`, `TRUSS_PIPELINE` and `TRUSS_TRIGGER`
@@ -223,7 +225,7 @@ Do not put secrets in `env`: the file is plain text. Use [`secrets`](#secrets).
 A list of secret names, allowed at the top level, on a job, and on a step. Each name must be
 stored first with `truss secret set <name>` (see [the CLI](cli.md#secrets)). A declared secret
 becomes an environment variable of the same name in the steps that declare it, directly or
-through their job or the pipeline, and in no other step. It overrides an `env` entry or an inherited variable of the same name.
+through their job or the flow, and in no other step. It overrides an `env` entry or an inherited variable of the same name.
 
 ```yaml
 secrets: [GITHUB_TOKEN]          # every step
@@ -240,9 +242,9 @@ jobs:
   recorded as failed.
 - Names follow the rule for `env` names. A repeated name, a non-list or a non-string is a
   validation error. `truss validate` lists the names a step uses and does not read the store.
-- A pipeline that declares no secret never reads the store.
+- A flow that declares no secret never reads the store.
 
-**Redaction.** In a run of a pipeline that declares secrets, every stored value (not only the
+**Redaction.** In a run of a flow that declares secrets, every stored value (not only the
 declared ones) that appears in step output is replaced by `***` in the run log,
 `.truss/state/<name>/run.log`, the daemon's stored log, the API and Desktop. A value split over several
 output chunks is still caught.
@@ -276,7 +278,7 @@ Windows). Every step starts a new shell, so `cd` or `export` in one step does no
 | `if` | no | A condition; the step runs only when it holds. See [Conditions](#conditions). |
 
 A step's working directory is the first one set of: its own `dir`, its job's `dir`,
-`pipeline.workdir`, the run's starting directory. They replace each other; they are not joined,
+`flow.workdir`, the run's starting directory. They replace each other; they are not joined,
 so a relative `dir` is always relative to the run's starting directory, not to `workdir`.
 The run's starting directory is the project root for `truss run`. On
 Windows a path with a drive letter must be absolute (`C:\work`, not `C:work`); `\work` means
@@ -302,13 +304,13 @@ A job is a named list of steps for one purpose: build, test, deploy.
 Job ids use letters, digits, `.`, `_` and `-`. In logs and in TRUSS Desktop a step of a job is
 named `job/step`, for example `build/compile`.
 
-Jobs that do not need each other run side by side when `pipeline.concurrency` allows it:
+Jobs that do not need each other run side by side when `flow.concurrency` allows it:
 
 ```yaml
 # .truss/flows/ci.yaml
 version: "1"
 
-pipeline:
+flow:
   name: ci
   concurrency: 3
 
@@ -333,8 +335,8 @@ Every run gets two folders that outlive the run. Steps find them in variables:
 TRUSS creates both before the first step and never empties them. What goes in is up to your
 steps: a package cache, a downloaded toolchain. There are no cache keys, no saving or
 restoring, and no clean workspace per run; the folders are plain directories. For `truss run`,
-`<name>` is the pipeline's file name without its extension; for the daemon, it is the registered
-name. `.truss/state/` is ignored by git, as described in [Project layout](#state-folders). Pipeline
+`<name>` is the flow's file name without its extension; for the daemon, it is the registered
+name. `.truss/state/` is ignored by git, as described in [Project layout](#state-folders). Flow
 `env` can override both variables like any other. To clear a cache see
 [the daemon page](daemon.md#data-and-cache-folders).
 
@@ -438,7 +440,7 @@ because of the jobs it needs (or an earlier failure) is skipped as a whole.
 ```yaml
 # .truss/flows/sync-photos.yaml
 version: "1"
-pipeline:
+flow:
   name: sync-photos
   overlap: skip
 on:
@@ -452,7 +454,7 @@ steps:
 
 **A morning job that still runs when the laptop opens late**
 
-Add this `on:` block to a pipeline file in `.truss/flows/`:
+Add this `on:` block to a flow file in `.truss/flows/`:
 
 ```yaml
 on:
@@ -466,7 +468,7 @@ on:
 ```yaml
 # .truss/flows/release.yaml
 version: "1"
-pipeline:
+flow:
   name: release
   concurrency: 4
 steps:
@@ -480,6 +482,6 @@ steps:
 
 Not built yet, so do not rely on them:
 
-- **Shared project defaults.** A project-wide `env` and a default `timeout` that every pipeline in
-  the project inherits, and later a default shell once a pipeline can choose one (it cannot
-  today). Each pipeline sets its own. The project file does not hold these.
+- **Shared project defaults.** A project-wide `env` and a default `timeout` that every flow in
+  the project inherits, and later a default shell once a flow can choose one (it cannot
+  today). Each flow sets its own. The project file does not hold these.

@@ -163,7 +163,7 @@ func mappingFields(n *yaml.Node, where string, allowed map[string]bool) (map[str
 		// A pipeline pasted into truss.yaml is the likely mistake; say so first.
 		for i := 0; i+1 < len(n.Content); i += 2 {
 			if key := n.Content[i].Value; key == "steps" || key == "jobs" {
-				return nil, errors.New("this file is project metadata and holds no " + key + "; pipelines live in .truss/flows/")
+				return nil, errors.New("this file is project metadata and holds no " + key + "; flows live in .truss/flows/")
 			}
 		}
 	}
@@ -197,15 +197,15 @@ type NotFoundError struct {
 }
 
 func (e *NotFoundError) Error() string {
-	return fmt.Sprintf("no pipeline named %q in .truss/flows; %s", e.Name, AvailableText(e.Available))
+	return fmt.Sprintf("no flow named %q in .truss/flows; %s", e.Name, AvailableText(e.Available))
 }
 
 // AvailableText says which pipeline names exist, for error messages.
 func AvailableText(names []string) string {
 	if len(names) == 0 {
-		return "there are no pipelines (put <name>.yaml files in .truss/flows/)"
+		return "there are no flows (put <name>.yaml files in .truss/flows/)"
 	}
-	return "available pipelines: " + strings.Join(names, ", ")
+	return "available flows: " + strings.Join(names, ", ")
 }
 
 // Names returns the names of flows, in order.
@@ -251,15 +251,15 @@ func (p Project) Flows() ([]Flow, error) {
 	}
 	f, err := os.Open(dir) // #nosec G304 -- Lstat showed a real folder
 	if err != nil {
-		return nil, fmt.Errorf("list pipelines: %w", err)
+		return nil, fmt.Errorf("list flows: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 	entries, err := f.ReadDir(MaxFlowEntries + 1)
 	if err != nil && !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("list pipelines: %w", err)
+		return nil, fmt.Errorf("list flows: %w", err)
 	}
 	if len(entries) > MaxFlowEntries {
-		return nil, fmt.Errorf(".truss/flows holds more than %d entries; keep pipelines in a smaller folder", MaxFlowEntries)
+		return nil, fmt.Errorf(".truss/flows holds more than %d entries; keep flows in a smaller folder", MaxFlowEntries)
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 
@@ -291,7 +291,7 @@ func checkClashes(files []string) error {
 		stem, _ := flowStem(file)
 		key := strings.ToLower(stem)
 		if other, dup := seen[key]; dup {
-			return fmt.Errorf("%s and %s in .truss/flows have the same pipeline name; keep one", other, file)
+			return fmt.Errorf("%s and %s in .truss/flows have the same flow name; keep one", other, file)
 		}
 		seen[key] = file
 	}
@@ -381,12 +381,12 @@ type State struct {
 func StateFor(root, flow string) (State, error) {
 	switch {
 	case flow == "" || flow == "." || flow == "..":
-		return State{}, fmt.Errorf("the pipeline file name %q cannot name a state folder", flow)
+		return State{}, fmt.Errorf("the flow file name %q cannot name a state folder", flow)
 	case strings.ContainsAny(flow, "/\\<>:\"|?*\x00") || strings.ContainsFunc(flow, func(r rune) bool { return r < ' ' }):
-		return State{}, errors.New("the pipeline file name has characters that cannot be used in a state folder name")
+		return State{}, errors.New("the flow file name has characters that cannot be used in a state folder name")
 	}
 	if err := checkStemSafe(flow); err != nil {
-		return State{}, fmt.Errorf("the pipeline file name cannot name a state folder: %w", err)
+		return State{}, fmt.Errorf("the flow file name cannot name a state folder: %w", err)
 	}
 	truss := filepath.Join(root, trussDir)
 	state := filepath.Join(truss, stateDir)

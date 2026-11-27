@@ -1,0 +1,25 @@
+{
+  "work_id": "feature--024-flow-vocabulary",
+  "title": "One vocabulary: flow",
+  "tier": 2,
+  "branch": "feature/024-flow-vocabulary",
+  "status": "in_review",
+  "step": "PR opened; reviews approve",
+  "steps_done": [
+    "implemented",
+    "reviewer and spec-reviewer findings fixed"
+  ],
+  "requirements": [],
+  "specs": [
+    "specs/024-flow-vocabulary/spec.md"
+  ],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [
+    "delta review, then PR"
+  ],
+  "pr": "https://github.com/afri-bit/truss/pull/27",
+  "created": "2026-11-25T15:21:34Z",
+  "updated": "2026-11-25T15:29:29Z"
+}

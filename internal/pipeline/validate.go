@@ -24,13 +24,13 @@ func Validate(p Pipeline) error {
 		if !p.concurrencyBad {
 			text = strconv.Quote(strconv.Itoa(p.Concurrency))
 		}
-		return fmt.Errorf("pipeline concurrency must be a whole number of at least 1, got %s", text)
+		return fmt.Errorf("flow concurrency must be a whole number of at least 1, got %s", text)
 	}
 	if len(p.issues) > 0 {
 		return errors.New(p.issues[0])
 	}
 	if p.hasSteps && p.hasJobs {
-		return fmt.Errorf("a pipeline has either steps or jobs, not both")
+		return fmt.Errorf("a flow has either steps or jobs, not both")
 	}
 	if p.hasJobs || len(p.Jobs) > 0 {
 		return validateJobs(p.Jobs)
@@ -39,7 +39,7 @@ func Validate(p Pipeline) error {
 		return fmt.Errorf("steps must be a list")
 	}
 	if len(p.Steps) == 0 {
-		return fmt.Errorf("pipeline must contain one or more steps")
+		return fmt.Errorf("a flow must contain one or more steps")
 	}
 	index, err := validateSteps(p.Steps, "")
 	if err != nil {
@@ -73,7 +73,7 @@ func validateSteps(steps []Step, job string) (map[string]int, error) {
 
 func validateJobs(jobs []Job) error {
 	if len(jobs) == 0 {
-		return fmt.Errorf("pipeline must contain one or more jobs")
+		return fmt.Errorf("a flow must contain one or more jobs")
 	}
 	index := make(map[string]int, len(jobs))
 	nodes := make([]Step, len(jobs))

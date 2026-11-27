@@ -187,7 +187,7 @@ func (m *Manager) restore(rec *record) error {
 		return errors.New("a local run is never queued")
 	}
 	if m.opts.Resolve == nil {
-		return errors.New("no way to read its pipeline")
+		return errors.New("no way to read its flow")
 	}
 	def, dir, err := m.opts.Resolve(rec.run.Pipeline)
 	if err != nil {
@@ -238,7 +238,7 @@ func (m *Manager) Submit(req Request) (api.Run, error) {
 		rec.run.Steps = append(rec.run.Steps, api.Step{ID: s.ID, Needs: s.Needs, Status: api.StepPending})
 	}
 	if req.Definition.Overlap == pipeline.OverlapSkip && m.activeFor(req.Pipeline) > 0 {
-		m.finish(rec, api.RunSkipped, "another run of this pipeline was still active")
+		m.finish(rec, api.RunSkipped, "another run of this flow was still active")
 		return m.add(rec)
 	}
 	rec.run.Status = api.RunQueued

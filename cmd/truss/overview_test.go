@@ -142,10 +142,10 @@ func TestFlows_ABrokenFlowDoesNotHideTheOthers(t *testing.T) {
 	s := projectSession(t, false)
 	s.write(".truss/flows/bad.yaml", "version: \"1\"\npipeline: {name: bad}\nsteps: []\n")
 	out := s.ok("flows")
-	if !strings.Contains(out, "INVALID: pipeline must contain one or more steps") || !strings.Contains(out, "demo") {
+	if !strings.Contains(out, "INVALID: a flow must contain one or more steps") || !strings.Contains(out, "demo") {
 		t.Fatalf("flows =\n%s", out)
 	}
-	if code, _, errOut := s.truss("flows", "show", "bad"); code != 1 || !strings.Contains(errOut, "bad.yaml: pipeline must contain") {
+	if code, _, errOut := s.truss("flows", "show", "bad"); code != 1 || !strings.Contains(errOut, "bad.yaml: a flow must contain") {
 		t.Fatalf("show bad: %d %q", code, errOut)
 	}
 	// The JSON says why and the exit code says it too.
@@ -280,7 +280,7 @@ func TestRuns_ShowFilterAndLimit(t *testing.T) {
 	}
 
 	last := s.ok("runs", "show", "last")
-	for _, want := range []string{"Pipeline   ok", "Status     succeeded", "Steps      1 (1 succeeded)", "hello", "#"} {
+	for _, want := range []string{"Flow       ok", "Status     succeeded", "Steps      1 (1 succeeded)", "hello", "#"} {
 		if !strings.Contains(last, want) {
 			t.Errorf("runs show last lacks %q:\n%s", want, last)
 		}
@@ -299,6 +299,10 @@ func TestRuns_ShowFilterAndLimit(t *testing.T) {
 	if r := decode[api.Run](t, s.ok("runs", "show", "last", "--pipeline", "demo", "--json")); r.ID != failedID {
 		t.Fatalf("last of demo = %s, want %s", r.ID, failedID)
 	}
+	// Spec 024: --flow is the name; --pipeline stays accepted.
+	if r := decode[api.Run](t, s.ok("runs", "show", "last", "--flow", "demo", "--json")); r.ID != failedID {
+		t.Fatalf("last of demo with --flow = %s, want %s", r.ID, failedID)
+	}
 }
 
 func TestRuns_BadInputIsExplained(t *testing.T) {
@@ -309,7 +313,9 @@ func TestRuns_BadInputIsExplained(t *testing.T) {
 		"cannot be used together":     {"runs", "--active", "--status", "failed"},
 		"no run \"nope\"":             {"runs", "show", "nope"},
 		"there are no runs yet":       {"runs", "show", "last"},
-		"only goes with the id":       {"runs", "show", "abc", "--pipeline", "x"},
+		"--pipeline only goes with":   {"runs", "show", "abc", "--pipeline", "x"},
+		"--flow only goes with":       {"runs", "show", "abc", "--flow", "x"},
+		"give one":                    {"runs", "show", "last", "--flow", "x", "--pipeline", "x"},
 		"--limit must be a whole num": {"runs", "--limit", "x"},
 	}
 	for want, args := range cases {
@@ -325,7 +331,7 @@ func TestRuns_APipelineNamedShowStillWorks(t *testing.T) {
 	s.write("show.yaml", "version: \"1\"\npipeline: {name: show}\nsteps: [{id: a, run: echo}]\n")
 	s.ok("register", "show.yaml")
 	s.ok("trigger", "show", "--follow")
-	if out := s.ok("runs", "show"); !strings.Contains(out, "show      succeeded") {
+	if out := s.ok("runs", "show"); !regexp.MustCompile(`(?m)^\S+ +show +succeeded`).MatchString(out) {
 		t.Fatalf("runs show = %q", out)
 	}
 }
@@ -335,7 +341,7 @@ func TestPipelines_ShowAndJSON(t *testing.T) {
 	s.ok("register", "--all")
 	s.truss("trigger", "demo", "--follow")
 	out := s.ok("pipelines", "show", "demo")
-	for _, want := range []string{"Pipeline      demo", "Project       demo", "Concurrency   2", "0 9 * * 1-5 (UTC, missed: skip), next ", "STEPS", "test  <- lint, build", "LATEST RUNS", "failed"} {
+	for _, want := range []string{"Flow          demo", "Project       demo", "Concurrency   2", "0 9 * * 1-5 (UTC, missed: skip), next ", "STEPS", "test  <- lint, build", "LATEST RUNS", "failed"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("pipelines show lacks %q:\n%s", want, out)
 		}
@@ -349,7 +355,7 @@ func TestPipelines_ShowAndJSON(t *testing.T) {
 	if s.ok("pipelines", "list") != s.ok("pipelines") {
 		t.Error("`pipelines list` differs from `pipelines`")
 	}
-	if code, _, errOut := s.truss("pipelines", "show", "nope"); code != 1 || !strings.Contains(errOut, `no pipeline named "nope"`) {
+	if code, _, errOut := s.truss("pipelines", "show", "nope"); code != 1 || !strings.Contains(errOut, `no flow named "nope"`) {
 		t.Fatalf("unknown: %d %q", code, errOut)
 	}
 }

@@ -14,13 +14,13 @@ truss
 ├── status                      is everything fine?
 ├── dashboard                   the same, as a live screen
 ├── project / projects          this folder's project / every project the daemon knows
-├── flows  list | show | graph  the pipeline files of this project
+├── flows  list | show | graph  the flow files of this project
 ├── pipelines  list | show      what the daemon has registered
 ├── schedules                   what runs when
-├── runs  [<pipeline>] | show   what ran, and how it went
+├── runs  [<flow>]     | show   what ran, and how it went
 ├── daemon  start | stop | status | logs | install | uninstall | run
 ├── desktop                     open TRUSS Desktop
-├── run / validate              run or check a pipeline here, without the daemon
+├── run / validate              run or check a flow here, without the daemon
 ├── register / unregister / pause / resume / trigger / cancel / logs
 ├── secret  set | list | remove
 ├── env                         where TRUSS keeps its files
@@ -135,7 +135,7 @@ stage 3
   [publish]  <- compile, test
 ```
 
-Steps in one stage do not wait for each other, so they can run together up to the pipeline's
+Steps in one stage do not wait for each other, so they can run together up to the flow's
 `concurrency`. To see the project itself, use `truss project`; to see every project the daemon has
 been told about, use `truss projects`:
 
@@ -169,7 +169,7 @@ Command
   npm publish --registry "$REGISTRY_URL"
 
 NAME             SOURCE            STATE        VALUE
-REGION           pipeline          set          eu
+REGION           flow              set          eu
 STAGE            step              set          staging
 NPM_TOKEN        secret store      missing      -
 TRUSS_DATA_DIR   truss run         set          .truss/state/ci/data
@@ -180,7 +180,7 @@ TRUSS_TRIGGER    daemon            daemon only  -
 REGISTRY_URL     host environment  not set      -
 ```
 
-The table lists what the step can use and where each value comes from: your file (`pipeline`,
+The table lists what the step can use and where each value comes from: your file (`flow`,
 `job <id>` or `step`, whichever layer wins), the secret store, TRUSS itself, or your shell
 (`host environment`). Here two things are wrong before anything runs: the secret `NPM_TOKEN` is
 `missing`, and the command reads `$REGISTRY_URL`, which nothing sets.
@@ -243,13 +243,13 @@ name a step declares as a secret.
 
 ```console
 $ truss schedules
-NEXT RUN             PIPELINE  CRON         ZONE   MISSED  STATE
+NEXT RUN             FLOW      CRON         ZONE   MISSED  STATE
 2026-11-17 09:20:00  poll      */5 * * * *  local  skip    active
 2026-11-18 01:30:00  nightly   30 1 * * *   UTC    run     active
 ```
 
-The list is across every registered pipeline, soonest first. A paused pipeline still shows its
-schedules, marked `paused`. `truss pipelines show <name>` gives one pipeline in full: its file,
+The list is across every registered flow, soonest first. A paused flow still shows its
+schedules, marked `paused`. `truss pipelines show <name>` gives one flow in full: its file,
 schedules, steps and five latest runs.
 
 ## How did that run go?
@@ -260,7 +260,7 @@ Find runs, then look at one:
 $ truss runs --status failed --limit 5
 $ truss runs show last
 Run        20261117-091500-a1b2c3
-Pipeline   nightly
+Flow       nightly
 Status     failed: nightly failed at test (exit 3)
 Trigger    schedule
 Created    2026-11-17 09:15:00 (4m 2s ago)
@@ -287,7 +287,7 @@ fails, use `truss trigger <name> --follow`, which exits `1` unless the run succe
 
 | Option of `truss runs` | Meaning |
 |---|---|
-| `<pipeline>` | Only runs of that pipeline. |
+| `<flow>` | Only runs of that flow. |
 | `--status <s>` | `queued`, `running`, `succeeded`, `failed`, `cancelled` or `skipped`. |
 | `--active` | Queued or running runs. |
 | `--limit <n>` | At most `n` runs (default 30). |
@@ -318,10 +318,10 @@ goes to standard output. Lists are `[]` when empty, never `null`. Daemon objects
 # fail a script when the daemon is down
 truss daemon status --json >/dev/null || { echo "daemon down" >&2; exit 1; }
 
-# names of the pipelines whose last run failed
+# names of the flows whose last run failed
 truss pipelines --json | jq -r '.[] | select(.last_run.status == "failed") | .name'
 
-# the newest failed run of one pipeline
+# the newest failed run of one flow
 truss runs nightly --status failed --limit 1 --json | jq -r '.[0].id'
 
 # flows of this project the daemon does not have yet
@@ -348,7 +348,7 @@ to standard error.
 - A command that needs the daemon says `start it with: truss daemon start` when none runs.
 - A command that needs a project and finds no `truss.yaml` names the folder it looked in. Run TRUSS
   from the project folder.
-- A flow name that is not found lists the flows that exist; an unknown pipeline or run id points to the command that lists them.
+- A flow name that is not found lists the flows that exist; an unknown flow or run id points to the command that lists them.
 - `truss run --help` and `truss validate --help` are not help. Their argument is a flow name or a path.
 
 ## Safe to read
@@ -362,4 +362,4 @@ line. `--json` has the exact text, escaped. Wide characters (CJK, emoji) can sti
 
 The commands of earlier versions keep their names, options, output and exit codes. New words
 (`show`, `list`, `logs`) are only taken where the old command would have printed usage, so a script
-that worked keeps working. A pipeline named `show` still works: `truss runs show` lists its runs.
+that worked keeps working. A flow named `show` still works: `truss runs show` lists its runs.

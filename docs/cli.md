@@ -28,11 +28,11 @@ daemon. Most take `--json` for scripts ([Using the command line](cli-guide.md#sc
 | `truss flows show <name\|path> [--json]` | One flow: concurrency, overlap, the **names** of environment variables and secrets (never values), schedules, and a table of its steps. | optional |
 | `truss flows show <name\|path> <step> [--values] [--json]` | One step: its command, the steps before and after it, its settings, and a table of the environment it can use with where each value comes from. Secrets show as `set` or `missing`; token-like names show `***`. `--values` also shows the values of host variables the command reads. See [Debugging a step](cli-guide.md#debugging-a-step). | optional |
 | `truss flows graph <name\|path>` | The steps in stages; steps in one stage can run together. | no |
-| `truss pipelines show <name> [--json]` | One registered pipeline: state, file, project, schedules with next run, steps, latest runs. | needed |
-| `truss schedules [list] [--json]` | Every schedule of every registered pipeline, soonest first. | needed |
+| `truss pipelines show <name> [--json]` | One registered flow: state, file, project, schedules with next run, steps, latest runs. | needed |
+| `truss schedules [list] [--json]` | Every schedule of every registered flow, soonest first. | needed |
 | `truss env` | The TRUSS home and where it comes from, the registry, secrets file and daemon log paths, the project, and whether a daemon runs. No secret name or value. | optional |
 
-`flows` reads files and `pipelines` asks the daemon: a flow is a file in `.truss/flows/`, a pipeline
+`flows` reads files and `pipelines` asks the daemon: a flow is a file in `.truss/flows/`, a flow
 is a file the daemon has registered ([glossary](GLOSSARY.md)).
 
 ```console
@@ -58,12 +58,12 @@ exits `1`.
 
 | Command | What it does |
 |---|---|
-| `truss run <name\|path>` | Runs a pipeline right here and waits for it. With no argument it is an error: it lists the pipelines in `.truss/flows/` and exits `1`. |
+| `truss run <name\|path>` | Runs a flow right here and waits for it. With no argument it is an error: it lists the flows in `.truss/flows/` and exits `1`. |
 | `truss run <name\|path> --track` | The same, and also reports the run to the daemon, which must be running. |
 | `truss run <name\|path> --step <id> [--with-needs]` | A debug run: only that step. The steps it needs are not run and the step starts as if they had succeeded; `--with-needs` runs them too. The log is printed, and the saved `run.log` is not replaced. |
 | `truss run <name\|path> --from <id>` | A debug run of the step and every step that needs it. Jobs after the step keep their `if`; only the job of the step you named loses it. |
 | `truss run <name\|path> --env NAME=VALUE` | Sets or replaces an environment variable for the steps that run, above everything in the file. Repeatable; works with a whole run too. A secret cannot be set this way: use `truss secret set`. |
-| `truss validate [<name\|path>]` | Checks one pipeline and prints its schedules and steps. With no argument, checks `truss.yaml` and every pipeline. Runs nothing. |
+| `truss validate [<name\|path>]` | Checks one flow and prints its schedules and steps. With no argument, checks `truss.yaml` and every flow. Runs nothing. |
 | `truss help`, `truss version` | Usage and version. |
 
 A debug run does not combine with `--track`. `--step`, `--from`, `--with-needs` and `--env` are options of `run`, so a file named like one runs as `./--step`. When a `truss run` fails, it prints on standard error the command to run only the failed step (`to run only this step again: truss run <flow> --step <id>`), without your `--env` options. The command is printed only when the flow and the id are plain words: letters, digits and `_ . / : @ + = -` (and `\` on Windows), not starting with `-`, `@` or `=`.
@@ -93,18 +93,18 @@ machine the steps run on), a step, or the summary. Everything a step prints is l
 steps run at the same time. Desktop shows the same text as one card per step
 ([Desktop](desktop.md#the-run-page)). A step that is retried gets a heading for each attempt.
 
-### Pipeline arguments
+### Flow arguments
 
-`run`, `validate` and `register` take a pipeline as a name or a path:
+`run`, `validate` and `register` take a flow as a name or a path:
 
 - An argument that contains `/` or `\`, or ends in `.yaml` or `.yml`, is a **path**, relative to
   the working directory. `truss run ./ci/build.yaml` runs that file.
 - Any other argument is a **name**: the file name in `.truss/flows/` without its extension.
   `truss run build` runs `.truss/flows/build.yaml`.
-- A name that is not found lists the available pipelines. TRUSS never tries the other reading.
-- `truss run` with no argument is an error. It lists the pipelines and exits `1`.
-- `truss run truss.yaml` is an error: `truss.yaml` is the project file, not a pipeline. A
-  `truss.yaml` in another folder, given by path, runs like any other pipeline file.
+- A name that is not found lists the available flows. TRUSS never tries the other reading.
+- `truss run` with no argument is an error. It lists the flows and exits `1`.
+- `truss run truss.yaml` is an error: `truss.yaml` is the project file, not a flow. A
+  `truss.yaml` in another folder, given by path, runs like any other flow file.
 - A command that needs a project and finds no `truss.yaml` in the working directory names the
   folder it looked in. TRUSS never looks in parent folders.
 
@@ -129,7 +129,7 @@ encrypted**. On Linux and macOS the file is `0600` and TRUSS refuses to read it 
 On Windows there are no mode bits: the file relies on the permissions it inherits from your user
 profile, and TRUSS does not change them; if you point `TRUSS_HOME` at a shared folder, nothing
 checks it. On systems other than Linux, macOS and Windows, and when standard input is not a console
-(some Windows terminals such as Git Bash), `set` reads the value from standard input with no prompt. The daemon has no API for secrets. Pipelines use them
+(some Windows terminals such as Git Bash), `set` reads the value from standard input with no prompt. The daemon has no API for secrets. Flows use them
 through [`secrets`](pipeline-reference.md#secrets).
 
 ## The daemon
@@ -164,30 +164,30 @@ tracking as run 20261112-090000-a1b2c3 (truss logs 20261112-090000-a1b2c3)
 2026-11-12 09:00:00 ==== Setup: the environment the steps run in ====
 ...
 $ truss runs
-RUN                     PIPELINE     STATUS     TRIGGER  CREATED              DURATION  NOTE
+RUN                     FLOW         STATUS     TRIGGER  CREATED              DURATION  NOTE
 20261112-090000-a1b2c3  hello-world  succeeded  local    2026-11-12 09:00:00  0.1s
 ```
 
 - `--track` needs the daemon. Without one it exits `1` with `start it with: truss daemon start`
   and runs nothing. The CLI never starts the daemon.
-- The pipeline's output and exit code do not depend on tracking. If the daemon goes away while the
+- The flow's output and exit code do not depend on tracking. If the daemon goes away while the
   run executes, you get one `warning:` on stderr and the run finishes normally.
 - Cancelling the run in Desktop or with `truss cancel <run-id>` stops it: it exits `1` with
   `error: cancelled from the daemon`.
 - The id is printed on stderr, so stdout stays the run log.
 
-## Registered pipelines
+## Registered flows
 
-A command that takes a registered pipeline's name accepts the name its file gives it now or the name
+A command that takes a registered flow's name accepts the name its file gives it now or the name
 it was registered under; they differ after a rename in the file (see [Registering
-pipelines](daemon.md#registering-pipelines)).
+flows](daemon.md#registering-flows)).
 
 | Command | What it does |
 |---|---|
-| `truss register <name> [--name <name>]`, `truss register <path> [--name <name>]`, `truss register --all` | Tells the daemon about a pipeline. The name defaults to `pipeline.name`, or the file name. `--all` registers every pipeline in the project, each under its pipeline name; `--name` is not allowed with `--all`. With no argument it is an error that lists the pipelines. When every pipeline registered, `--all` prints `registered N pipelines (M with schedules)` (`registered 1 pipeline (M with schedules)` for one). It prints no summary when a pipeline failed. |
+| `truss register <name> [--name <name>]`, `truss register <path> [--name <name>]`, `truss register --all` | Tells the daemon about a flow. The name defaults to `flow.name`, or the file name. `--all` registers every flow in the project, each under its flow name; `--name` is not allowed with `--all`. With no argument it is an error that lists the flows. When every flow registered, `--all` prints `registered N flows (M with schedules)` (`registered 1 flow (M with schedules)` for one). It prints no summary when a flow failed. |
 | `truss unregister <name>` | Forgets it. The file and the run history stay. |
 | `truss pipelines [list] [--json]` | Lists registrations with state, next scheduled run and last run. `--json` prints the daemon's objects. See also `pipelines show`, above. |
-| `truss pause <name>` | Stops the pipeline's schedules. Manual runs still work. |
+| `truss pause <name>` | Stops the flow's schedules. Manual runs still work. |
 | `truss resume <name>` | Restarts them, counting from now. |
 
 ## Runs
@@ -196,14 +196,14 @@ pipelines](daemon.md#registering-pipelines)).
 |---|---|
 | `truss trigger <name>` | Requests a run and prints its id. |
 | `truss trigger <name> --follow` | Requests a run, prints its log live, and exits `0` only if it succeeded. |
-| `truss runs [<name>]` | Lists the newest runs, optionally of one pipeline. |
+| `truss runs [<name>]` | Lists the newest runs, optionally of one flow. |
 | `truss runs [<name>] --status <s> --active --limit <n> --json` | Filters the list. `<s>` is `queued`, `running`, `succeeded`, `failed`, `cancelled` or `skipped`; `--active` means queued or running; the default limit is 30. |
-| `truss runs show <run-id\|last> [--pipeline <name>] [--json]` | One run: status, reason, trigger, times, each step's status, exit code, time and attempt, and a timeline. `last` is the newest run (of `--pipeline` if given). Exits `0` even for a failed run: it answers a question. |
+| `truss runs show <run-id\|last> [--flow <name>] [--json]` | One run: status, reason, trigger, times, each step's status, exit code, time and attempt, and a timeline. `last` is the newest run (of `--flow` if given; `--pipeline` is its older name). Exits `0` even for a failed run: it answers a question. |
 | `truss logs <run-id>` | Prints a run log. `--follow` keeps printing until the run ends. |
 | `truss cancel <run-id>` | Ends a queued or running run. |
-| `truss cache clear <name>` | Empties the pipeline's cache folder. Needs no daemon. For a daemon run, see [the daemon page](daemon.md#data-and-cache-folders). |
+| `truss cache clear <name>` | Empties the flow's cache folder. Needs no daemon. For a daemon run, see [the daemon page](daemon.md#data-and-cache-folders). |
 
-A pipeline may be called `show`: `truss runs show` alone still lists its runs, and only `truss runs show <something>`
+A flow may be called `show`: `truss runs show` alone still lists its runs, and only `truss runs show <something>`
 shows a run.
 
 `-f` is short for `--follow`. Interrupting a followed log stops the printing, not the run.

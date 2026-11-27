@@ -41,7 +41,7 @@ test("demo mode shows sample data, says so, and never calls an API", async () =>
     await page.locator("h1", { hasText: "Dashboard" }).waitFor();
     await page.locator("#conn", { hasText: "Demo data" }).waitFor();
     await page.locator("#daemon", { hasText: "Demo mode" }).waitFor();
-    await poll(async () => Number(await page.locator(".tile", { hasText: "Pipelines registered" }).locator(".num").textContent()) >= 9, "sample pipelines");
+    await poll(async () => Number(await page.locator(".tile", { hasText: "Flows registered" }).locator(".num").textContent()) >= 9, "sample pipelines");
     assert.ok(Number(await page.locator(".tile", { hasText: "Running now" }).locator(".num").textContent()) >= 1, "a run is live");
 
     // Pipelines: an invalid file and a paused schedule are part of the sample.

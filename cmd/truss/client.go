@@ -101,9 +101,9 @@ func (in invocation) register(ctx context.Context) int {
 		}
 	}
 	if all && code == 0 {
-		noun := "pipelines"
+		noun := "flows"
 		if done == 1 {
-			noun = "pipeline"
+			noun = "flow"
 		}
 		fmt.Fprintf(in.stdout, "registered %d %s (%d with schedules)\n", done, noun, scheduled)
 	}

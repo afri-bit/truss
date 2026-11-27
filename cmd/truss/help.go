@@ -34,7 +34,7 @@ truss flows show <name|path> [--json]
 truss flows show <name|path> <step> [--values] [--json]
 truss flows graph <name|path>
 
-Read the pipeline files of the project. Nothing runs and the daemon is optional.
+Read the flow files of the project. Nothing runs and the daemon is optional.
   list    every flow with its steps, schedules and whether the daemon has it
   show    one flow: concurrency, overlap, environment and secret names (never
           values), schedules and a table of its steps
@@ -48,19 +48,19 @@ Read the pipeline files of the project. Nothing runs and the daemon is optional.
 	"pipelines": `truss pipelines [list] [--json]
 truss pipelines show <name> [--json]
 
-The pipelines registered with the daemon. show adds the file, the project, the
+The flows registered with the daemon (pipelines is the older name of flows). show adds the file, the project, the
 schedules with their next run, the steps and the latest runs. Needs the daemon.
 `,
 	"schedules": `truss schedules [list] [--json]
 
-Every schedule of every registered pipeline, soonest first. Needs the daemon.
+Every schedule of every registered flow, soonest first. Needs the daemon.
 `,
-	"runs": `truss runs [<pipeline>] [--status <s>] [--active] [--limit <n>] [--json]
-truss runs show <run-id|last> [--pipeline <name>] [--json]
+	"runs": `truss runs [<flow>] [--status <s>] [--active] [--limit <n>] [--json]
+truss runs show <run-id|last> [--flow <name>] [--json]
 
 List runs, newest first, or show one: its status, each step's exit code and time,
-and a timeline of when the steps ran. "last" is the newest run, of one pipeline
-with --pipeline. --status is one of queued, running, succeeded, failed, cancelled,
+and a timeline of when the steps ran. "last" is the newest run, of one flow
+with --flow (--pipeline also works). --status is one of queued, running, succeeded, failed, cancelled,
 skipped. --active means queued or running. Needs the daemon.
 `,
 	"daemon": `truss daemon start|stop|status|run|install|uninstall|logs
@@ -84,7 +84,7 @@ truss run <name|path> --step <id> [--with-needs]
 truss run <name|path> --from <id>
 truss run <name|path> [...] --env NAME=VALUE
 
-Run a pipeline here, without the daemon. --track also reports it to the daemon.
+Run a flow here, without the daemon. --track also reports it to the daemon.
 
 Debug a flow: --step runs one step (the steps it needs are not run, as if they had
 succeeded; --with-needs runs them too), --from runs a step and every step that needs
@@ -97,7 +97,7 @@ Inspect a step first: truss flows show <name> <step>
 `,
 	"validate": `truss validate [<name|path>]
 
-Check truss.yaml and every pipeline, or one pipeline, without running it.
+Check truss.yaml and every flow, or one flow, without running it.
 `,
 	"secret": `truss secret set|list|remove <name>
 
@@ -106,7 +106,7 @@ Store a secret (the value is read from standard input), list names, or remove on
 	"register": `truss register <name|path> [--name <name>]
 truss register --all
 
-Make a pipeline known to the daemon. Related: unregister, pause, resume.
+Make a flow known to the daemon. Related: unregister, pause, resume.
 `,
 	"trigger": `truss trigger <name> [--follow]
 
@@ -126,7 +126,7 @@ Open TRUSS Desktop. --no-open prints the address only; --demo shows sample data.
 `,
 	"cache": `truss cache clear <name>
 
-Remove a pipeline's cache folder; the next run recreates it. Needs no daemon.
+Remove a flow's cache folder; the next run recreates it. Needs no daemon.
 `,
 }
 

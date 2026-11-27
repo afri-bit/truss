@@ -258,9 +258,9 @@ func (d *Daemon) tick() {
 		switch dec.Action {
 		case scheduler.Missed:
 			if _, err := d.runs.Record(dec.Pipeline, api.TriggerSchedule, dec.ScheduledFor, api.RunSkipped, missedReason); err != nil {
-				d.logf("pipeline %s: record missed schedule: %v", dec.Pipeline, err)
+				d.logf("flow %s: record missed schedule: %v", dec.Pipeline, err)
 			}
-			d.logf("pipeline %s: skipped the schedule %q for %s (missed)", dec.Pipeline, dec.Cron, stamp(dec.ScheduledFor))
+			d.logf("flow %s: skipped the schedule %q for %s (missed)", dec.Pipeline, dec.Cron, stamp(dec.ScheduledFor))
 		case scheduler.Fire, scheduler.CatchUp:
 			trigger := api.TriggerSchedule
 			if dec.Action == scheduler.CatchUp {
@@ -268,10 +268,10 @@ func (d *Daemon) tick() {
 			}
 			run, err := d.submit(dec.Pipeline, trigger, dec.ScheduledFor)
 			if err != nil {
-				d.logf("pipeline %s: schedule %q could not start a run: %v", dec.Pipeline, dec.Cron, err)
+				d.logf("flow %s: schedule %q could not start a run: %v", dec.Pipeline, dec.Cron, err)
 				continue
 			}
-			d.logf("pipeline %s: schedule %q for %s -> run %s (%s)", dec.Pipeline, dec.Cron, stamp(dec.ScheduledFor), run.ID, run.Status)
+			d.logf("flow %s: schedule %q for %s -> run %s (%s)", dec.Pipeline, dec.Cron, stamp(dec.ScheduledFor), run.ID, run.Status)
 		}
 	}
 	// Remember the moment right away after acting, so a crash cannot make
@@ -321,7 +321,7 @@ func (d *Daemon) load(e registry.Entry, since time.Time, force bool) *definition
 			cur.armed, cur.scheduled, cur.named = old.armed, old.scheduled, old.named
 		}
 		if statErr != nil {
-			cur.err = fmt.Errorf("read pipeline definition: %w", statErr)
+			cur.err = fmt.Errorf("read flow file: %w", statErr)
 		} else {
 			cur.modTime, cur.size = info.ModTime(), info.Size()
 			cur.def, cur.plan, cur.err = readDefinition(e.Path)
@@ -380,11 +380,11 @@ func (d *Daemon) logChanged(e registry.Entry, old, cur *definition) {
 	case cur.err != nil && old.err != nil && cur.err.Error() == old.err.Error():
 		return
 	case cur.err != nil:
-		d.logf("pipeline %s: file changed and does not load: %v", e.Name, cur.err)
+		d.logf("flow %s: file changed and does not load: %v", e.Name, cur.err)
 	case cur.def.Name != e.Name:
-		d.logf("pipeline %s: file changed, read again (it is named %s)", e.Name, cur.def.Name)
+		d.logf("flow %s: file changed, read again (it is named %s)", e.Name, cur.def.Name)
 	default:
-		d.logf("pipeline %s: file changed, read again", e.Name)
+		d.logf("flow %s: file changed, read again", e.Name)
 	}
 }
 
@@ -416,7 +416,7 @@ func workingDir(path string) string {
 func readDefinition(path string) (pipeline.Pipeline, pipeline.ExecutionPlan, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return pipeline.Pipeline{}, pipeline.ExecutionPlan{}, fmt.Errorf("read pipeline definition: %w", err)
+		return pipeline.Pipeline{}, pipeline.ExecutionPlan{}, fmt.Errorf("read flow file: %w", err)
 	}
 	if !info.Mode().IsRegular() {
 		return pipeline.Pipeline{}, pipeline.ExecutionPlan{}, fmt.Errorf("%s is not a regular file", path)
@@ -455,7 +455,7 @@ func (d *Daemon) submit(name, trigger string, scheduledFor time.Time) (api.Run, 
 	}
 	data, cache := d.opts.Home.PipelineData(name), d.opts.Home.PipelineCache(name)
 	if err := os.MkdirAll(cache, 0o700); err != nil {
-		err = fmt.Errorf("prepare the data folder of pipeline %s: %w", name, err)
+		err = fmt.Errorf("prepare the data folder of flow %s: %w", name, err)
 		if trigger != api.TriggerManual {
 			_, _ = d.runs.Record(name, trigger, scheduledFor, api.RunFailed, err.Error())
 		}

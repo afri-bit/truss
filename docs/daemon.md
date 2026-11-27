@@ -1,6 +1,6 @@
 # The daemon
 
-`truss run` is enough to run a pipeline by hand. The daemon adds everything that needs someone
+`truss run` is enough to run a flow by hand. The daemon adds everything that needs someone
 to stay awake: schedules, a queue, a history, and one place where the CLI and
 [TRUSS Desktop](desktop.md) see the same state. It works like Docker's: a background service
 on your machine, and a CLI that talks to it.
@@ -36,19 +36,19 @@ schedule 0 9 * * 1-5: next run 2026-11-13 09:00:00
 $ truss trigger nightly --follow       # do not wait for 09:00
 ...
 $ truss runs
-RUN                     PIPELINE  STATUS     TRIGGER  CREATED              DURATION  NOTE
+RUN                     FLOW      STATUS     TRIGGER  CREATED              DURATION  NOTE
 20261112-101502-a3f9c1  nightly   succeeded  manual   2026-11-12 10:15:02  4.2s
 
 $ truss desktop                        # the same, with a UI
 ```
 
-## Registering pipelines
+## Registering flows
 
-Your pipeline files live in your projects. The daemon cannot guess where, so you tell it:
+Your flow files live in your projects. The daemon cannot guess where, so you tell it:
 
-- `truss register <name>` registers a pipeline in the project you are in, from `.truss/flows/`.
-- `truss register <path>` registers any pipeline file.
-- `truss register --all` registers every pipeline in the project, each under its pipeline name. Their schedules start firing. The daemon re-reads a registered file on every run, so a later `git pull` changes what scheduled runs execute. When every pipeline registered, the command prints `registered N pipelines (M with schedules)`. It prints no summary when a pipeline failed.
+- `truss register <name>` registers a flow in the project you are in, from `.truss/flows/`.
+- `truss register <path>` registers any flow file.
+- `truss register --all` registers every flow in the project, each under its flow name. Their schedules start firing. The daemon re-reads a registered file on every run, so a later `git pull` changes what scheduled runs execute. When every flow registered, the command prints `registered N flows (M with schedules)`. It prints no summary when a flow failed.
 
 A registration is only a name and a path. The layout of a project is in
 [Project layout](pipeline-reference.md#project-layout).
@@ -58,7 +58,7 @@ A registration is only a name and a path. The layout of a project is in
   done. There is nothing to restart or register again.
 - **Renaming.** A registration keeps the name it was registered under (its *registered name*) for
   good: its history, schedules and [data folder](#data-and-cache-folders) hang on it. When the file
-  changes `pipeline.name`, the daemon shows the new name, keeps every earlier run with the flow, and
+  changes `flow.name`, the daemon shows the new name, keeps every earlier run with the flow, and
   accepts either name in every command. The API reports the registered name as `registered_name`
   while the two differ, and each run as `registered_pipeline`.
   - A new name that another registration holds or claims is not taken, and neither is a name you
@@ -73,11 +73,11 @@ A registration is only a name and a path. The layout of a project is in
     system reports file times late there.
 - A flow in a project (`.truss/flows/` under a folder with a `truss.yaml`) runs its steps in the
   project root. Any other file runs in its own directory, as `truss run` does there. Either one
-  can be changed with `pipeline.workdir`.
+  can be changed with `flow.workdir`.
 - A name that is already registered for another file is reported, with a hint to use `--name`
   for a different name.
 - **Trust.** A repository is a weaker trust root than a file you picked yourself. `register --all`
-  takes every pipeline a project holds, including files someone else committed. Use `--all` only
+  takes every flow a project holds, including files someone else committed. Use `--all` only
   in projects you trust.
 - A file that becomes invalid is shown as `invalid` with the reason. It does not run until fixed.
 - `truss unregister <name>` removes the registration. Nothing is deleted; old runs and the
@@ -101,7 +101,7 @@ that time was *missed*: the laptop was closed, the machine was off, or the daemo
 So a job planned for 09:00 does not start at 11:00 just because you opened the laptop late,
 unless you asked for that.
 
-`truss pause <name>` stops a pipeline's schedules. Times that pass while it is paused are not
+`truss pause <name>` stops a flow's schedules. Times that pass while it is paused are not
 missed runs; `resume` counts from now.
 
 ## Concurrency
@@ -110,20 +110,20 @@ Three limits work together:
 
 | Limit | Set with | Default | Controls |
 |---|---|---|---|
-| Runs at once | `truss daemon start --max-runs <n>` | 4 | How many runs execute in parallel, across all pipelines. |
-| Overlap | `pipeline.overlap` in the file | `queue` | Whether two runs of the *same* pipeline may overlap, wait, or the second is skipped. |
-| Steps at once | `pipeline.concurrency` in the file | 1 | How many steps of one run execute in parallel. |
+| Runs at once | `truss daemon start --max-runs <n>` | 4 | How many runs execute in parallel, across all flows. |
+| Overlap | `flow.overlap` in the file | `queue` | Whether two runs of the *same* flow may overlap, wait, or the second is skipped. |
+| Steps at once | `flow.concurrency` in the file | 1 | How many steps of one run execute in parallel. |
 
 Runs that cannot start yet are `queued` and start in the order they were requested. The queue
 survives a restart: stop the daemon and start it again, and the queued runs start, still in
-order. A queued run whose pipeline was unregistered or no longer loads in the meantime is closed
+order. A queued run whose flow was unregistered or no longer loads in the meantime is closed
 as `failed` with the reason.
 
 ## Run states
 
 | Run | Meaning |
 |---|---|
-| `queued` | Waiting for a free slot or for an earlier run of the same pipeline. |
+| `queued` | Waiting for a free slot or for an earlier run of the same flow. |
 | `running` | Steps are executing. |
 | `succeeded` | No step failed the run. A step with `continue-on-error` can fail and the run still succeeds. |
 | `failed` | A step failed; the note names it. |
@@ -146,7 +146,7 @@ to retry it is `running` and keeps the exit code of its last attempt.
 
 Steps start from the environment the daemon was started with, plus the file's `env`, plus
 `TRUSS_RUN_ID`, `TRUSS_PIPELINE`, `TRUSS_TRIGGER`, `TRUSS_DATA_DIR` and `TRUSS_CACHE_DIR`.
-If a pipeline needs a variable from your
+If a flow needs a variable from your
 shell profile, start the daemon from a shell that has it, or set it in the file. A daemon
 [started at login](#starting-at-login) has the login environment instead of a shell's.
 
@@ -154,12 +154,12 @@ shell profile, start the daemon from a shell that has it, or set it in the file.
 
 The daemon creates `~/.truss/pipelines/<name>/` and its `cache/` folder before a run starts, and
 gives their paths to every step as `TRUSS_DATA_DIR` and `TRUSS_CACHE_DIR`. Nothing in them is
-ever deleted by TRUSS: not when a run ends, not when you unregister the pipeline. Registering
+ever deleted by TRUSS: not when a run ends, not when you unregister the flow. Registering
 the same name again finds the old contents.
 
 To empty a cache run `truss cache clear <name>`. It needs no daemon and works for a name that
-is no longer registered. Do it while no run of that pipeline is active. To remove all of a
-pipeline's data, delete `~/.truss/pipelines/<name>` yourself; nothing else refers to it.
+is no longer registered. Do it while no run of that flow is active. To remove all of a
+flow's data, delete `~/.truss/pipelines/<name>` yourself; nothing else refers to it.
 `truss run` keeps its folders in `.truss/state/<name>/data` of the project; delete that folder
 to clear them. Those folders are ignored by git (see [Project layout](pipeline-reference.md#state-folders)).
 
@@ -171,12 +171,12 @@ directory is private to your user.
 | Path | Holds |
 |---|---|
 | `daemon.json` | Address, process id and access token of the running daemon. Removed on stop. |
-| `registry.json` | Registered pipelines. |
+| `registry.json` | Registered flows. |
 | `secrets.json` | Stored secrets, plain text, `0600` (see [`truss secret`](cli.md#secrets)). Read at the start of each run that declares secrets. |
 | `clock.json` | When the scheduler last looked at the clock. |
 | `runs/<run-id>/run.json` | One run: status, times, steps. |
 | `runs/<run-id>/run.log` | Its run log, the same format `truss run` prints. |
-| `pipelines/<name>/` | The pipeline's data folder, `TRUSS_DATA_DIR`. |
+| `pipelines/<name>/` | The flow's data folder, `TRUSS_DATA_DIR`. |
 | `pipelines/<name>/cache/` | Its cache folder, `TRUSS_CACHE_DIR`. |
 | `daemon.log` | The daemon's own log when started with `daemon start`. |
 
@@ -270,7 +270,7 @@ Things to know:
 
 A daemon started at login has the login environment, **not** what your interactive shell profile
 (`.bashrc`, `.zshrc`, PowerShell profile) sets up. `PATH` is shorter and variables you export in
-the profile are missing. Steps inherit this environment. Prefer putting what a pipeline needs in
+the profile are missing. Steps inherit this environment. Prefer putting what a flow needs in
 the file's `env` ([reference](pipeline-reference.md)). To give the daemon more:
 
 - **Linux.** A drop-in survives re-running `install`:
@@ -295,9 +295,9 @@ while the daemon stops).
 | `GET /status` | Version, address, counts, limits. |
 | `GET /metrics` | CPU and memory of the machine, the daemon and each running step, plus ten minutes of host history. See [Resource figures](#resource-figures). |
 | `POST /shutdown` | Stops the daemon. |
-| `GET /pipelines` | Registered pipelines with schedules, step graph and last run. `name` is the name the file gives; `registered_name` is the name it was registered under, when that differs. Any call that takes `{name}` accepts either. |
+| `GET /pipelines` | Registered flows with schedules, step graph and last run. `name` is the name the file gives; `registered_name` is the name it was registered under, when that differs. Any call that takes `{name}` accepts either. |
 | `POST /pipelines` | Registers `{"path": "/abs/file.yaml", "name": "optional"}`. |
-| `GET /pipelines/{name}` | One pipeline. |
+| `GET /pipelines/{name}` | One flow. |
 | `DELETE /pipelines/{name}` | Unregisters it. |
 | `POST /pipelines/{name}/pause`, `/resume` | Stops or restarts its schedules. |
 | `POST /pipelines/{name}/runs` | Requests a run; answers `202` with the run. |
@@ -348,10 +348,10 @@ See [spec 015](../specs/015-resource-metrics/spec.md) and
 
 ### Tracked local runs
 
-`truss run --track` runs a pipeline in your shell, as `truss run` does, and reports it through
+`truss run --track` runs a flow in your shell, as `truss run` does, and reports it through
 the four `POST /runs...` endpoints above, so it appears in `truss runs` and Desktop with the
 trigger `local`. The daemon never starts it and it does not use a slot of `--max-runs` or block
-the overlap policy of a pipeline of the same name. Only a `local` run that is `running` accepts
+the overlap policy of a flow of the same name. Only a `local` run that is `running` accepts
 reports; anything else answers `409`. Bodies over the limits answer `413`; a log append must start
 where the log ends (`409`), and repeating one the log already holds is harmless.
 

@@ -290,9 +290,9 @@ func TestLayout_ValidateChecksTheProjectAndEveryFlow(t *testing.T) {
 	}
 	for _, want := range []string{
 		"truss.yaml is valid: project demo",
-		".truss/flows/build.yaml is valid: pipeline hello-world, 1 steps, concurrency 1",
-		".truss/flows/named.yaml is valid: pipeline other-name, 1 steps, concurrency 1",
-		`note: .truss/flows/named.yaml declares the pipeline name "other-name", not "named"`,
+		".truss/flows/build.yaml is valid: flow hello-world, 1 steps, concurrency 1",
+		".truss/flows/named.yaml is valid: flow other-name, 1 steps, concurrency 1",
+		`note: .truss/flows/named.yaml declares the flow name "other-name", not "named"`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("stdout lacks %q:\n%s", want, out)
@@ -314,7 +314,7 @@ func TestLayout_ValidateReportsABrokenFlowAndGoesOn(t *testing.T) {
 func TestLayout_ValidateWithNoFlowsFolderSaysSo(t *testing.T) {
 	dir := newProject(t, nil)
 	code, out, errOut := invoke(t, dir, []string{"validate"})
-	if code != 0 || !strings.Contains(out, "truss.yaml is valid") || !strings.Contains(out, "no pipelines") {
+	if code != 0 || !strings.Contains(out, "truss.yaml is valid") || !strings.Contains(out, "no flows") {
 		t.Fatalf("exit = %d, stdout = %q, stderr = %q", code, out, errOut)
 	}
 }
@@ -331,12 +331,12 @@ func TestLayout_ValidateRejectsAPipelineInTrussYAML(t *testing.T) {
 func TestLayout_ValidateOneByNameAndByPath(t *testing.T) {
 	dir := newProject(t, map[string]string{"build.yaml": validPipeline(echoHello())})
 	code, out, _ := invoke(t, dir, []string{"validate", "build"})
-	if code != 0 || !strings.HasPrefix(out, ".truss/flows/build.yaml is valid: pipeline hello-world, 1 steps, concurrency 1\n") {
+	if code != 0 || !strings.HasPrefix(out, ".truss/flows/build.yaml is valid: flow hello-world, 1 steps, concurrency 1\n") {
 		t.Fatalf("by name: exit = %d, stdout = %q", code, out)
 	}
 	rel := filepath.Join(".truss", "flows", "build.yaml")
 	code, out, _ = invoke(t, dir, []string{"validate", rel})
-	if code != 0 || !strings.HasPrefix(out, rel+" is valid: pipeline hello-world") {
+	if code != 0 || !strings.HasPrefix(out, rel+" is valid: flow hello-world") {
 		t.Fatalf("by path: exit = %d, stdout = %q", code, out)
 	}
 	if code, _, errOut := invoke(t, dir, []string{"validate", "nope"}); code != 1 || !strings.Contains(errOut, "build") {
@@ -508,7 +508,7 @@ func TestLayout_RegisterAllPrintsASummary(t *testing.T) {
 	if !strings.Contains(out, "registered plain (") || !strings.Contains(out, "registered timed (") {
 		t.Fatalf("per-flow lines changed: %q", out)
 	}
-	if !strings.HasSuffix(out, "registered 2 pipelines (1 with schedules)\n") {
+	if !strings.HasSuffix(out, "registered 2 flows (1 with schedules)\n") {
 		t.Fatalf("summary missing: %q", out)
 	}
 }
@@ -518,7 +518,7 @@ func TestLayout_RegisterAllSummaryIsSingularForOne(t *testing.T) {
 	writeFile(t, filepath.Join(s.dir, "truss.yaml"), projectFile)
 	writeFile(t, filepath.Join(s.dir, ".truss", "flows", "plain.yaml"), "version: \"1\"\nsteps:\n  - id: a\n    run: "+echoHello()+"\n")
 	out := s.ok("register", "--all")
-	if !strings.HasSuffix(out, "registered 1 pipeline (0 with schedules)\n") {
+	if !strings.HasSuffix(out, "registered 1 flow (0 with schedules)\n") {
 		t.Fatalf("summary: %q", out)
 	}
 }
@@ -530,7 +530,7 @@ func TestLayout_CRLFFilesAreAccepted(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "truss.yaml"), crlf(projectFile))
 	writeFile(t, filepath.Join(dir, ".truss", "flows", "build.yaml"), crlf(validPipeline(echoHello())))
 	code, out, errOut := invoke(t, dir, []string{"validate", "build"})
-	if code != 0 || !strings.Contains(out, "build.yaml is valid: pipeline hello-world") {
+	if code != 0 || !strings.Contains(out, "build.yaml is valid: flow hello-world") {
 		t.Fatalf("exit = %d, stdout = %q, stderr = %q", code, out, errOut)
 	}
 	if code, _, errOut := invoke(t, dir, []string{"validate"}); code != 0 {

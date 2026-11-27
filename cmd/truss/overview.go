@@ -619,10 +619,10 @@ func (in invocation) schedules(ctx context.Context) int {
 		return writeJSON(in.stdout, rows)
 	}
 	if len(rows) == 0 {
-		fmt.Fprintln(in.stdout, "no schedules: no registered pipeline has an on.schedule entry")
+		fmt.Fprintln(in.stdout, "no schedules: no registered flow has an on.schedule entry")
 		return 0
 	}
-	out := [][]string{{"NEXT RUN", "PIPELINE", "CRON", "ZONE", "MISSED", "STATE"}}
+	out := [][]string{{"NEXT RUN", "FLOW", "CRON", "ZONE", "MISSED", "STATE"}}
 	for _, r := range rows {
 		zone, state := r.Timezone, "active"
 		if zone == "" {

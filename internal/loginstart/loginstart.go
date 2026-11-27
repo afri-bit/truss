@@ -190,7 +190,7 @@ func (h Host) hasMarker(path string) (bool, error) {
 // because a second daemon would exit and be restarted in a loop.
 func Install(ctx context.Context, h Host, s Spec, startNow bool) (Result, error) {
 	if h.Elevated {
-		return Result{}, errors.New("do not run this as root or administrator: the daemon would run every pipeline with those rights and the login item would land in the wrong account. Run it as your own user")
+		return Result{}, errors.New("do not run this as root or administrator: the daemon would run every flow with those rights and the login item would land in the wrong account. Run it as your own user")
 	}
 	if s.User == "" {
 		s.User = h.User
