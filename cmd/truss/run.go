@@ -38,17 +38,17 @@ type runSpec struct {
 // opts.from it runs only part of the flow and saves no run log (spec 023).
 func runLocal(ctx context.Context, pos []string, opts runOptions, cwd string, env []string, stdout, stderr io.Writer) int {
 	if len(pos) == 0 {
-		fmt.Fprintf(stderr, "error: %s\n", needFlowError(cwd, "run").Error())
+		printError(stderr, needFlowError(cwd, "run").Error())
 		return 1
 	}
 	file, err := resolveFile(cwd, pos[0])
 	if err != nil {
-		fmt.Fprintf(stderr, "error: %s\n", err.Error())
+		printError(stderr, err.Error())
 		return 1
 	}
 	l, err := load(ctx, file)
 	if err != nil {
-		fmt.Fprintf(stderr, "error: %s\n", err.Error())
+		printError(stderr, err.Error())
 		return 1
 	}
 	def := l.def
@@ -56,7 +56,7 @@ func runLocal(ctx context.Context, pos []string, opts runOptions, cwd string, en
 	if opts.debug() || len(opts.env) > 0 {
 		sliced, err := pipeline.Slice(def, opts.selection())
 		if err != nil {
-			fmt.Fprintf(stderr, "error: %s\n", clean(err.Error()))
+			printError(stderr, clean(err.Error()))
 			return 1
 		}
 		if spec.debug {
@@ -79,7 +79,7 @@ func runLocal(ctx context.Context, pos []string, opts runOptions, cwd string, en
 	if opts.track {
 		tr, err = startTracking(ctx, def, env, stderr, cancelRun)
 		if err != nil {
-			fmt.Fprintf(stderr, "error: %s\n", err.Error())
+			printError(stderr, err.Error())
 			return 1
 		}
 	}
@@ -145,7 +145,7 @@ func execute(ctx, runCtx context.Context, def pipeline.Pipeline, stem, cwd strin
 	if spec.debug {
 		log = runlog.New(stdout, time.Now)
 	} else if log, tmp, tmpPath, dest, err = openRunLog(st.Dir, stdout, extra); err != nil {
-		fmt.Fprintf(stderr, "error: %s\n", err.Error())
+		printError(stderr, err.Error())
 		return 1, api.RunFailed, err.Error()
 	}
 	discard := func() {
@@ -178,7 +178,7 @@ func execute(ctx, runCtx context.Context, def pipeline.Pipeline, stem, cwd strin
 	if run.Status != pipeline.StatusSucceeded {
 		log.SummaryFailed(len(run.Steps), run.Failure())
 		if err := commit(); err != nil {
-			fmt.Fprintf(stderr, "error: %s\n", err.Error())
+			printError(stderr, err.Error())
 		}
 		if run.FailedStep != "" && !spec.debug {
 			fmt.Fprintln(stderr, rerunHint(spec.flow, run.FailedStep))
@@ -187,7 +187,7 @@ func execute(ctx, runCtx context.Context, def pipeline.Pipeline, stem, cwd strin
 	}
 	log.SummarySucceeded(len(run.Steps))
 	if err := commit(); err != nil {
-		fmt.Fprintf(stderr, "error: %s\n", err.Error())
+		printError(stderr, err.Error())
 		return 1, api.RunFailed, err.Error()
 	}
 	return 0, api.RunSucceeded, ""
@@ -201,10 +201,10 @@ func interrupted(ctx context.Context, tr *tracker, err error, stderr io.Writer) 
 		fmt.Fprintln(stderr, "error: cancelled from the daemon")
 		return 1, api.RunCancelled, "cancelled from the daemon"
 	case ctx.Err() != nil:
-		fmt.Fprintf(stderr, "error: %s\n", err.Error())
+		printError(stderr, err.Error())
 		return 1, api.RunCancelled, "interrupted"
 	}
-	fmt.Fprintf(stderr, "error: %s\n", err.Error())
+	printError(stderr, err.Error())
 	return 1, api.RunFailed, err.Error()
 }
 

@@ -668,7 +668,7 @@ func TestUnknownInvocation_PrintsUsageOnStderr(t *testing.T) {
 		if code != 1 {
 			t.Fatalf("args %q exit = %d", args, code)
 		}
-		if errOut != wantUsage {
+		if !isUsageError(errOut) || !strings.Contains(errOut, "usage: truss") {
 			t.Fatalf("args %q stderr = %q", args, errOut)
 		}
 		if out != "" {

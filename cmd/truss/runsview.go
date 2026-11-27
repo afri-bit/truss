@@ -154,9 +154,15 @@ func (in invocation) runs(ctx context.Context) int {
 	if len(in.args) >= 2 && in.args[0] == "show" {
 		return in.runShow(ctx, in.args[1:])
 	}
-	pos, flags, err := options(in.args, []string{"status", "limit"}, []string{"json", "active"})
+	pos, flags, err := options(in.args, []string{"status", "limit", "n"}, []string{"json", "active"})
 	if err != nil || len(pos) > 1 {
 		return in.usage()
+	}
+	if n, ok := flags["n"]; ok {
+		if _, both := flags["limit"]; both {
+			return in.fail(errors.New("-n and --limit are the same option; give one"))
+		}
+		flags["limit"] = n
 	}
 	limit := defaultRuns
 	if text, ok := flags["limit"]; ok {

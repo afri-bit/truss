@@ -1,0 +1,26 @@
+{
+  "work_id": "feature--025-cli-tidy",
+  "title": "A neat command line",
+  "tier": 2,
+  "branch": "feature/025-cli-tidy",
+  "status": "in_review",
+  "step": "all review findings fixed; PR",
+  "steps_done": [
+    "implemented",
+    "reviewer and portability findings fixed",
+    "security findings fixed"
+  ],
+  "requirements": [],
+  "specs": [
+    "specs/025-cli-tidy/spec.md"
+  ],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [
+    "delta and security review, then PR"
+  ],
+  "pr": "https://github.com/afri-bit/truss/pull/28",
+  "created": "2026-11-25T15:28:03Z",
+  "updated": "2026-11-25T15:53:36Z"
+}

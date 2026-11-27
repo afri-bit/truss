@@ -55,7 +55,7 @@ schedules with their next run, the steps and the latest runs. Needs the daemon.
 
 Every schedule of every registered flow, soonest first. Needs the daemon.
 `,
-	"runs": `truss runs [<flow>] [--status <s>] [--active] [--limit <n>] [--json]
+	"runs": `truss runs [<flow>] [--status <s>] [--active] [-n|--limit <n>] [--json]
 truss runs show <run-id|last> [--flow <name>] [--json]
 
 List runs, newest first, or show one: its status, each step's exit code and time,
@@ -124,6 +124,25 @@ End a queued or running run.
 
 Open TRUSS Desktop. --no-open prints the address only; --demo shows sample data.
 `,
+	"completion": `truss completion bash|zsh|fish|powershell
+
+Print a script that completes commands, subcommands and the flow names of this
+folder's project. Load it once per shell, or add the line to your shell profile:
+  bash        eval "$(truss completion bash)"
+  zsh         eval "$(truss completion zsh)"
+  fish        truss completion fish | source
+  PowerShell  truss completion powershell | Out-String | Invoke-Expression
+`,
+	"exit-codes": `truss help exit-codes
+
+  0   success: the command did what it was asked, or the run succeeded
+  1   anything else: an error, a usage error, a failed, cancelled or
+      interrupted run, a run that could not start, or (truss daemon status)
+      a daemon that is not running
+
+Read commands such as truss runs show exit 0 for a failed run: they answered.
+Errors go to standard error as "error: ..." with an optional "hint: ..." line.
+`,
 	"cache": `truss cache clear <name>
 
 Remove a flow's cache folder; the next run recreates it. Needs no daemon.
@@ -152,7 +171,10 @@ func (in invocation) help(topic []string) int {
 	}
 	text, ok := helpTopics[key]
 	if !ok {
-		return in.usage()
+		if contains(commands, key) {
+			return in.usage() // a command without a topic, such as help itself
+		}
+		return in.unknownCommand(key)
 	}
 	fmt.Fprint(in.stdout, text)
 	return 0

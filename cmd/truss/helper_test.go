@@ -141,3 +141,12 @@ func pollFile(path string, d time.Duration) bool {
 	}
 	return false
 }
+
+// isUsageError reports whether stderr is a usage error: an error line and a
+// usage line (spec 025), or the whole usage list.
+func isUsageError(errOut string) bool {
+	if errOut == usageText {
+		return true
+	}
+	return strings.HasPrefix(errOut, "error: ") && strings.Contains(errOut, "\nusage: truss ")
+}
