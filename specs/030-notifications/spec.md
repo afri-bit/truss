@@ -30,17 +30,31 @@ email later.
   on Windows. The title and text are passed as arguments or environment, never as code.
 - **FR-004** Webhook URLs are `https://`, `http://` to this machine only, or `secret:NAME` (read from
   the secret store when sending; it must hold such a URL); no user name or password in the URL.
-  Messages never quote a URL. Formats: `slack` and `teams` (`{"text"}`), `discord` (`{"content"}`),
-  `generic` (the outcome as JSON). One retry after 2 seconds on a server error or no answer; none
-  on a client error.
+  Messages never quote a URL. Formats: `slack` (`{"text"}`, with `&`, `<` and `>` escaped so a name
+  cannot mention or link), `teams` (`{"text"}`), `discord` (`{"content"}`, mentions off), `generic`
+  (the outcome as JSON). A redirect is a failure, never followed (it could carry the URL's token
+  elsewhere). One retry after 2 seconds on a server error or no answer; none on a client error.
 - **FR-005** `run` is a command for the host shell, started in the project root (the file's folder
   outside a project) with the daemon's environment and `TRUSS_NOTIFY_FLOW`, `_RUN_ID`, `_STATUS`,
-  `_REASON`, `_TRIGGER`, `_TITLE`, `_TEXT`.
-- **FR-006** Each channel gives up after 15 seconds. A notification that fails is written to the
-  daemon log (`flow <name>: notification of run <id> not sent: ...`) and never changes the run.
+  `_REASON`, `_TRIGGER`, `_TITLE`, `_TEXT`, in a process tree of its own that is ended as a whole
+  at the deadline. Its output is not logged: it may print what its environment holds.
+- **FR-006** Each channel has its own 15 seconds, retries included. A notification that fails is
+  written to the daemon log (`flow <name>: notification of run <id> not sent: ...`) and never
+  changes the run. When the daemon stops it gives notifications in flight 5 seconds, then stops
+  them. The reason of a run may name local paths and goes to every channel.
 - **FR-007** The daemon notifies for every run of a registered flow that ends, missed schedules
-  included. `truss run --notify` notifies for a local run (run id `local`, trigger `local`, no
-  previous run); without a notify block it says so.
+  included, using the last notify block that loaded, so a flow whose file breaks still notifies
+  about the runs that fail because of it. Runs tracked from a shell (`truss run --track`) are not
+  notified by the daemon. `truss run --notify` notifies for a local run (run id `local`, trigger
+  `local`, no previous run) with the file's block, also for a debug run or with `--env`; without a
+  block it says so; after Ctrl-C it sends nothing, and Ctrl-C while sending stops it.
+
+## Limits
+
+A success after a missed schedule is not "recovered": a missed schedule never counts as the
+previous run. Desktop notifications need a desktop session: `notify-send` on Linux, permission
+for notifications on macOS (they may be held back by Focus), and on Windows a logged-in user
+(Windows PowerShell 5.1 shows the toast; a service in session 0 cannot).
 
 ## Not done
 

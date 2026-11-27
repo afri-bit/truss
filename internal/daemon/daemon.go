@@ -80,6 +80,9 @@ type definition struct {
 	// named is pipeline.name from the last reading that got that far. It
 	// survives a file that stops loading, so the name shown does not jump back.
 	named string
+	// notify is the notify block of the last definition that loaded: a file
+	// that stops loading still notifies about the runs it fails (spec 030).
+	notify *pipeline.Notify
 	// checked is when the file was last looked at, by the clock of this machine.
 	checked time.Time
 	// armed holds the schedules given to the scheduler: those of the last
@@ -115,6 +118,11 @@ type Daemon struct {
 	// counts those that did not fit.
 	finished chan finishedRun
 	dropped  *atomic.Int64
+	// notifyCtx ends when the daemon stops; notifying counts the
+	// notifications being sent (spec 030).
+	notifyCtx  context.Context
+	stopNotify context.CancelFunc
+	notifying  sync.WaitGroup
 
 	stopOnce sync.Once
 	stop     chan struct{}
@@ -195,6 +203,7 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 		finished:    finished,
 		dropped:     dropped,
 	}
+	d.notifyCtx, d.stopNotify = context.WithCancel(context.Background())
 	d.metrics = metrics.New(metrics.Options{Self: os.Getpid(), Targets: d.metricTargets})
 
 	// Count schedules from the last moment a daemon watched the clock, so the
@@ -271,6 +280,16 @@ loop:
 	defer cancel()
 	_ = server.Shutdown(shutdownCtx)
 	d.runs.Close()
+	// Notifications still being sent get a few seconds, then are stopped.
+	waited := make(chan struct{})
+	go func() { d.notifying.Wait(); close(waited) }()
+	select {
+	case <-waited:
+	case <-time.After(5 * time.Second):
+		d.stopNotify()
+		<-waited
+	}
+	d.stopNotify()
 	d.saveClock(d.opts.Now())
 	_ = os.Remove(d.opts.Home.Endpoint())
 	d.logf("daemon stopped")
@@ -368,7 +387,11 @@ func (d *Daemon) load(e registry.Entry, since time.Time, force bool) *definition
 				cur.named = cur.def.Name
 			}
 		}
+		if old != nil {
+			cur.notify = old.notify
+		}
 		if cur.err == nil {
+			cur.notify = cur.def.Notify
 			cur.armed = cur.def.Schedules
 		}
 		d.defs[e.Name] = cur

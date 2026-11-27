@@ -67,3 +67,42 @@ func TestNotify_TheDaemonNotifiesAsTheFlowAsks(t *testing.T) {
 		t.Fatalf("a plain success notified: %v", lines)
 	}
 }
+
+// A flow whose file stops loading still notifies with its last valid block
+// (review of spec 030: the forgotten cron job that breaks must not be silent).
+func TestNotify_ABrokenFileStillNotifies(t *testing.T) {
+	ctx := context.Background()
+	d, c := boot(t, home.Dir(t.TempDir()), nil)
+	dir := t.TempDir()
+	log := filepath.Join(dir, "notified.txt")
+	tell := "echo $TRUSS_NOTIFY_STATUS >> \"" + log + "\""
+	if runtime.GOOS == "windows" {
+		tell = "echo %TRUSS_NOTIFY_STATUS%>> \"" + log + "\""
+	}
+	flow := writeDefinition(t, dir, "b.yaml", "version: \"1\"\nflow: {name: b}\nnotify:\n  run: '"+strings.ReplaceAll(tell, "'", "''")+"'\nsteps:\n  - id: a\n    run: echo ok\n")
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: flow}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if err := os.WriteFile(flow, []byte("version: \"1\"\nflow: {name: b}\nsteps: [oops\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	future := time.Now().Add(2 * time.Second)
+	_ = os.Chtimes(flow, future, future)
+	time.Sleep(200 * time.Millisecond) // the daemon notices the broken file
+	// A schedule records a run it cannot start as failed, as this does.
+	if _, err := d.runs.Record("b", api.TriggerSchedule, time.Now(), api.RunFailed, "the file does not load"); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		data, _ := os.ReadFile(log)
+		if strings.Contains(string(data), "failed") {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("a flow whose file broke did not notify")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}

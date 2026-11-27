@@ -297,14 +297,18 @@ notify:
   run over SSH may not.
 - **Webhook**: an `https://` address, or `secret:NAME` to keep the address in
   [the secret store](#secrets), as Slack and Discord addresses are secrets. `http://` is allowed only
-  to this machine. TRUSS posts once and tries again once on a server error. `generic` sends
-  `{flow, run_id, status, reason, trigger, previous_status, missed, finished_at}`.
+  to this machine. TRUSS posts once and tries again once on a server error, and never follows a
+  redirect. `generic` sends `{flow, run_id, status, reason, trigger, previous_status, missed,
+  finished_at}`. The reason can name folders of your machine.
 - **Run** is a command for the host shell, run in the project root with `TRUSS_NOTIFY_FLOW`,
   `TRUSS_NOTIFY_RUN_ID`, `TRUSS_NOTIFY_STATUS`, `TRUSS_NOTIFY_REASON`, `TRUSS_NOTIFY_TRIGGER`,
   `TRUSS_NOTIFY_TITLE` and `TRUSS_NOTIFY_TEXT`.
-- The daemon notifies for registered flows. `truss run --notify` notifies for a local run.
+- The daemon notifies for registered flows, also when the file stopped loading (with its last
+  valid `notify`). `truss run --notify` notifies for a local run; a run tracked with `--track` is
+  notified only by `--notify`.
 - A notification that cannot be sent is written to the daemon log (or shown by `truss run`). It
-  never changes the run's result. Each channel gives up after 15 seconds.
+  never changes the run's result. Each channel gives up after 15 seconds; a `run` command is ended
+  with everything it started.
 
 ## `env`
 

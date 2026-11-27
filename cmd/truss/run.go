@@ -93,7 +93,9 @@ func runLocal(ctx context.Context, pos []string, opts runOptions, cwd string, en
 		tr.finish(status, reason)
 	}
 	if opts.notify {
-		notifyLocal(def, status, reason, cmp.Or(spec.projectDir, workingRoot(cwd)), env, stderr)
+		// The block of the file as written: a debug run or --env builds a
+		// smaller flow without it.
+		notifyLocal(ctx, l.def.Name, l.def.Notify, status, reason, cmp.Or(spec.projectDir, filepath.Dir(file.path)), env, stderr)
 	}
 	return code
 }
@@ -101,13 +103,17 @@ func runLocal(ctx context.Context, pos []string, opts runOptions, cwd string, en
 // notifyLocal sends the flow's notifications for a local run with --notify
 // (spec 030). A failure to notify is reported and never changes the exit
 // code.
-func notifyLocal(def pipeline.Pipeline, status, reason, dir string, env []string, stderr io.Writer) {
-	if def.Notify == nil {
+func notifyLocal(ctx context.Context, flow string, n *pipeline.Notify, status, reason, dir string, env []string, stderr io.Writer) {
+	if n == nil {
 		fmt.Fprintln(stderr, "note: --notify: the flow has no notify block")
 		return
 	}
-	o := notify.Outcome{Flow: def.Name, RunID: "local", Status: status, Reason: reason, Trigger: api.TriggerLocal, Ended: time.Now()}
-	if !notify.Wanted(def.Notify, o) {
+	if ctx.Err() != nil {
+		fmt.Fprintln(stderr, "note: --notify: the run was interrupted; no notification sent")
+		return
+	}
+	o := notify.Outcome{Flow: flow, RunID: "local", Status: status, Reason: clean(reason), Trigger: api.TriggerLocal, Ended: time.Now()}
+	if !notify.Wanted(n, o) {
 		return
 	}
 	sender := notify.Sender{Secret: func(name string) (string, bool) {
@@ -117,10 +123,9 @@ func notifyLocal(def pipeline.Pipeline, status, reason, dir string, env []string
 		}
 		v, ok := all[name]
 		return v, ok
-	}, Shell: executor.ShellCommand, Dir: dir, Env: env}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*notify.Timeout+5*time.Second)
-	defer cancel()
-	for _, err := range sender.Send(ctx, def.Notify, o) {
+	}, Dir: dir, Env: env}
+	// A Ctrl-C while notifying stops it.
+	for _, err := range sender.Send(ctx, n, o) {
 		fmt.Fprintf(stderr, "note: notification not sent: %s\n", clean(err.Error()))
 	}
 }

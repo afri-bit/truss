@@ -7,16 +7,21 @@ package notify
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
+	"unicode/utf16"
 
+	"github.com/afri-bit/truss/internal/executor"
 	"github.com/afri-bit/truss/internal/pipeline"
 )
 
@@ -87,36 +92,40 @@ type Sender struct {
 	HTTP *http.Client
 	// Command starts a process; nil means exec.CommandContext.
 	Command func(ctx context.Context, name string, args ...string) *exec.Cmd
-	// Shell returns the host shell and its arguments for a run string.
-	Shell func(run string) (string, []string)
 	// Dir is where a notify run command starts.
 	Dir string
 	// Env is the environment of a notify run command.
 	Env []string
 }
 
-// Timeout bounds each channel of one notification.
-const Timeout = 15 * time.Second
+// Timeout bounds each channel of one notification, retries included.
+var Timeout = 15 * time.Second
 
 // Send delivers the outcome on every channel the block names and returns
-// one error per channel that failed. It does not retry more than once and
-// never takes longer than about twice Timeout.
+// one error per channel that failed. Each channel has its own Timeout, so
+// one that hangs does not take the time of the next; Send takes at most
+// three times Timeout and returns early when ctx ends.
 func (s Sender) Send(ctx context.Context, n *pipeline.Notify, o Outcome) []error {
 	var errs []error
-	if n.Desktop {
-		if err := s.desktop(ctx, o); err != nil {
-			errs = append(errs, fmt.Errorf("desktop: %w", err))
+	channel := func(name string, send func(context.Context) error) {
+		if ctx.Err() != nil {
+			errs = append(errs, fmt.Errorf("%s: not sent, stopped", name))
+			return
 		}
+		cctx, cancel := context.WithTimeout(ctx, Timeout)
+		defer cancel()
+		if err := send(cctx); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", name, err))
+		}
+	}
+	if n.Desktop {
+		channel("desktop", func(c context.Context) error { return s.desktop(c, o) })
 	}
 	if n.Webhook != nil {
-		if err := s.webhook(ctx, *n.Webhook, o); err != nil {
-			errs = append(errs, fmt.Errorf("webhook: %w", err))
-		}
+		channel("webhook", func(c context.Context) error { return s.webhook(c, *n.Webhook, o) })
 	}
 	if n.Run != "" {
-		if err := s.command(ctx, n.Run, o); err != nil {
-			errs = append(errs, fmt.Errorf("run: %w", err))
-		}
+		channel("run", func(c context.Context) error { return s.command(c, n.Run, o) })
 	}
 	return errs
 }
@@ -125,14 +134,12 @@ func (s Sender) cmd(ctx context.Context, name string, args ...string) *exec.Cmd 
 	if s.Command != nil {
 		return s.Command(ctx, name, args...)
 	}
-	return exec.CommandContext(ctx, name, args...) // #nosec G204 -- fixed tools; texts are arguments, never code
+	return exec.CommandContext(ctx, name, args...) // #nosec G204 G702 -- fixed tools; texts are arguments, never code
 }
 
 // desktop shows a notification with the system's own tool. The title and
 // text are passed as arguments or environment, never as code.
 func (s Sender) desktop(ctx context.Context, o Outcome) error {
-	ctx, cancel := context.WithTimeout(ctx, Timeout)
-	defer cancel()
 	var c *exec.Cmd
 	switch runtime.GOOS {
 	case "linux", "freebsd", "openbsd", "netbsd":
@@ -141,15 +148,29 @@ func (s Sender) desktop(ctx context.Context, o Outcome) error {
 		c = s.cmd(ctx, "osascript", "-e", "on run argv", "-e",
 			"display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", Title(o), Text(o))
 	case "windows":
-		c = s.cmd(ctx, "powershell", "-NoProfile", "-NonInteractive", "-Command", windowsToast)
+		ps := filepath.Join(os.Getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+		c = s.cmd(ctx, ps, "-NoProfile", "-NonInteractive", "-EncodedCommand", encodePowerShell(windowsToast))
 		c.Env = append(os.Environ(), "TRUSS_NOTIFY_TITLE="+Title(o), "TRUSS_NOTIFY_TEXT="+Text(o))
 	default:
 		return fmt.Errorf("no desktop notifications on %s", runtime.GOOS)
 	}
+	// A tool that leaves a child holding its output must not keep us.
+	c.WaitDelay = 2 * time.Second
 	if out, err := c.CombinedOutput(); err != nil {
-		return fmt.Errorf("%s: %w: %s", c.Path, err, firstLine(out))
+		return fmt.Errorf("%s: %w: %s", filepath.Base(c.Path), err, firstLine(out))
 	}
 	return nil
+}
+
+// encodePowerShell gives a script to -EncodedCommand: base64 of UTF-16LE,
+// so no quoting of the command line can change it.
+func encodePowerShell(script string) string {
+	u := utf16.Encode([]rune(script))
+	b := make([]byte, 2*len(u))
+	for i, r := range u {
+		binary.LittleEndian.PutUint16(b[2*i:], r)
+	}
+	return base64.StdEncoding.EncodeToString(b)
 }
 
 // windowsToast shows a toast with the texts from the environment, so they
@@ -167,10 +188,14 @@ $app = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell
 func Body(format string, o Outcome) ([]byte, error) {
 	line := Title(o) + " - " + Text(o)
 	switch format {
-	case "slack", "teams":
+	case "slack":
+		// Slack reads <...> as links and mentions; escape them.
+		return json.Marshal(map[string]string{"text": strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(line)})
+	case "teams":
 		return json.Marshal(map[string]string{"text": line})
 	case "discord":
-		return json.Marshal(map[string]string{"content": line})
+		// No @everyone or @here from a flow name or a reason.
+		return json.Marshal(map[string]any{"content": line, "allowed_mentions": map[string]any{"parse": []string{}}})
 	}
 	return json.Marshal(o)
 }
@@ -183,7 +208,7 @@ func (s Sender) webhook(ctx context.Context, w pipeline.Webhook, o Outcome) erro
 			v, found = s.Secret(name)
 		}
 		if !found {
-			return fmt.Errorf("the secret %s is not set (truss secret set %s)", name, name)
+			return fmt.Errorf("the secret %s is not set or the secret store cannot be read (truss secret list)", name)
 		}
 		if err := pipeline.CheckWebhookURL(v); err != nil || strings.HasPrefix(v, "secret:") {
 			return fmt.Errorf("the secret %s does not hold an https URL", name)
@@ -196,8 +221,13 @@ func (s Sender) webhook(ctx context.Context, w pipeline.Webhook, o Outcome) erro
 	}
 	client := s.HTTP
 	if client == nil {
-		client = &http.Client{Timeout: Timeout}
+		client = &http.Client{}
 	}
+	// A redirect could carry the URL, which holds a token, to another host,
+	// or the body to plain http: it counts as a failure.
+	noRedirect := *client
+	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	client = &noRedirect
 	var last error
 	for attempt := 0; attempt < 2; attempt++ {
 		if attempt > 0 {
@@ -222,6 +252,9 @@ func (s Sender) webhook(ctx context.Context, w pipeline.Webhook, o Outcome) erro
 		if resp.StatusCode < 300 {
 			return nil
 		}
+		if resp.StatusCode < 400 {
+			return fmt.Errorf("the webhook answered %d (a redirect, which TRUSS does not follow)", resp.StatusCode)
+		}
 		last = fmt.Errorf("the webhook answered %d", resp.StatusCode)
 		if resp.StatusCode < 500 {
 			return last // a client error does not get better on retry
@@ -230,20 +263,27 @@ func (s Sender) webhook(ctx context.Context, w pipeline.Webhook, o Outcome) erro
 	return last
 }
 
-// command runs the notify run string in the host shell with the outcome in
-// TRUSS_NOTIFY_* variables.
+// command runs the notify run string in the host shell, in a process tree
+// of its own that is ended as a whole at the deadline, with the outcome in
+// TRUSS_NOTIFY_* variables. Its output goes to no log: it may print what
+// its environment holds.
 func (s Sender) command(ctx context.Context, run string, o Outcome) error {
-	ctx, cancel := context.WithTimeout(ctx, Timeout)
-	defer cancel()
-	shell, args := s.Shell(run)
-	c := s.cmd(ctx, shell, args...)
-	c.Dir = s.Dir
-	c.Env = append(append([]string(nil), s.Env...),
+	env := append(append([]string(nil), s.Env...),
 		"TRUSS_NOTIFY_FLOW="+o.Flow, "TRUSS_NOTIFY_RUN_ID="+o.RunID, "TRUSS_NOTIFY_STATUS="+o.Status,
 		"TRUSS_NOTIFY_REASON="+o.Reason, "TRUSS_NOTIFY_TRIGGER="+o.Trigger,
 		"TRUSS_NOTIFY_TITLE="+Title(o), "TRUSS_NOTIFY_TEXT="+Text(o))
-	if out, err := c.CombinedOutput(); err != nil {
-		return fmt.Errorf("%w: %s", err, firstLine(out))
+	p, err := executor.Start(ctx, executor.Request{Run: run, Dir: s.Dir, Env: env, KillTimeout: 2 * time.Second})
+	if err != nil {
+		return err
+	}
+	res := p.Wait(ctx)
+	switch {
+	case ctx.Err() != nil:
+		return fmt.Errorf("stopped after %s", Timeout)
+	case res.Err != nil:
+		return res.Err
+	case res.ExitCode != nil && *res.ExitCode != 0:
+		return fmt.Errorf("exit %d", *res.ExitCode)
 	}
 	return nil
 }
