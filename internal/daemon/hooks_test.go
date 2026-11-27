@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -144,15 +145,110 @@ func TestHooks_ScanSkipsStateAndGit(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	snap, full := scan(root, pipelineFileHook("**"))
-	if full || len(snap) != 2 {
-		t.Fatalf("scan = %v", snap)
+	res := scan(root, pipelineFileHook("**"))
+	if res.limit != "" || len(res.files) != 2 {
+		t.Fatalf("scan = %+v", res)
 	}
-	if _, ok := snap["sub/b.txt"]; !ok {
-		t.Fatalf("scan = %v", snap)
+	if _, ok := res.files["sub/b.txt"]; !ok {
+		t.Fatalf("scan = %+v", res)
 	}
 }
 
 func pipelineFileHook(paths ...string) pipeline.FileHook {
 	return pipeline.FileHook{Paths: paths, Debounce: time.Second}
+}
+
+// Security review of spec 029: the scan is bounded, names with control
+// characters are left out, a linked base is not followed.
+func TestHooks_ScanIsBoundedAndCareful(t *testing.T) {
+	root := t.TempDir()
+	big := filepath.Join(root, "big")
+	for i := 0; i < 300; i++ {
+		d := filepath.Join(big, fmt.Sprintf("d%03d", i))
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for j := 0; j < 200; j++ {
+			if err := os.WriteFile(filepath.Join(d, fmt.Sprintf("f%03d.txt", j)), nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	res := scan(root, pipelineFileHook("big/**/*.never"))
+	if !strings.Contains(res.limit, "looked at more than") {
+		t.Fatalf("an unbounded walk: %+v", res.limit)
+	}
+	if runtime.GOOS != "windows" {
+		odd := filepath.Join(root, "inbox")
+		if err := os.MkdirAll(odd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(odd, "x\nevil.txt"), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(odd, "ok.txt"), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		res = scan(root, pipelineFileHook("inbox/"))
+		if len(res.files) != 1 || len(res.skipped) == 0 {
+			t.Fatalf("control characters: %+v", res)
+		}
+		if err := os.Symlink(odd, filepath.Join(root, "link")); err != nil {
+			t.Fatal(err)
+		}
+		res = scan(root, pipelineFileHook("link/"))
+		if len(res.files) != 0 || len(res.skipped) != 1 || !strings.Contains(res.skipped[0], "does not follow the link") {
+			t.Fatalf("link: %+v", res)
+		}
+	}
+}
+
+// Flows that start each other widely add at most one waiting run each.
+func TestHooks_RunHooksDoNotFanOut(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	dir := t.TempDir()
+	hooks := "on:\n  run:\n    - {flow: a, status: any}\n    - {flow: b, status: any}\n"
+	for _, name := range []string{"a", "b"} {
+		body := "version: \"1\"\nflow: {name: " + name + "}\n" + hooks + "steps:\n  - id: s\n    run: echo " + name + "\n"
+		if _, err := c.Register(ctx, api.RegisterRequest{Path: writeDefinition(t, dir, name+".yaml", body)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := c.Trigger(ctx, "a"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(3 * time.Second)
+	as, _ := c.Runs(ctx, "a", 0)
+	bs, _ := c.Runs(ctx, "b", 0)
+	if n := len(as) + len(bs); n > 2*(maxChain+1) {
+		t.Fatalf("%d runs: the hooks fanned out", n)
+	}
+}
+
+// Resuming takes a new baseline: changes made while paused start nothing,
+// changes after resuming do (review of spec 029).
+func TestHooks_ResumeCountsFromNow(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	dir := t.TempDir()
+	watched := mkdirs(t, filepath.Join(dir, "w"))
+	flow := writeDefinition(t, dir, "r.yaml", "version: \"1\"\nflow: {name: r}\non:\n  file: {paths: [w/], debounce: 1s}\nsteps:\n  - id: a\n    run: echo a\n")
+	if _, err := c.Register(ctx, api.RegisterRequest{Path: flow}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.SetPaused(ctx, "r", true); err != nil {
+		t.Fatal(err)
+	}
+	writeDefinition(t, watched, "while-paused", "1")
+	time.Sleep(200 * time.Millisecond)
+	if _, err := c.SetPaused(ctx, "r", false); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1500 * time.Millisecond)
+	if list, _ := c.Runs(ctx, "r", 0); len(list) != 0 {
+		t.Fatalf("a change made while paused started a run: %+v", list)
+	}
+	writeDefinition(t, watched, "after", "2")
+	awaitRuns(t, c, "r", 1)
 }

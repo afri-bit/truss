@@ -26,19 +26,36 @@ dependency; no catch-up of changes made while the daemon was off.
 - **FR-002** While the daemon runs, for a registered flow that is not paused, a file created,
   changed (time or size) or removed under the paths, not ignored, starts one run (trigger `file`)
   once no further change came for `debounce`. The first look after the daemon starts, the flow is
-  registered or its `on.file` changes takes a baseline: earlier changes start nothing.
+  registered or resumed, its file loads again after failing, or its `paths` or `ignore` change takes
+  a baseline: earlier changes start nothing. A new `debounce` keeps the baseline.
 - **FR-003** The run gets `TRUSS_CHANGED_FILES`: the path of a file listing the changed paths, one
   per line, sorted, relative to the project root (absolute for an absolute pattern).
-- **FR-004** `.truss/state/` and `.git/` are never watched; links are not followed; at most 10,000
-  files per flow are watched (the daemon log says when more match).
+- **FR-004** `.truss/state/` and `.git/` are never watched; links are not followed (a linked base
+  is named in the daemon log); a scan looks at no more than 10,000 matching files and 50,000 files
+  and folders per flow (the daemon log says when it stops). A name with a control character is
+  left out and logged. A pattern may not watch a filesystem root or start with `~`, and has at
+  most three `**`; matching costs at most patterns x path segments.
+- **FR-004a** A flow has at most one hook-started run queued or running at a time. File changes
+  seen meanwhile start one run once it ends; an on.run match meanwhile starts nothing.
 - **FR-005** `on.run` is one mapping or a list: `flow` (required) and `status` (`succeeded`,
   `failed`, `any`, or a list; default `succeeded`; `any` is succeeded, failed or cancelled). When a
-  daemon-known run of that flow (by name or registered name) ends with a matching status, the flow
-  starts (trigger `run`), unless it is paused. Runs closed because the daemon had stopped start
-  nothing.
+  daemon-known run of that flow (by its registered name or the name in its file) that started
+  ends with a matching status, the flow starts (trigger `run`), unless it is paused. Runs that never
+  started (cancelled while queued, skipped, a file that did not load) and runs closed because the
+  daemon had stopped start nothing.
 - **FR-006** A chain of runs started by `on.run` stops after 10: the eleventh is not started and
   the daemon log says so.
-- **FR-007** `truss flows show <flow>` lists the hooks ("Starts when"); `--json` adds `hooks`.
+- **FR-007** `truss flows show <flow>` lists the hooks ("Starts when"); `--json` adds `hooks`, a
+  list of `{type: "file", paths, ignore, debounce}` and `{type: "run", flow, status}`.
+- **FR-008** The list of changed files is written when the run is queued, so a queued run keeps it
+  across a daemon restart. Patterns may not go up with `..`. An ignored folder is not walked. Ended
+  runs that the daemon was too busy to check are counted in its log.
+
+## Limits
+
+Matching is case-sensitive on every system. Changes are seen by time and size, so a same-size
+rewrite within a filesystem's time resolution is missed. Changes made while a hook is edited are
+part of the new baseline.
 
 ## Not done
 

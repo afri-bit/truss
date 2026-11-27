@@ -234,15 +234,26 @@ further change came for `debounce`. A burst of changes is one run.
 | `debounce` | How long changes must stop, `1s` to `10m`. Default `2s`. |
 
 - The run's trigger is `file`. `$TRUSS_CHANGED_FILES` names a file that lists the changed paths,
-  one per line, relative to the project root.
+  one per line, relative to the project root (absolute for an absolute pattern).
+- `paths` cannot go up with `..`: write a folder outside the project as an absolute path.
+- An `ignore` pattern that matches a folder keeps the daemon out of it, which keeps scans fast
+  (`ignore: [node_modules]`).
 - Only while the daemon runs, and only for a registered flow that is not paused. Changes made while
   the daemon was stopped start nothing: the daemon looks at the files when it starts and counts
   changes from there.
 - `.truss/state/` and `.git/` are never watched, so a flow that writes its own state does not
   start itself. A flow that writes into the folders it watches does: keep its output elsewhere, or
   `ignore` it.
-- The daemon looks every second; at most 10,000 files per flow. It does not follow links.
-- `overlap` decides what happens when files change while the flow runs.
+- The daemon looks every second, at no more than 10,000 matching files and 50,000 files and
+  folders per flow; narrow `paths` for big trees. It does not follow links: name the real folder.
+- A flow has at most one run started by a hook at a time. Changes made while it runs start one
+  more run when it ends.
+- Patterns match names as written: `*.jpg` does not match `A.JPG`, even on Windows and macOS.
+  A file is "changed" when its time or size changes; some disks keep times to the second, so write
+  files in place with care, or write elsewhere and rename them in.
+- A file whose name holds a line break or another control character is left out (the daemon log
+  says so), because `$TRUSS_CHANGED_FILES` is one path per line.
+- A whole disk (`/`, `C:/`) and `~` cannot be watched; at most three `**` per pattern.
 
 ## `on.run`: start when another flow ends
 
@@ -254,8 +265,10 @@ on:
 ```
 
 `on.run` may be a list to follow several flows. The run's trigger is `run`. A run of `build` that
-ends as asked starts this flow, whatever started `build`. Flows that start each other in a loop
-stop after 10 runs in a row; the daemon log says so.
+ran and ended as asked starts this flow, whatever started `build`; a run that never started (for
+example cancelled while queued) starts nothing. While a run of this flow that a hook started is
+queued or running, another one does not start. Flows that start each other in a loop stop after
+10 runs in a row; the daemon log says so.
 
 ## `env`
 

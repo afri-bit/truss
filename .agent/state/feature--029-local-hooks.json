@@ -4,8 +4,10 @@
   "tier": 2,
   "branch": "feature/029-local-hooks",
   "status": "in_progress",
-  "step": "implemented; review next",
-  "steps_done": [],
+  "step": "reviewer and security findings fixed; delta review and PR",
+  "steps_done": [
+    "reviewer and security findings fixed"
+  ],
   "requirements": [],
   "specs": [
     "specs/029-local-hooks/spec.md"
@@ -16,5 +18,5 @@
   "next_actions": [],
   "pr": null,
   "created": "2026-11-27T15:31:54Z",
-  "updated": "2026-11-27T15:31:54Z"
+  "updated": "2026-11-27T15:51:05Z"
 }

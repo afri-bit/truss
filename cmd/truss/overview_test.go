@@ -754,3 +754,22 @@ func TestPipelines_ShowPrefersTheExactName(t *testing.T) {
 		t.Fatalf("pipelines show alias = %+v", p)
 	}
 }
+
+// Spec 029 FR-007: flows show lists the hooks, as text and as JSON.
+func TestFlows_ShowListsHooks(t *testing.T) {
+	s := projectSession(t, false)
+	s.write(".truss/flows/h.yaml", "version: \"1\"\nflow: {name: h}\non:\n  file: {paths: [inbox/], debounce: 5s}\n  run: {flow: build, status: [failed, succeeded]}\nsteps:\n  - id: a\n    run: echo a\n")
+	out := s.ok("flows", "show", "h")
+	if !strings.Contains(out, "files change: inbox/, after 5s") || !strings.Contains(out, "a run of build failed or succeeded") {
+		t.Fatalf("show:\n%s", out)
+	}
+	d := decode[struct {
+		Hooks []struct {
+			Type, Debounce, Flow string
+			Paths, Status        []string
+		}
+	}](t, s.ok("flows", "show", "h", "--json"))
+	if len(d.Hooks) != 2 || d.Hooks[0].Type != "file" || d.Hooks[0].Paths[0] != "inbox/" || d.Hooks[1].Flow != "build" || len(d.Hooks[1].Status) != 2 {
+		t.Fatalf("json: %+v", d.Hooks)
+	}
+}

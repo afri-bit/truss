@@ -77,3 +77,24 @@ func TestValidate_BadHooks(t *testing.T) {
 		}
 	}
 }
+
+// Security review of spec 029.
+func TestPattern_AbsoluteRootsAndCost(t *testing.T) {
+	if !MatchPattern("/data/inbox", "/data/inbox/a.jpg") || !MatchPattern("/data/*.txt", "/data/a.txt") {
+		t.Error("an absolute pattern does not match an absolute path")
+	}
+	if MatchPattern("/data", "data/a") || MatchPattern("data", "/data/a") {
+		t.Error("absolute and relative must not match each other")
+	}
+	for _, bad := range []string{"/", "/*", "C:/", "~/inbox", "**/a/**/b/**/c/**/d", "../x", "a/../../b"} {
+		if CheckPattern(bad) == nil {
+			t.Errorf("CheckPattern(%q) = nil", bad)
+		}
+	}
+	start := time.Now()
+	long := strings.Repeat("x/", 60) + "z"
+	MatchPattern("**/a/**/a/**/b", long)
+	if took := time.Since(start); took > 100*time.Millisecond {
+		t.Fatalf("matching took %s", took)
+	}
+}

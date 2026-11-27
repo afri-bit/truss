@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/afri-bit/truss/internal/api"
@@ -107,8 +108,10 @@ type Daemon struct {
 
 	// watches is the on.file state per flow; only the Serve goroutine uses it.
 	watches map[string]*fileWatch
-	// finished receives runs that ended, for on.run (spec 029).
+	// finished receives runs that ended, for on.run (spec 029); dropped
+	// counts those that did not fit.
 	finished chan finishedRun
+	dropped  *atomic.Int64
 
 	stopOnce sync.Once
 	stop     chan struct{}
@@ -150,11 +153,13 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 		return nil, err
 	}
 	finished := make(chan finishedRun, 256)
+	dropped := &atomic.Int64{}
 	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Keep: opts.KeepRuns, Env: opts.Env, Secrets: secrets.Open(opts.Home.Secrets()).Load, Now: opts.Now, Resolve: resolver(reg), Folders: func(name string) (string, string) { return opts.Home.PipelineData(name), opts.Home.PipelineCache(name) },
 		Finished: func(run api.Run, chain int) {
 			select {
 			case finished <- finishedRun{run, chain}:
-			default: // the daemon is far behind; on.run of this run is lost
+			default: // the daemon is far behind: counted and logged by Serve
+				dropped.Add(1)
 			}
 		}})
 	if err != nil {
@@ -184,6 +189,7 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 		stop:     make(chan struct{}),
 		watches:  map[string]*fileWatch{},
 		finished: finished,
+		dropped:  dropped,
 	}
 	d.metrics = metrics.New(metrics.Options{Self: os.Getpid(), Targets: d.metricTargets})
 
@@ -248,6 +254,9 @@ loop:
 		case <-ticker.C:
 			d.tick()
 			d.checkFileHooks(d.opts.Now())
+			if n := d.dropped.Swap(0); n > 0 {
+				d.logf("%d ended runs were not checked for on.run and notifications: the daemon was too busy", n)
+			}
 		case f := <-d.finished:
 			d.runFinished(f)
 		}

@@ -505,6 +505,11 @@ func (m *Manager) add(rec *record) (api.Run, error) {
 	if err := m.save(rec); err != nil {
 		return api.Run{}, err
 	}
+	// The list of changed files is kept with the run from the start, so a
+	// queued run still has it after a daemon restart (spec 029).
+	if _, err := m.changedFiles(rec.run.ID, rec.req.ChangedFiles); err != nil {
+		return api.Run{}, fmt.Errorf("store the list of changed files: %w", err)
+	}
 	m.records[rec.run.ID] = rec
 	m.order = append(m.order, rec.run.ID)
 	m.prune()
@@ -550,17 +555,22 @@ func (m *Manager) logPath(id string) string {
 }
 
 // changedFiles writes the paths an on.file hook saw change, one per line,
-// next to the run's log, and returns the file's path ("" when there are none
-// or it cannot be written).
-func (m *Manager) changedFiles(id string, paths []string) string {
+// next to the run's log, and returns the file's path ("" when there are
+// none). The daemon leaves out names with control characters, so a line is
+// always one path.
+func (m *Manager) changedFiles(id string, paths []string) (string, error) {
 	if len(paths) == 0 {
-		return ""
+		return "", nil
 	}
-	path := filepath.Join(m.opts.Dir, id, "changed-files.txt")
+	path := m.changedPath(id)
 	if err := os.WriteFile(path, []byte(strings.Join(paths, "\n")+"\n"), 0o600); err != nil {
-		return ""
+		return "", err
 	}
-	return path
+	return path, nil
+}
+
+func (m *Manager) changedPath(id string) string {
+	return filepath.Join(m.opts.Dir, id, "changed-files.txt")
 }
 
 // activeFor counts the daemon's queued and running runs of a pipeline. The caller holds m.mu.
@@ -646,6 +656,12 @@ func (m *Manager) execute(ctx context.Context, rec *record) {
 	log.Setup(runlog.OSName(runtime.GOOS), runtime.GOARCH, executor.Shell(), req.Dir)
 
 	env := append([]string(nil), m.opts.Env...)
+	changed := ""
+	if path := m.changedPath(id); req.Trigger == api.TriggerFile {
+		if _, err := os.Stat(path); err == nil {
+			changed = path
+		}
+	}
 	if req.CacheDir != "" {
 		// A cache clear may have run while this run was queued.
 		_ = os.MkdirAll(req.CacheDir, 0o700)
@@ -659,7 +675,7 @@ func (m *Manager) execute(ctx context.Context, rec *record) {
 	result, err := engine.Run(ctx, req.Definition, req.Dir, env, &follower{m: m, rec: rec, log: log, out: outputBudget{left: MaxRunLog}},
 		engine.WithSecrets(m.opts.Secrets),
 		engine.WithRun(engine.RunInfo{ID: id, Flow: req.Pipeline, Trigger: req.Trigger, ProjectDir: cmp.Or(req.ProjectDir, req.Dir),
-			ChangedFiles: m.changedFiles(id, req.ChangedFiles)}))
+			ChangedFiles: changed}))
 
 	m.mu.Lock()
 	defer m.mu.Unlock()

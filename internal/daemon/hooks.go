@@ -1,11 +1,14 @@
 package daemon
 
 import (
+	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/afri-bit/truss/internal/api"
 	"github.com/afri-bit/truss/internal/pipeline"
@@ -14,9 +17,13 @@ import (
 // Local hooks (spec 029): on.file starts a flow when files change, on.run
 // when another flow's run ends. Both act only while the daemon runs.
 
-// maxWatchedFiles bounds what one flow's on.file may watch, so a pattern
-// over a huge tree cannot make every tick slow.
-const maxWatchedFiles = 10000
+// maxWatchedFiles bounds what one flow's on.file may watch, and
+// maxVisited what one scan may look at (folders and files that do not match
+// included), so a pattern over a huge tree cannot make every tick slow.
+const (
+	maxWatchedFiles = 10000
+	maxVisited      = 50000
+)
 
 // maxChain bounds how many on.run hooks may follow one another, so flows
 // that start each other cannot run for ever.
@@ -34,7 +41,18 @@ type fileWatch struct {
 	snap    map[string]fileStamp
 	changed map[string]bool
 	last    time.Time // when the newest change was seen
-	tooMany bool      // the last scan hit maxWatchedFiles; logged once
+	tooMany bool      // the last scan hit a limit; logged once
+	noted   map[string]bool
+}
+
+// scanResult is what one scan found.
+type scanResult struct {
+	files map[string]fileStamp
+	// limit is set when the scan stopped at maxWatchedFiles or maxVisited.
+	limit string
+	// skipped are names left out: links at a pattern's base, and names
+	// with control characters, which a list of lines cannot hold safely.
+	skipped []string
 }
 
 // finishedRun is a run that ended, for on.run.
@@ -76,11 +94,21 @@ func (d *Daemon) checkFileHooks(now time.Time) {
 			w = &fileWatch{hook: t.hook, root: t.root, changed: map[string]bool{}}
 			d.watches[t.name] = w
 		}
-		snap, full := scan(t.root, t.hook)
-		if full && !w.tooMany {
-			d.logf("flow %s: on.file watches more than %d files; only the first are watched", t.name, maxWatchedFiles)
+		res := scan(t.root, t.hook)
+		snap := res.files
+		if res.limit != "" && !w.tooMany {
+			d.logf("flow %s: on.file %s; narrow its paths", t.name, res.limit)
 		}
-		w.tooMany = full
+		w.tooMany = res.limit != ""
+		if w.noted == nil {
+			w.noted = map[string]bool{}
+		}
+		for _, why := range res.skipped {
+			if !w.noted[why] {
+				w.noted[why] = true
+				d.logf("flow %s: on.file %s", t.name, why)
+			}
+		}
 		if w.snap != nil {
 			for p, st := range snap {
 				if old, ok := w.snap[p]; !ok || !old.mod.Equal(st.mod) || old.size != st.size {
@@ -102,9 +130,15 @@ func (d *Daemon) checkFileHooks(now time.Time) {
 			changed = append(changed, p)
 		}
 		sort.Strings(changed)
+		if d.hookRunWaiting(t.name) {
+			continue // the queued run will see the files as they are; keep the changes for later
+		}
 		w.changed = map[string]bool{}
 		if _, err := d.submitHook(t.name, api.TriggerFile, changed, 0); err != nil {
 			d.logf("flow %s: files changed but the run could not start: %v", t.name, err)
+			for _, p := range changed {
+				w.changed[p] = true // try again at the next quiet moment
+			}
 		} else {
 			d.logf("flow %s: %d file(s) changed -> run", t.name, len(changed))
 		}
@@ -123,47 +157,77 @@ func sameHook(a, b pipeline.FileHook) bool {
 
 // scan lists the files the hook watches, by path relative to root (with
 // slashes; an absolute pattern gives an absolute path). It follows no link,
-// never looks in .truss/state/ or .git/, and stops at maxWatchedFiles.
-func scan(root string, hook pipeline.FileHook) (map[string]fileStamp, bool) {
-	out := map[string]fileStamp{}
-	full := false
+// never looks in .truss/state/ or .git/, and stops at maxWatchedFiles files
+// or maxVisited entries across all patterns.
+func scan(root string, hook pipeline.FileHook) scanResult {
+	res := scanResult{files: map[string]fileStamp{}}
+	visited := 0
 	for _, pattern := range hook.Paths {
+		if res.limit != "" {
+			break
+		}
 		base := pipeline.PatternBase(pattern)
 		start := filepath.FromSlash(base)
-		if !filepath.IsAbs(start) {
+		absolute := filepath.IsAbs(start)
+		if !absolute {
 			start = filepath.Join(root, start)
 		}
+		if info, err := os.Lstat(start); err == nil && info.Mode()&fs.ModeSymlink != 0 {
+			res.skipped = append(res.skipped, "does not follow the link "+filepath.ToSlash(base)+"; name the folder it points to")
+			continue
+		}
 		_ = filepath.WalkDir(start, func(path string, de fs.DirEntry, err error) error {
+			if visited++; visited > maxVisited {
+				res.limit = fmt.Sprintf("looked at more than %d files and folders and stopped", maxVisited)
+				return fs.SkipAll
+			}
 			if err != nil {
 				return nil // a folder that went away or cannot be read
 			}
-			rel := path
-			if r, err := filepath.Rel(root, path); err == nil && !strings.HasPrefix(r, "..") && !filepath.IsAbs(base) {
-				rel = r
+			rel := filepath.ToSlash(path)
+			if !absolute {
+				if r, err := filepath.Rel(root, path); err == nil {
+					rel = filepath.ToSlash(r)
+				}
 			}
-			rel = filepath.ToSlash(rel)
 			if de.IsDir() {
-				if rel == ".git" || rel == ".truss/state" || strings.HasSuffix(rel, "/.git") {
-					return filepath.SkipDir
+				if rel == ".git" || rel == ".truss/state" || strings.HasSuffix(rel, "/.git") || ignored(hook.Ignore, rel) {
+					return filepath.SkipDir // an ignored folder is not even looked into
 				}
 				return nil
 			}
 			if !de.Type().IsRegular() || !pipeline.MatchPattern(pattern, rel) || ignored(hook.Ignore, rel) {
 				return nil
 			}
-			if len(out) >= maxWatchedFiles {
-				full = true
+			if strings.ContainsFunc(rel, unicode.IsControl) {
+				res.skipped = append(res.skipped, "leaves out a file whose name has a control character (such as a line break)")
+				return nil
+			}
+			if len(res.files) >= maxWatchedFiles {
+				res.limit = fmt.Sprintf("matches more than %d files; only the first are watched", maxWatchedFiles)
 				return fs.SkipAll
 			}
 			info, err := de.Info()
 			if err != nil {
 				return nil
 			}
-			out[rel] = fileStamp{info.ModTime(), info.Size()}
+			res.files[rel] = fileStamp{info.ModTime(), info.Size()}
 			return nil
 		})
 	}
-	return out, full
+	return res
+}
+
+// hookRunWaiting reports whether a run of the flow that a hook started is
+// still queued or running: hooks give a flow at most one such run at a time,
+// so flows that start each other cannot multiply.
+func (d *Daemon) hookRunWaiting(name string) bool {
+	for _, r := range d.runs.List(name, 0) {
+		if r.Active() && (r.Trigger == api.TriggerFile || r.Trigger == api.TriggerRun) {
+			return true
+		}
+	}
+	return false
 }
 
 func ignored(patterns []string, rel string) bool {
@@ -179,13 +243,22 @@ func ignored(patterns []string, rel string) bool {
 func (d *Daemon) runFinished(f finishedRun) {
 	type match struct{ name string }
 	var starts []match
+	// A run that never started (cancelled while queued, skipped, or a file
+	// that did not load) starts no hook.
+	if f.run.StartedAt == nil {
+		return
+	}
 	d.mu.Lock()
+	shown := f.run.Pipeline
+	if def, ok := d.defs[f.run.Pipeline]; ok && def.def.Name != "" {
+		shown = def.def.Name
+	}
 	for name, def := range d.defs {
 		if def.err != nil {
 			continue
 		}
 		for _, h := range def.def.RunHooks {
-			if h.Matches(f.run.Pipeline, f.run.Status) || (f.run.RegisteredPipeline != "" && h.Matches(f.run.RegisteredPipeline, f.run.Status)) {
+			if h.Matches(f.run.Pipeline, f.run.Status) || h.Matches(shown, f.run.Status) {
 				starts = append(starts, match{name})
 				break
 			}
@@ -195,6 +268,9 @@ func (d *Daemon) runFinished(f finishedRun) {
 	for _, m := range starts {
 		if e, ok := d.registry.Get(m.name); !ok || e.Paused {
 			continue
+		}
+		if d.hookRunWaiting(m.name) {
+			continue // one waiting hook run per flow, so flows cannot fan out without end
 		}
 		if f.chain+1 > maxChain {
 			d.logf("flow %s: on.run not started: %d flows already started each other in a row (a loop?)", m.name, maxChain)

@@ -175,8 +175,9 @@ history   200             default
 | `cancelled` | You cancelled it, or the daemon stopped while it was running. |
 | `skipped` | Requested but never started: a missed schedule, or `overlap: skip`. |
 
-The trigger says why a run exists: `manual`, `schedule`, `catch-up`, or `local` (started in your
-shell with `truss run --track`, only recorded by the daemon).
+The trigger says why a run exists: `manual`, `schedule`, `catch-up`, `file` (watched files
+changed), `run` (another flow's run ended), or `local` (started in your shell with
+`truss run --track`, only recorded by the daemon).
 
 Steps are `pending`, `running`, `succeeded`, `failed`, `stopped` (ended because another step
 failed), `cancelled`, or `skipped` (never started: the run ended first, an `if` condition was false, or a step it
