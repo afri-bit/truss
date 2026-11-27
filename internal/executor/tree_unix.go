@@ -29,6 +29,21 @@ func (g *groupTree) terminate() bool {
 	return true
 }
 
+// waitGone polls until the group is empty, the deadline passes or killNow
+// is closed.
+func (g *groupTree) waitGone(deadline time.Time, killNow <-chan struct{}) {
+	for time.Now().Before(deadline) {
+		if err := syscall.Kill(-g.pgid, 0); errors.Is(err, syscall.ESRCH) {
+			return
+		}
+		select {
+		case <-killNow:
+			return
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
 // kill sends SIGKILL to the whole group. A group that is already gone is fine.
 func (g *groupTree) kill() {
 	_ = syscall.Kill(-g.pgid, syscall.SIGKILL) // ESRCH: already gone

@@ -16,8 +16,23 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err.Error())
 		os.Exit(1)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	code := RunWithInput(ctx, args, cwd, os.Environ(), os.Stdin, os.Stdout, os.Stderr)
-	stop()
+	// The first Ctrl-C (or SIGTERM) asks the steps to stop; a second one
+	// kills them at once (spec 028).
+	ctx, cancel := context.WithCancel(context.Background())
+	killNow := make(chan struct{})
+	signals := make(chan os.Signal, 2)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-signals
+		if isRun(args) {
+			fmt.Fprintln(os.Stderr, "stopping the steps; press Ctrl-C again to kill them now")
+		}
+		cancel()
+		<-signals
+		close(killNow)
+	}()
+	code := RunWithInput(withKillNow(ctx, killNow), args, cwd, os.Environ(), os.Stdin, os.Stdout, os.Stderr)
+	signal.Stop(signals)
+	cancel()
 	os.Exit(code)
 }

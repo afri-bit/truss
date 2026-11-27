@@ -203,8 +203,8 @@ to clear them. Those folders are ignored by git (see [Project layout](pipeline-r
 
 ## Limits that keep the disk safe
 
-- A run's log keeps at most 64 MiB. After that it says so and keeps no more; the run goes on, and
-  `truss runs show` has its result.
+- A run's log keeps at most 64 MiB of step output. After that it says so and keeps no more of it;
+  TRUSS's own lines and the summary are still written.
 - The daemon's own log is set aside as `daemon.log.1` when it is over 10 MiB at a start. Between
   starts it can grow past that. On Windows, if another program has the log open, it is not set
   aside that time.

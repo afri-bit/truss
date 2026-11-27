@@ -17,6 +17,9 @@ import (
 // The implementation is per OS: a process group on Unix, a job object on
 // Windows.
 type tree interface {
+	// waitGone waits until no process of the tree is left, the deadline
+	// passes or killNow is closed.
+	waitGone(deadline time.Time, killNow <-chan struct{})
 	// terminate asks every process of the tree to stop (SIGTERM on Unix). It
 	// reports false where the OS has no such request (Windows): the caller
 	// then kills at once.
@@ -38,6 +41,7 @@ const copyGrace = 2 * time.Second
 type Process struct {
 	cmd         *exec.Cmd
 	killTimeout time.Duration
+	killNow     <-chan struct{}
 	// exited receives the result of cmd.Wait, sent by a reaper goroutine that
 	// Start launches as soon as the shell is running in its tree. It is
 	// buffered (capacity 1), so the reaper never blocks and a delivered exit
@@ -69,7 +73,7 @@ func Start(ctx context.Context, req Request) (*Process, error) {
 	}
 	prepare(cmd)
 
-	p := &Process{cmd: cmd, killTimeout: req.KillTimeout}
+	p := &Process{cmd: cmd, killTimeout: req.KillTimeout, killNow: req.KillNow}
 	var outW, errW io.Writer = &p.stdout, &p.stderr
 	if req.Out != nil {
 		mu := &sync.Mutex{}
@@ -155,10 +159,20 @@ func (p *Process) Wait(ctx context.Context) Result {
 		default:
 			killed = true
 			if p.killTimeout > 0 && p.tree.terminate() {
+				// The whole group has kill_timeout to end, not only the shell:
+				// a child that handles SIGTERM keeps its time after a shell
+				// without a trap is gone (spec 028).
+				deadline := time.Now().Add(p.killTimeout)
+				exited := false
 				select {
 				case err = <-p.exited:
+					exited = true
+					p.tree.waitGone(deadline, p.killNow)
 				case <-time.After(p.killTimeout):
-					p.tree.kill()
+				case <-p.killNow:
+				}
+				p.tree.kill()
+				if !exited {
 					err = <-p.exited
 				}
 			} else {

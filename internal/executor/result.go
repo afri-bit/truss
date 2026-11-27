@@ -19,6 +19,9 @@ type Request struct {
 	// asked to (SIGTERM on Unix) before it is killed. 0 kills at once
 	// (spec 028).
 	KillTimeout time.Duration
+	// KillNow, when closed, ends the wait of KillTimeout at once: a second
+	// Ctrl-C (spec 028).
+	KillNow <-chan struct{}
 }
 
 // Result is the outcome of running a host shell.

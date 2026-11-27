@@ -79,3 +79,53 @@ func TestRun_CancellingARunLetsStepsCleanUp(t *testing.T) {
 		t.Fatalf("the step did not get to clean up on cancel: %v", err)
 	}
 }
+
+// Review of spec 028: a step stopped because another failed is failed even
+// when it exits 0 after the stop, so failure() still holds for what needs it.
+func TestRun_AStoppedStepIsFailedWhateverItsExit(t *testing.T) {
+	dir := t.TempDir()
+	started := filepath.Join(dir, "started")
+	cond, err := pipeline.ParseCondition("failure()")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := pipeline.Pipeline{Version: "1", Name: "stop", Concurrency: 2, Steps: []pipeline.Step{
+		{ID: "b", Run: "trap 'exit 0' TERM; touch \"" + started + "\"; while :; do sleep 0.05; done"},
+		{ID: "a", Run: "while [ ! -e \"" + started + "\" ]; do sleep 0.02; done; exit 3"},
+		{ID: "c", Run: "echo handled", Needs: []string{"b"}, If: cond},
+	}}
+	got, err := Run(context.Background(), p, t.TempDir(), os.Environ(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status := map[string]pipeline.Status{}
+	for _, s := range got.Steps {
+		status[s.ID] = s.Status
+	}
+	if status["b"] != pipeline.StatusFailed || status["c"] != pipeline.StatusSucceeded {
+		t.Fatalf("steps = %+v", got.Steps)
+	}
+}
+
+// A child that handles SIGTERM keeps its kill_timeout after its shell is gone.
+func TestRun_AChildGetsItsTimeAfterTheShellIsGone(t *testing.T) {
+	dir := t.TempDir()
+	marker, started := filepath.Join(dir, "cleaned"), filepath.Join(dir, "started")
+	child := "trap 'sleep 0.3; echo c > \"" + marker + "\"; exit 0' TERM; touch \"" + started + "\"; while :; do sleep 0.05; done"
+	run := "sh -c '" + strings.ReplaceAll(child, "'", "'\\''") + "'; echo after"
+	p := pipeline.Pipeline{Version: "1", Name: "stop", Steps: []pipeline.Step{{ID: "a", Run: run, KillTimeout: 3 * time.Second}}}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		for i := 0; i < 1000; i++ {
+			if _, err := os.Stat(started); err == nil {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		cancel()
+	}()
+	_, _ = Run(ctx, p, t.TempDir(), os.Environ(), nil)
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("the child was killed before it could clean up: %v", err)
+	}
+}

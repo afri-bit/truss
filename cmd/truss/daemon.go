@@ -18,6 +18,10 @@ import (
 // startWait bounds how long "daemon start" and "daemon stop" wait.
 const startWait = 15 * time.Second
 
+// stopWait bounds how long "daemon stop" waits: the longest kill_timeout
+// (spec 028) and a margin.
+const stopWait = 75 * time.Second
+
 func (in invocation) daemon(ctx context.Context) int {
 	if len(in.args) == 0 {
 		return in.usage()
@@ -182,7 +186,8 @@ func (in invocation) daemonStop(ctx context.Context, h home.Dir, wait bool) int 
 	if err := c.Shutdown(ctx); err != nil {
 		return in.fail(err)
 	}
-	deadline := time.After(startWait)
+	// Steps may take their kill_timeout, up to a minute, to end.
+	deadline := time.After(stopWait)
 	for {
 		if _, err := os.Stat(h.Endpoint()); os.IsNotExist(err) {
 			fmt.Fprintln(in.stdout, "daemon stopped")

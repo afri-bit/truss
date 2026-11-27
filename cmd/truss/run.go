@@ -172,7 +172,7 @@ func execute(ctx, runCtx context.Context, def pipeline.Pipeline, stem, cwd strin
 	if tr != nil {
 		info.ID = tr.id
 	}
-	run, err := engine.Run(runCtx, def, cwd, env, events, engine.WithSecrets(secretLoader(env)), engine.WithRun(info))
+	run, err := engine.Run(runCtx, def, cwd, env, events, engine.WithSecrets(secretLoader(env)), engine.WithRun(info), engine.WithKillNow(killNowOf(ctx)))
 	if err != nil {
 		discard()
 		return interrupted(ctx, tr, err, stderr)
@@ -328,4 +328,17 @@ func localRunID() string {
 	var b [3]byte
 	_, _ = rand.Read(b[:])
 	return "local-" + time.Now().Format("20060102-150405") + "-" + hex.EncodeToString(b[:])
+}
+
+type killNowKey struct{}
+
+// withKillNow carries the channel a second Ctrl-C closes.
+func withKillNow(ctx context.Context, ch <-chan struct{}) context.Context {
+	return context.WithValue(ctx, killNowKey{}, ch)
+}
+
+// killNowOf returns the channel of withKillNow, or nil.
+func killNowOf(ctx context.Context) <-chan struct{} {
+	ch, _ := ctx.Value(killNowKey{}).(<-chan struct{})
+	return ch
 }

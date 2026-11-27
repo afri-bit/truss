@@ -410,13 +410,13 @@ TRUSS stops a step when its `timeout` passes, when you cancel the run (`truss ca
 when another step fails and the run ends early, and when the daemon stops.
 
 - **Linux and macOS:** every process the step started gets `SIGTERM`, so a script can clean up
-  (`trap 'rm -f "$LOCK"' TERM`). Whatever still runs after `kill_timeout` (default `10s`) gets
-  `SIGKILL`.
+  (`trap 'rm -f "$LOCK"' TERM`). Whatever still runs after `kill_timeout` (default `10s`, at most
+  `1m`) gets `SIGKILL`. During `truss run`, a second Ctrl-C kills at once.
 - **Windows:** the step and everything it started end at once; Windows has no request to stop
   that reaches every process, so `kill_timeout` has no effect there.
 - A process that leaves the step's process group on Linux or macOS (`setsid`, a daemonizing
   tool) is neither asked nor killed.
-- A step that runs out of `timeout` fails, even if it handles the stop and exits `0`.
+- A stopped step fails, even if it handles the stop and exits `0`; `if: failure()` steps run.
 - If the daemon process itself dies, on Windows its steps end with it. On Linux and macOS a step
   can outlive a crashed daemon; the run is marked failed when the daemon starts again.
 

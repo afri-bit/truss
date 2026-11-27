@@ -19,17 +19,22 @@ them finish. A step printing without end could fill the disk with its run log.
 
 - **FR-001** On Linux and macOS, when TRUSS stops a step (timeout, cancel, interrupt, a failure
   elsewhere that ends the run, the daemon stopping), every process of the step's group gets
-  SIGTERM; what still runs after the step's `kill_timeout` gets SIGKILL.
+  SIGTERM. The whole group, not only the shell, has `kill_timeout` to end; what still runs then gets
+  SIGKILL. A second Ctrl-C during a local `truss run` kills at once; the first one prints that it is
+  stopping the steps.
 - **FR-002** `kill_timeout` on a step, and on the flow block as the default of every step. A
-  duration greater than zero; default 10 seconds.
+  duration greater than zero and at most one minute (service managers kill a stopping daemon after
+  about that long); default 10 seconds. `truss daemon stop` waits up to 75 seconds.
 - **FR-003** On Windows a stopped step's job is terminated at once, as before. The job object is
   marked kill-on-close, so the steps of a TRUSS process that dies end with it.
-- **FR-004** A step stopped by its `timeout` fails with "timed out after ..." whatever its exit
-  code, including 0 after handling SIGTERM.
+- **FR-004** A step TRUSS stopped is failed whatever its exit code, including 0 after handling
+  SIGTERM, so `failure()` holds for the steps that need it. One stopped by its `timeout` fails with
+  "timed out after ...".
 - **FR-005** `truss daemon stop --wait` waits until no run is running or queued, then stops the
   daemon. Ctrl-C ends the wait and leaves the daemon running. `--wait` is valid only with `stop`.
-- **FR-006** A daemon run's log keeps at most 64 MiB; at the limit one line says so and the rest of
-  the output is dropped. The run's record (status, steps, exit codes) is unaffected.
+- **FR-006** A daemon run's log keeps at most 64 MiB of step output; at the limit one line says so
+  and the rest of the step output is dropped. TRUSS's own lines (steps finishing, the summary) are
+  always kept, and the run's record is unaffected.
 - **FR-007** `truss daemon start` sets `daemon.log` aside as `daemon.log.1` when it is over 10 MiB.
 
 ## Already true before this spec

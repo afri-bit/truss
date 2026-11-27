@@ -12,8 +12,9 @@ for robustness in v0.3.0. Process execution and cancellation are execution-safet
 
 ## Decision
 
-1. Unix: SIGTERM to the step's process group, then SIGKILL after `kill_timeout` (default 10s,
-   settable per step and per flow).
+1. Unix: SIGTERM to the step's process group, then SIGKILL after `kill_timeout` (default 10s, at
+   most a minute, settable per step and per flow). TRUSS waits for the group to be empty, not only
+   the shell, so a child that cleans up keeps its time. A second Ctrl-C kills at once.
 2. Windows: terminate the job at once, as before (no stop request reaches every process), and mark
    the job kill-on-close so its processes end when the TRUSS process that holds it ends.
 3. A step that TRUSS stopped counts as stopped whatever its exit code; a timeout always fails it.

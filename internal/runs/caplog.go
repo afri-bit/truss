@@ -1,33 +1,33 @@
 package runs
 
-import (
-	"fmt"
-	"io"
-)
+import "sync"
 
-// MaxRunLog bounds the log a daemon run keeps on disk (spec 028), so a step
-// that prints without end cannot fill the disk. The run's status, steps and
-// exit codes are kept in its record whatever the log holds.
+// MaxRunLog bounds the step output a daemon run keeps in its log (spec
+// 028), so a step that prints without end cannot fill the disk. TRUSS's own
+// lines, the summary included, are kept beyond it.
 const MaxRunLog = 64 << 20
 
-// cappedLog writes until left bytes are used, then one line that says so,
-// then nothing. Writes always report success, so the run goes on.
-type cappedLog struct {
-	w    io.Writer
+// outputBudget counts the step output a run may still log. Steps of one run
+// may print at the same time.
+type outputBudget struct {
+	mu   sync.Mutex
 	left int64
 	cut  bool
 }
 
-func (c *cappedLog) Write(b []byte) (int, error) {
-	if c.cut {
-		return len(b), nil
+// take returns how many of n bytes may be logged, and whether this is the
+// moment to say that the rest is dropped (once).
+func (b *outputBudget) take(n int) (keep int, notice bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.cut {
+		return 0, false
 	}
-	if int64(len(b)) > c.left {
-		_, _ = c.w.Write(b[:c.left])
-		_, _ = fmt.Fprintf(c.w, "\n[the run log reached %d MiB; TRUSS keeps no more of it. The run goes on; see truss runs show for its result]\n", MaxRunLog>>20)
-		c.cut = true
-		return len(b), nil
+	if int64(n) <= b.left {
+		b.left -= int64(n)
+		return n, false
 	}
-	c.left -= int64(len(b))
-	return c.w.Write(b)
+	keep = int(b.left)
+	b.left, b.cut = 0, true
+	return keep, true
 }

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -110,6 +111,10 @@ const stoppedExitCode = 0x5452
 // terminate reports false: a job object has no polite stop that reaches
 // every process, so a stopped step on Windows is ended at once (spec 028).
 func (j *jobTree) terminate() bool { return false }
+
+// waitGone is not needed on Windows: terminate reports false, so the job is
+// killed at once.
+func (j *jobTree) waitGone(time.Time, <-chan struct{}) {}
 
 // kill terminates every process in the job with stoppedExitCode. Idempotent.
 func (j *jobTree) kill() {
