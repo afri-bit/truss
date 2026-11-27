@@ -15,3 +15,10 @@ func TestOutputBudget_KeepsUpToTheLimitAndSaysSoOnce(t *testing.T) {
 		}
 	}
 }
+
+// Empty lines are cheap to print but not to log (security review, spec 028).
+func TestLogCost_CountsWhatTheLogWrites(t *testing.T) {
+	if got := logCost("build/pkg", []byte("\n\n\n")); got != 3+3*(28+9) {
+		t.Fatalf("logCost = %d", got)
+	}
+}

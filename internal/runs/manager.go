@@ -7,6 +7,7 @@
 package runs
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"crypto/rand"
@@ -732,10 +733,19 @@ func (f *follower) StepSkipped(id, reason string) {
 	f.step(id, func(s *api.Step) { s.Status, s.Reason, s.FinishedAt = api.StepSkipped, reason, &now })
 }
 
+// logCost is how many bytes chunk takes in the run log: the log writes every
+// line with a time and the step's id in front.
+func logCost(id string, chunk []byte) int {
+	return len(chunk) + bytes.Count(chunk, []byte{'\n'})*(len("2006-01-02 15:04:05 step  | ")+len(id))
+}
+
 // StepOutput logs a step's output while the run's budget lasts; TRUSS's own
 // lines (steps finishing, the summary) are always logged (spec 028).
 func (f *follower) StepOutput(id string, chunk []byte) {
-	keep, notice := f.out.take(len(chunk))
+	keep, notice := f.out.take(logCost(id, chunk))
+	if keep > len(chunk) {
+		keep = len(chunk)
+	}
 	if keep > 0 {
 		f.log.StepOutput(id, chunk[:keep])
 	}

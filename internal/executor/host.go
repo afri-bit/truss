@@ -48,8 +48,8 @@ type Process struct {
 	// is observable (len(exited) == 1) before Wait is called.
 	exited chan error
 	tree   tree
-	stdout bytes.Buffer
-	stderr bytes.Buffer
+	stdout capBuffer
+	stderr capBuffer
 	reads  []*os.File
 	copies sync.WaitGroup
 }
@@ -173,6 +173,9 @@ func (p *Process) Wait(ctx context.Context) Result {
 				}
 				p.tree.kill()
 				if !exited {
+					// A shell that left its group is not reached by the group
+					// kill; it is not reaped yet, so its pid is still its own.
+					_ = p.cmd.Process.Kill()
 					err = <-p.exited
 				}
 			} else {
@@ -268,3 +271,31 @@ func shellCommand(run string) (string, []string) {
 	}
 	return Shell(), []string{"-c", run}
 }
+
+// maxKeptOutput bounds the output of a step kept in memory for the Result
+// (spec 028): a step that prints without end must not exhaust TRUSS's
+// memory. Output streamed to Request.Out is not bounded here.
+const maxKeptOutput = 1 << 20
+
+// capBuffer keeps the first maxKeptOutput bytes written to it and drops the
+// rest, reporting every write as complete.
+type capBuffer struct {
+	buf bytes.Buffer
+	cut bool
+}
+
+func (c *capBuffer) Write(b []byte) (int, error) {
+	if room := maxKeptOutput - c.buf.Len(); room < len(b) {
+		if room > 0 {
+			c.buf.Write(b[:room])
+		}
+		if !c.cut {
+			c.buf.WriteString("\n[output cut at 1 MiB]\n")
+			c.cut = true
+		}
+		return len(b), nil
+	}
+	return c.buf.Write(b)
+}
+
+func (c *capBuffer) String() string { return c.buf.String() }

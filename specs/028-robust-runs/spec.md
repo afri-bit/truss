@@ -35,6 +35,11 @@ them finish. A step printing without end could fill the disk with its run log.
 - **FR-006** A daemon run's log keeps at most 64 MiB of step output; at the limit one line says so
   and the rest of the step output is dropped. TRUSS's own lines (steps finishing, the summary) are
   always kept, and the run's record is unaffected.
+- **FR-006a** A step's output kept in memory for its result is at most 1 MiB per stream, so a step
+  that prints without end cannot exhaust TRUSS's memory; the live log is bounded by FR-006, which
+  counts what the log writes, line prefixes included.
+- **FR-006b** The launchd agent gives a stopping daemon 75 seconds (`ExitTimeOut`), so steps get
+  their `kill_timeout`.
 - **FR-007** `truss daemon start` sets `daemon.log` aside as `daemon.log.1` when it is over 10 MiB.
 
 ## Already true before this spec
@@ -56,6 +61,8 @@ stopped is closed as failed at the next start.
   no safe way yet to recognise that process later without risking a process that reused its id.
 - A lock so that two daemons can never share one TRUSS home.
 - A size cap for the `run.log` of a local `truss run`.
+- `daemon.log` of a daemon started at login is not set aside (only `daemon start` does it).
+- A third Ctrl-C does nothing more; end TRUSS with your system's tools if a step hangs.
 
 ## Compatibility
 

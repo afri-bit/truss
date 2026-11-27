@@ -3,10 +3,11 @@
   "title": "Robust runs",
   "tier": 2,
   "branch": "feature/028-robust-runs",
-  "status": "in_progress",
-  "step": "review findings fixed; security review and PR next",
+  "status": "in_review",
+  "step": "security findings fixed; PR",
   "steps_done": [
-    "reviewer and portability findings fixed"
+    "reviewer and portability findings fixed",
+    "security findings fixed"
   ],
   "requirements": [],
   "specs": [
@@ -18,5 +19,5 @@
   "next_actions": [],
   "pr": null,
   "created": "2026-11-25T15:58:43Z",
-  "updated": "2026-11-27T15:29:25Z"
+  "updated": "2026-11-27T15:37:42Z"
 }

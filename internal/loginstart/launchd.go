@@ -39,6 +39,9 @@ func LaunchdPlist(s Spec) string {
 	}
 	b.WriteString("\t</array>\n")
 	b.WriteString("\t<key>RunAtLoad</key>\n\t<true/>\n")
+	// launchd kills a stopping daemon after ExitTimeOut seconds; steps may
+	// take their kill_timeout, up to a minute, to end (spec 028).
+	b.WriteString("\t<key>ExitTimeOut</key>\n\t<integer>75</integer>\n")
 	b.WriteString("\t<key>KeepAlive</key>\n\t<dict>\n\t\t<key>SuccessfulExit</key>\n\t\t<false/>\n\t</dict>\n")
 	b.WriteString("\t<key>ThrottleInterval</key>\n\t<integer>30</integer>\n")
 	if s.LogPath != "" {
