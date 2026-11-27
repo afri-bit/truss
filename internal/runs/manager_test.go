@@ -755,3 +755,34 @@ func TestListForAndSummaryForTakeSeveralNames(t *testing.T) {
 		t.Fatalf("summary of an unknown name = %d %+v", active, last)
 	}
 }
+
+// Spec 029 FR-008: a queued file-hook run keeps its list of changed files
+// across a restart.
+func TestQueue_AQueuedFileRunKeepsItsChangedFiles(t *testing.T) {
+	dir := t.TempDir()
+	gate := filepath.Join(t.TempDir(), "gate")
+	show := "cat \"$TRUSS_CHANGED_FILES\""
+	if runtime.GOOS == "windows" {
+		show = "type \"%TRUSS_CHANGED_FILES%\""
+	}
+	blocker := def("b", pipeline.OverlapQueue, pipeline.Step{ID: "wait", Run: waitFor(gate)})
+	watcher := def("w", pipeline.OverlapQueue, pipeline.Step{ID: "show", Run: show})
+	first := open(t, Options{Dir: dir, MaxParallel: 1})
+	r1 := submit(t, first, "b", blocker)
+	r2, err := first.Submit(Request{Pipeline: "w", Definition: watcher, Dir: t.TempDir(), Trigger: api.TriggerFile,
+		ChangedFiles: []string{"inbox/a.jpg", "inbox/b.jpg"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	await(t, first, r1.ID, api.RunRunning)
+	first.Close()
+	release(t, gate)
+
+	again := open(t, Options{Dir: dir, MaxParallel: 1, Resolve: resolveTo(t.TempDir(), map[string]pipeline.Pipeline{"w": watcher})})
+	again.Resume()
+	got := await(t, again, r2.ID, api.RunSucceeded, api.RunFailed)
+	data, _, _, _ := again.Log(r2.ID, 0)
+	if got.Status != api.RunSucceeded || !strings.Contains(string(data), "inbox/a.jpg") || !strings.Contains(string(data), "inbox/b.jpg") {
+		t.Fatalf("run = %+v\n%s", got, data)
+	}
+}

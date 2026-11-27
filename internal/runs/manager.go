@@ -502,13 +502,16 @@ func (m *Manager) add(rec *record) (api.Run, error) {
 	if err := os.MkdirAll(filepath.Join(m.opts.Dir, rec.run.ID), 0o700); err != nil {
 		return api.Run{}, fmt.Errorf("store run: %w", err)
 	}
-	if err := m.save(rec); err != nil {
-		return api.Run{}, err
-	}
 	// The list of changed files is kept with the run from the start, so a
-	// queued run still has it after a daemon restart (spec 029).
+	// queued run still has it after a daemon restart (spec 029). It is
+	// written first: a run that cannot have it is not stored at all.
 	if _, err := m.changedFiles(rec.run.ID, rec.req.ChangedFiles); err != nil {
+		_ = os.RemoveAll(filepath.Join(m.opts.Dir, rec.run.ID))
 		return api.Run{}, fmt.Errorf("store the list of changed files: %w", err)
+	}
+	if err := m.save(rec); err != nil {
+		_ = os.RemoveAll(filepath.Join(m.opts.Dir, rec.run.ID))
+		return api.Run{}, err
 	}
 	m.records[rec.run.ID] = rec
 	m.order = append(m.order, rec.run.ID)

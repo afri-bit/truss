@@ -106,8 +106,11 @@ type Daemon struct {
 	sched *scheduler.Scheduler
 	defs  map[string]*definition
 
-	// watches is the on.file state per flow; only the Serve goroutine uses it.
-	watches map[string]*fileWatch
+	// watches is the on.file state per flow, and pendingRuns the on.run
+	// runs waiting for a hook run of their flow to end (name to chain); only
+	// the Serve goroutine uses them.
+	watches     map[string]*fileWatch
+	pendingRuns map[string]int
 	// finished receives runs that ended, for on.run (spec 029); dropped
 	// counts those that did not fit.
 	finished chan finishedRun
@@ -179,17 +182,18 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 	}
 	now := opts.Now()
 	d := &Daemon{
-		opts:     opts,
-		registry: reg,
-		runs:     mgr,
-		listener: ln,
-		endpoint: api.Endpoint{Address: ln.Addr().String(), Token: hex.EncodeToString(token), PID: os.Getpid(), StartedAt: now, Version: opts.Version},
-		sched:    scheduler.New(opts.Grace),
-		defs:     map[string]*definition{},
-		stop:     make(chan struct{}),
-		watches:  map[string]*fileWatch{},
-		finished: finished,
-		dropped:  dropped,
+		opts:        opts,
+		registry:    reg,
+		runs:        mgr,
+		listener:    ln,
+		endpoint:    api.Endpoint{Address: ln.Addr().String(), Token: hex.EncodeToString(token), PID: os.Getpid(), StartedAt: now, Version: opts.Version},
+		sched:       scheduler.New(opts.Grace),
+		defs:        map[string]*definition{},
+		stop:        make(chan struct{}),
+		watches:     map[string]*fileWatch{},
+		pendingRuns: map[string]int{},
+		finished:    finished,
+		dropped:     dropped,
 	}
 	d.metrics = metrics.New(metrics.Options{Self: os.Getpid(), Targets: d.metricTargets})
 
@@ -254,6 +258,7 @@ loop:
 		case <-ticker.C:
 			d.tick()
 			d.checkFileHooks(d.opts.Now())
+			d.startPendingRuns()
 			if n := d.dropped.Swap(0); n > 0 {
 				d.logf("%d ended runs were not checked for on.run and notifications: the daemon was too busy", n)
 			}

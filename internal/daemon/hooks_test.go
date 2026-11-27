@@ -218,11 +218,26 @@ func TestHooks_RunHooksDoNotFanOut(t *testing.T) {
 	if _, err := c.Trigger(ctx, "a"); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(3 * time.Second)
-	as, _ := c.Runs(ctx, "a", 0)
-	bs, _ := c.Runs(ctx, "b", 0)
-	if n := len(as) + len(bs); n > 2*(maxChain+1) {
-		t.Fatalf("%d runs: the hooks fanned out", n)
+	// The runs stop, and their number grows with the chain limit, not
+	// exponentially: each flow has one hook run active and one waiting.
+	deadline := time.Now().Add(30 * time.Second)
+	last, quiet := -1, 0
+	for quiet < 20 {
+		as, _ := c.Runs(ctx, "a", 0)
+		bs, _ := c.Runs(ctx, "b", 0)
+		n := len(as) + len(bs)
+		if n == last {
+			quiet++
+		} else {
+			last, quiet = n, 0
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the hooks did not stop: %d runs", n)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if last > 4*(maxChain+1) {
+		t.Fatalf("%d runs: the hooks fanned out", last)
 	}
 }
 
@@ -251,4 +266,45 @@ func TestHooks_ResumeCountsFromNow(t *testing.T) {
 	}
 	writeDefinition(t, watched, "after", "2")
 	awaitRuns(t, c, "r", 1)
+}
+
+// An on.run match while the flow's hook run is still active waits and starts
+// after it (delta review of spec 029); a renamed flow is matched by the name
+// in its file too.
+func TestHooks_ABusyOnRunWaitsAndNamesMatch(t *testing.T) {
+	ctx := context.Background()
+	_, c := boot(t, home.Dir(t.TempDir()), nil)
+	dir := t.TempDir()
+	slow := "sleep 1"
+	if runtime.GOOS == "windows" {
+		slow = "ping -n 2 127.0.0.1 >nul"
+	}
+	for name, body := range map[string]string{
+		// registered as "build", shown as "ci-build"
+		"build.yaml":  "version: \"1\"\nflow: {name: ci-build}\nsteps:\n  - id: a\n    run: echo built\n",
+		"deploy.yaml": "version: \"1\"\nflow: {name: deploy}\non:\n  run: {flow: ci-build}\nsteps:\n  - id: a\n    run: " + slow + "\n",
+	} {
+		reg := strings.TrimSuffix(name, ".yaml")
+		if _, err := c.Register(ctx, api.RegisterRequest{Path: writeDefinition(t, dir, name, body), Name: reg}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 3; i++ { // three builds while the first deploy is still running
+		if _, err := c.Trigger(ctx, "build"); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	// One deploy for the first build, one waiting run for the next two.
+	awaitRuns(t, c, "deploy", 2)
+	time.Sleep(2 * time.Second)
+	list, _ := c.Runs(ctx, "deploy", 0)
+	if len(list) != 2 {
+		t.Fatalf("deploys = %d, want 2", len(list))
+	}
+	for _, r := range list {
+		if r.Trigger != api.TriggerRun || r.Status != api.RunSucceeded {
+			t.Fatalf("deploy = %+v", r)
+		}
+	}
 }
