@@ -214,6 +214,49 @@ late run by default.
 
 A schedule counts as on time when it fires within two minutes of its planned time.
 
+## `on.file`: start when files change
+
+```yaml
+on:
+  file:
+    paths: [inbox/, "src/**/*.go"]   # what to watch
+    ignore: ["**/*.tmp"]              # optional: changes that do not count
+    debounce: 5s                      # optional: wait until changes stop (default 2s)
+```
+
+The daemon starts the flow once files under `paths` were created, changed or removed, and no
+further change came for `debounce`. A burst of changes is one run.
+
+| Field | Meaning |
+|---|---|
+| `paths` | Required. Folders (everything under them), files, or patterns, relative to the project root or absolute. `*` and `?` match within a name, `**` across folders. Use `/` on every system. |
+| `ignore` | Patterns of changes that do not count. |
+| `debounce` | How long changes must stop, `1s` to `10m`. Default `2s`. |
+
+- The run's trigger is `file`. `$TRUSS_CHANGED_FILES` names a file that lists the changed paths,
+  one per line, relative to the project root.
+- Only while the daemon runs, and only for a registered flow that is not paused. Changes made while
+  the daemon was stopped start nothing: the daemon looks at the files when it starts and counts
+  changes from there.
+- `.truss/state/` and `.git/` are never watched, so a flow that writes its own state does not
+  start itself. A flow that writes into the folders it watches does: keep its output elsewhere, or
+  `ignore` it.
+- The daemon looks every second; at most 10,000 files per flow. It does not follow links.
+- `overlap` decides what happens when files change while the flow runs.
+
+## `on.run`: start when another flow ends
+
+```yaml
+on:
+  run:
+    flow: build
+    status: succeeded          # succeeded (default), failed, any; or a list
+```
+
+`on.run` may be a list to follow several flows. The run's trigger is `run`. A run of `build` that
+ends as asked starts this flow, whatever started `build`. Flows that start each other in a loop
+stop after 10 runs in a row; the daemon log says so.
+
 ## `env`
 
 A mapping of variable names to values, allowed at the top level, on a job, and on a step.
@@ -272,9 +315,10 @@ TRUSS sets these in every run, by hand, by the daemon or tracked. A file may not
 | `TRUSS_JOB` | The job's id; set only for a step of a job. |
 | `TRUSS_ATTEMPT` | `1`, then `2` and up for each retry. |
 | `TRUSS_RUN_ID` | The run's id; a local run that the daemon does not track gets `local-<time>-<random>`. |
-| `TRUSS_TRIGGER` | `manual`, `schedule`, `catch-up`, or `local` for `truss run`. |
+| `TRUSS_TRIGGER` | `manual`, `schedule`, `catch-up`, `file`, `run`, or `local` for `truss run`. |
 | `TRUSS_PROJECT_DIR` | The flow's project root, wherever you start the run, or the run's directory for a flow outside a project. |
 | `TRUSS_TEMP_DIR` | A folder for this run only, removed when the run ends. |
+| `TRUSS_CHANGED_FILES` | For a run that [`on.file`](#onfile-start-when-files-change) started: a file listing the changed paths. |
 | `TRUSS_OS`, `TRUSS_ARCH` | `linux`, `darwin` or `windows`, and `amd64` or `arm64`. |
 | `TRUSS_DATA_DIR`, `TRUSS_CACHE_DIR` | Folders that outlive runs ([below](#data-and-cache-folders)). A file may set these two. |
 

@@ -54,16 +54,18 @@ type flowDoc struct {
 	Overlap     string            `json:"overlap,omitempty"`
 	Jobs        int               `json:"jobs"`
 	Schedules   []flowScheduleDoc `json:"schedules"`
-	Env         []string          `json:"env"`
-	Secrets     []string          `json:"secrets"`
-	Steps       []flowStepDoc     `json:"steps"`
+	// Hooks are the flow's on.file and on.run, as text (spec 029).
+	Hooks   []string      `json:"hooks"`
+	Env     []string      `json:"env"`
+	Secrets []string      `json:"secrets"`
+	Steps   []flowStepDoc `json:"steps"`
 }
 
 // describeFlow loads one pipeline file for display. A file that does not load
 // is a valid result with Valid false, so one broken flow never hides the rest.
 func describeFlow(ctx context.Context, file pipelineFile, reg []api.Pipeline, daemonUp bool) flowDoc {
 	d := flowDoc{Name: file.stem, File: file.display, Path: file.path, Daemon: regUnknown,
-		Schedules: []flowScheduleDoc{}, Env: []string{}, Secrets: []string{}, Steps: []flowStepDoc{}}
+		Schedules: []flowScheduleDoc{}, Hooks: []string{}, Env: []string{}, Secrets: []string{}, Steps: []flowStepDoc{}}
 	if daemonUp {
 		d.Daemon = regNotRegistered
 		if p, ok := findRegistered(reg, file.path); ok {
@@ -93,6 +95,20 @@ func describeFlow(ctx context.Context, file pipelineFile, reg []api.Pipeline, da
 	d.Jobs = len(l.def.Jobs)
 	for _, s := range l.def.Schedules {
 		d.Schedules = append(d.Schedules, flowScheduleDoc{Cron: s.Cron, Timezone: s.Timezone, Missed: string(s.Missed)})
+	}
+	if h := l.def.FileHook; h != nil {
+		text := "files change: " + strings.Join(h.Paths, ", ")
+		if len(h.Ignore) > 0 {
+			text += " (ignoring " + strings.Join(h.Ignore, ", ") + ")"
+		}
+		d.Hooks = append(d.Hooks, text+", after "+h.Debounce.String())
+	}
+	for _, h := range l.def.RunHooks {
+		status := "succeeded"
+		if len(h.Status) > 0 {
+			status = strings.Join(h.Status, " or ")
+		}
+		d.Hooks = append(d.Hooks, "a run of "+h.Flow+" "+status)
 	}
 	env, secrets := map[string]bool{}, map[string]bool{}
 	for _, s := range plan.Graph {
@@ -252,6 +268,9 @@ func (in invocation) flowsShow(ctx context.Context, args []string) int {
 			zone = s.Timezone
 		}
 		line("Schedule", fmt.Sprintf("%s (%s, missed: %s)", s.Cron, zone, s.Missed))
+	}
+	for _, h := range d.Hooks {
+		line("Starts when", h)
 	}
 	fmt.Fprintln(in.stdout)
 	rows := [][]string{{"STEP", "NEEDS", "TIMEOUT", "RETRIES", "IF", "RUN"}}

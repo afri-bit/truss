@@ -105,6 +105,11 @@ type Daemon struct {
 	sched *scheduler.Scheduler
 	defs  map[string]*definition
 
+	// watches is the on.file state per flow; only the Serve goroutine uses it.
+	watches map[string]*fileWatch
+	// finished receives runs that ended, for on.run (spec 029).
+	finished chan finishedRun
+
 	stopOnce sync.Once
 	stop     chan struct{}
 }
@@ -144,7 +149,14 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 	if err != nil {
 		return nil, err
 	}
-	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Keep: opts.KeepRuns, Env: opts.Env, Secrets: secrets.Open(opts.Home.Secrets()).Load, Now: opts.Now, Resolve: resolver(reg), Folders: func(name string) (string, string) { return opts.Home.PipelineData(name), opts.Home.PipelineCache(name) }})
+	finished := make(chan finishedRun, 256)
+	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Keep: opts.KeepRuns, Env: opts.Env, Secrets: secrets.Open(opts.Home.Secrets()).Load, Now: opts.Now, Resolve: resolver(reg), Folders: func(name string) (string, string) { return opts.Home.PipelineData(name), opts.Home.PipelineCache(name) },
+		Finished: func(run api.Run, chain int) {
+			select {
+			case finished <- finishedRun{run, chain}:
+			default: // the daemon is far behind; on.run of this run is lost
+			}
+		}})
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +182,8 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 		sched:    scheduler.New(opts.Grace),
 		defs:     map[string]*definition{},
 		stop:     make(chan struct{}),
+		watches:  map[string]*fileWatch{},
+		finished: finished,
 	}
 	d.metrics = metrics.New(metrics.Options{Self: os.Getpid(), Targets: d.metricTargets})
 
@@ -233,6 +247,9 @@ loop:
 			break loop
 		case <-ticker.C:
 			d.tick()
+			d.checkFileHooks(d.opts.Now())
+		case f := <-d.finished:
+			d.runFinished(f)
 		}
 	}
 
@@ -451,6 +468,15 @@ func readDefinition(path string) (pipeline.Pipeline, pipeline.ExecutionPlan, err
 
 // submit reads the definition as it is now and requests a run of it.
 func (d *Daemon) submit(name, trigger string, scheduledFor time.Time) (api.Run, error) {
+	return d.submitRequest(name, trigger, scheduledFor, nil, 0)
+}
+
+// submitHook requests a run started by a hook (spec 029).
+func (d *Daemon) submitHook(name, trigger string, changed []string, chain int) (api.Run, error) {
+	return d.submitRequest(name, trigger, time.Time{}, changed, chain)
+}
+
+func (d *Daemon) submitRequest(name, trigger string, scheduledFor time.Time, changed []string, chain int) (api.Run, error) {
 	e, ok := d.registry.Get(name)
 	if !ok {
 		return api.Run{}, fmt.Errorf("%w: %q", registry.ErrNotFound, name)
@@ -481,6 +507,8 @@ func (d *Daemon) submit(name, trigger string, scheduledFor time.Time) (api.Run, 
 		CacheDir:     cache,
 		Trigger:      trigger,
 		ScheduledFor: scheduledFor,
+		ChangedFiles: changed,
+		Chain:        chain,
 	})
 }
 

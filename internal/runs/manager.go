@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -59,6 +60,9 @@ type Options struct {
 	MaxParallel int
 	// Keep is how many finished runs stay in the history.
 	Keep int
+	// Finished, when set, is told about every run that ends, with the Chain
+	// of its request. It is called on its own goroutine.
+	Finished func(run api.Run, chain int)
 	// Env is the environment every step starts from ("KEY=value" entries).
 	Env []string
 	// Secrets returns the stored secrets, name to value. It is called at the
@@ -87,6 +91,11 @@ type Request struct {
 	// and TRUSS_CACHE_DIR. The caller creates them.
 	DataDir  string
 	CacheDir string
+	// ChangedFiles are the paths an on.file hook saw change; they reach the
+	// steps as a file named by TRUSS_CHANGED_FILES (spec 029).
+	ChangedFiles []string
+	// Chain counts the on.run hooks that led to this run; 0 for any other.
+	Chain int
 	// ProjectDir is the root of the flow's project, handed to steps as
 	// TRUSS_PROJECT_DIR (spec 026). Empty means Dir.
 	ProjectDir string
@@ -112,6 +121,8 @@ type record struct {
 // Manager queues, executes and remembers runs. It is safe for concurrent use.
 type Manager struct {
 	opts Options
+	// ready is set once Open has read the history; see announce.
+	ready bool
 
 	mu      sync.Mutex
 	records map[string]*record
@@ -182,6 +193,7 @@ func Open(opts Options) (*Manager, error) {
 		}
 	}
 	m.prune()
+	m.ready = true
 	return m, nil
 }
 
@@ -501,6 +513,7 @@ func (m *Manager) add(rec *record) (api.Run, error) {
 
 // finish closes a run and every step that is still open. The caller holds m.mu.
 func (m *Manager) finish(rec *record, status, reason string) {
+	defer m.announce(rec)
 	now := m.opts.Now()
 	rec.run.Status = status
 	rec.run.Reason = reason
@@ -517,12 +530,37 @@ func (m *Manager) finish(rec *record, status, reason string) {
 	}
 }
 
+// announce tells Options.Finished about a run that ended, once the manager
+// is open: runs closed while it opens (the daemon had stopped) start no hook.
+func (m *Manager) announce(rec *record) {
+	if !m.ready || m.opts.Finished == nil {
+		return
+	}
+	run := rec.run
+	run.Steps = append([]api.Step(nil), run.Steps...)
+	go m.opts.Finished(run, rec.req.Chain)
+}
+
 func (m *Manager) save(rec *record) error {
 	return home.WriteJSON(filepath.Join(m.opts.Dir, rec.run.ID, "run.json"), rec.run)
 }
 
 func (m *Manager) logPath(id string) string {
 	return filepath.Join(m.opts.Dir, id, "run.log")
+}
+
+// changedFiles writes the paths an on.file hook saw change, one per line,
+// next to the run's log, and returns the file's path ("" when there are none
+// or it cannot be written).
+func (m *Manager) changedFiles(id string, paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	path := filepath.Join(m.opts.Dir, id, "changed-files.txt")
+	if err := os.WriteFile(path, []byte(strings.Join(paths, "\n")+"\n"), 0o600); err != nil {
+		return ""
+	}
+	return path
 }
 
 // activeFor counts the daemon's queued and running runs of a pipeline. The caller holds m.mu.
@@ -620,7 +658,8 @@ func (m *Manager) execute(ctx context.Context, rec *record) {
 	}
 	result, err := engine.Run(ctx, req.Definition, req.Dir, env, &follower{m: m, rec: rec, log: log, out: outputBudget{left: MaxRunLog}},
 		engine.WithSecrets(m.opts.Secrets),
-		engine.WithRun(engine.RunInfo{ID: id, Flow: req.Pipeline, Trigger: req.Trigger, ProjectDir: cmp.Or(req.ProjectDir, req.Dir)}))
+		engine.WithRun(engine.RunInfo{ID: id, Flow: req.Pipeline, Trigger: req.Trigger, ProjectDir: cmp.Or(req.ProjectDir, req.Dir),
+			ChangedFiles: m.changedFiles(id, req.ChangedFiles)}))
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
