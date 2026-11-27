@@ -61,6 +61,7 @@ two callers of the same engine, so a pipeline behaves the same in both.
 | `internal/executor` | Run one command in the host shell inside a stoppable process tree. | Decide ordering. |
 | `internal/secrets` | Keep named secret values in a private file; remove values from output streams. | Know pipelines or the engine. |
 | `internal/runlog` | Format and write the run log. | Execute steps. |
+| `internal/config` | Read the daemon's `config.yaml` and resolve each setting from a flag, the environment, the file or the default, with its source. | Know the daemon, start anything, or print. |
 | `internal/home` | Locate the TRUSS home directory and its per-pipeline data folders, and read and write its JSON files safely. | Hold state. |
 | `internal/project` | Find the project (a `truss.yaml` in the working directory), parse its metadata, list and resolve the pipelines in `.truss/flows/`, and give the state paths under `.truss/state/`. See [ADR 0015](decisions/0015-project-layout.md). | Run anything or print. Make `internal/pipeline` aware of the layout. |
 | `internal/registry` | Remember registered pipeline files by name. | Read pipeline content. |

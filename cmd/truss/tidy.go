@@ -18,7 +18,7 @@ var commands = []string{
 var subcommands = map[string][]string{
 	"cache":      {"clear"},
 	"completion": {"bash", "zsh", "fish", "powershell"},
-	"daemon":     {"start", "stop", "status", "run", "install", "uninstall", "logs"},
+	"daemon":     {"start", "stop", "status", "run", "install", "uninstall", "logs", "config"},
 	"flows":      {"list", "show", "graph"},
 	"pipelines":  {"list", "show"},
 	"project":    {"show"},

@@ -40,9 +40,10 @@ Run here, without the daemon:
                                       without running it
 
 The daemon:
-  daemon start [--address <host:port>] [--max-runs <n>]
+  daemon start [--address <host:port>] [--max-runs <n>] [--history <n>]
   daemon stop | status [--json]       manage the background service
   daemon logs [-n <lines>] [--follow] the daemon's own log file
+  daemon config [--json]              each daemon setting and where it comes from
   daemon run                          run the service in this terminal
   daemon install [--address <host:port>] [--max-runs <n>]
   daemon uninstall                    start the daemon at login, or stop doing so

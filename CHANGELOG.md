@@ -11,6 +11,9 @@ Dates below are when a release was made. 0.1.0 is the first release.
 
 ### Added
 
+- Daemon configuration file  
+  The daemon reads `~/.truss/config.yaml` when it starts: `address`, `max_runs` and `history` (finished runs kept, new). A `TRUSS_DAEMON_*` variable or a flag of `truss daemon start` wins over the file. `truss daemon config [--json]` shows each setting, its value and where it comes from (specs/027-daemon-config).
+
 - Built-in variables, `${NAME}` and a project-wide env  
   Every run, local or daemon, sets `TRUSS_FLOW`, `TRUSS_STEP`, `TRUSS_JOB`, `TRUSS_ATTEMPT`, `TRUSS_RUN_ID`, `TRUSS_TRIGGER`, `TRUSS_PROJECT_DIR`, `TRUSS_TEMP_DIR` (a folder for one run), `TRUSS_OS` and `TRUSS_ARCH`; a file may not set them. An `env` value, a `dir` or a `workdir` may use `${NAME}` (`$$` is a `$`), and `truss.yaml` may hold an `env` for every flow of the project. A file that held a literal `${` or `$$` in such a value, or set one of these names, must change. `truss flows show <flow> <step>` lists the built-ins; its state `daemon-only` is now `each-run` (specs/026-builtin-variables, ADR 0023).
 
