@@ -32,10 +32,11 @@ suggestion you take with Enter, and writes the files below for you:
 $ truss init
 Set up TRUSS in this folder. Press Enter to take the answer in [brackets].
 Name of the project [demo]:
-Name of the flow [build]:
 What should the flow do?
   1) go - Go module: vet, test and build (found go.mod)
   ...
+Choose [1]:
+Name of the flow [build]:
 How should it start?
   1) by hand (truss run build)
   2) on a schedule
