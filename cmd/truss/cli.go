@@ -16,7 +16,8 @@ const usageText = `TRUSS runs flows on your machine.
 usage: truss <command> [arguments]
 
 Start:
-  init [--yes] [--template <t>]       set up a project here with a first flow (asks a few questions)
+  init [--yes] [--template <t>] [--name <p>] [--flow <f>]
+                                      set up a project here with a first flow (asks a few questions)
   flows new [<name>] [--template <t>] add a flow to this project
 
 Look around (read-only; most take --json):

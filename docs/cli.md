@@ -43,7 +43,7 @@ read `--json`, not the tables: their wording and columns may change between mino
 
 | Command | What it does |
 |---|---|
-| `truss init [--yes] [--name <project>] [--flow <name>] [--template <t>]` | Sets up this folder: `truss.yaml` and a first flow in `.truss/flows/`. Asks what the flow does (a template suggested from `go.mod`, `package.json`, `pyproject.toml`, `requirements.txt`, `Makefile`), how it starts (by hand, a schedule in plain words or a cron expression, or when files change) and whether to notify on failure. `--yes`, or no terminal, takes every suggestion. Refuses a folder that has a `truss.yaml`; never overwrites a file. |
+| `truss init [--yes] [--name <project>] [--flow <name>] [--template <t>]` | Sets up this folder: `truss.yaml` and a first flow in `.truss/flows/`. Asks what the flow does (a template suggested from `go.mod`, `package.json`, `pyproject.toml`, `requirements.txt`, `setup.py`, `Makefile`), how it starts (by hand, a schedule in plain words or a cron expression, or when files change) and whether to notify on failure. `--yes`, or no terminal, takes every suggestion; Ctrl-C stops it and writes nothing. Refuses a folder that has a `truss.yaml`; never overwrites a file, and leaves nothing half-written. |
 | `truss flows new [<name>] [--template <t>] [--yes]` | Adds a flow to this project with the same questions. |
 
 Templates: `go`, `node`, `python`, `make`, `backup`, `shell`.

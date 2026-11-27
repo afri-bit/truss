@@ -3,9 +3,11 @@
   "title": "truss init",
   "tier": 1,
   "branch": "feature/031-truss-init",
-  "status": "in_progress",
-  "step": "implemented; review next",
-  "steps_done": [],
+  "status": "in_review",
+  "step": "review findings fixed; PR",
+  "steps_done": [
+    "reviewer findings fixed"
+  ],
   "requirements": [],
   "specs": [
     "specs/031-truss-init/spec.md"
@@ -16,5 +18,5 @@
   "next_actions": [],
   "pr": null,
   "created": "2026-11-27T16:08:54Z",
-  "updated": "2026-11-27T16:08:54Z"
+  "updated": "2026-11-27T16:30:31Z"
 }
