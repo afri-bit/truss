@@ -147,6 +147,8 @@ func parsePipelineBlock(p *Pipeline, val *yaml.Node) {
 			p.Workdir = parseString(p, v, "flow workdir")
 		case "overlap":
 			p.Overlap = Overlap(oneOf(p, v, "flow overlap", string(OverlapQueue), string(OverlapSkip), string(OverlapParallel)))
+		case "kill_timeout":
+			p.KillTimeout = parseKillTimeout(p, v, "flow")
 		default:
 			p.noteUnknown(field, "in flow")
 		}
@@ -191,6 +193,8 @@ func parseStep(p *Pipeline, item *yaml.Node, pos int, job string) Step {
 			deferred = append(deferred, func(label string) { step.Dir = parseString(p, v, label+" dir") })
 		case "timeout":
 			deferred = append(deferred, func(label string) { step.Timeout = parseDuration(p, v, label, "timeout") })
+		case "kill_timeout":
+			deferred = append(deferred, func(label string) { step.KillTimeout = parseKillTimeout(p, v, label) })
 		case "retries":
 			deferred = append(deferred, func(label string) { step.Retries = parseRetries(p, v, label) })
 		case "retry_delay":
@@ -546,4 +550,16 @@ func parseConcurrency(p *Pipeline, val *yaml.Node) {
 		shown = "null"
 	}
 	p.concurrencyBad, p.concurrencyText = true, strconv.Quote(shown)
+}
+
+// MaxKillTimeout bounds kill_timeout (spec 028): service managers give a
+// stopping daemon about a minute before they kill it.
+const MaxKillTimeout = time.Minute
+
+func parseKillTimeout(p *Pipeline, v *yaml.Node, label string) time.Duration {
+	d := parseDuration(p, v, label, "kill_timeout")
+	if d > MaxKillTimeout {
+		p.issue("%s kill_timeout must be at most %s", label, MaxKillTimeout)
+	}
+	return d
 }

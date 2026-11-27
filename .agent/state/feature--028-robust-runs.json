@@ -1,0 +1,23 @@
+{
+  "work_id": "feature--028-robust-runs",
+  "title": "Robust runs",
+  "tier": 2,
+  "branch": "feature/028-robust-runs",
+  "status": "in_review",
+  "step": "security findings fixed; PR",
+  "steps_done": [
+    "reviewer and portability findings fixed",
+    "security findings fixed"
+  ],
+  "requirements": [],
+  "specs": [
+    "specs/028-robust-runs/spec.md"
+  ],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [],
+  "pr": "https://github.com/afri-bit/truss/pull/31",
+  "created": "2026-11-25T15:58:43Z",
+  "updated": "2026-11-27T15:38:04Z"
+}

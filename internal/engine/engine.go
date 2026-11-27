@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -22,6 +23,13 @@ type Option func(*config)
 type config struct {
 	loadSecrets func() (map[string]string, error)
 	run         RunInfo
+	killNow     <-chan struct{}
+}
+
+// WithKillNow gives a channel that, once closed, ends every step's
+// kill_timeout at once (a second Ctrl-C, spec 028).
+func WithKillNow(ch <-chan struct{}) Option {
+	return func(c *config) { c.killNow = ch }
 }
 
 // WithSecrets supplies the stored secrets, name to value. load is called once
@@ -307,7 +315,8 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 			}
 		}
 		if err == nil {
-			proc, err = executor.Start(base, executor.Request{Run: step.Run, Dir: workDir, Env: stepEnvironment, Out: out, ErrOut: errOut})
+			proc, err = executor.Start(base, executor.Request{Run: step.Run, Dir: workDir, Env: stepEnvironment, Out: out, ErrOut: errOut,
+				KillTimeout: cmp.Or(step.KillTimeout, executor.DefaultKillTimeout), KillNow: cfg.killNow})
 		}
 		if err != nil {
 			return finish(outcome{slot: slot, attempt: attempt, id: step.ID, res: executor.Result{Err: err}})
@@ -328,6 +337,8 @@ func Run(ctx context.Context, p pipeline.Pipeline, dir string, env []string, eve
 			}
 			o := outcome{slot: slot, attempt: attempt, id: step.ID, res: res}
 			if res.Stopped && base.Err() == nil && errors.Is(waitCtx.Err(), context.DeadlineExceeded) {
+				// A step that handled the stop and exited 0 still ran out of
+				// time: the timeout fails it whatever its exit (spec 028).
 				// The step's own limit ended it, not a failure elsewhere.
 				o.res.Stopped = false
 				o.res.ExitCode = nil
@@ -507,7 +518,9 @@ func stepResult(id string, res executor.Result, hidden []string) pipeline.StepRu
 		step.Error = res.Err.Error()
 		return step
 	}
-	if res.ExitCode == nil || *res.ExitCode != 0 {
+	// A step TRUSS stopped did not finish its work, whatever it exited with
+	// after the stop (spec 028): it is failed, so failure() conditions hold.
+	if res.ExitCode == nil || *res.ExitCode != 0 || res.Stopped {
 		step.Status = pipeline.StatusFailed
 	}
 	return step

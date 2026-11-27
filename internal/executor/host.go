@@ -17,6 +17,13 @@ import (
 // The implementation is per OS: a process group on Unix, a job object on
 // Windows.
 type tree interface {
+	// waitGone waits until no process of the tree is left, the deadline
+	// passes or killNow is closed.
+	waitGone(deadline time.Time, killNow <-chan struct{})
+	// terminate asks every process of the tree to stop (SIGTERM on Unix). It
+	// reports false where the OS has no such request (Windows): the caller
+	// then kills at once.
+	terminate() bool
 	// kill force-ends every process of the tree at once. It is idempotent.
 	kill()
 	// afterExit runs once the shell has exited. It ends every process still
@@ -32,15 +39,17 @@ const copyGrace = 2 * time.Second
 
 // Process is a started Step command. Call Wait exactly once.
 type Process struct {
-	cmd *exec.Cmd
+	cmd         *exec.Cmd
+	killTimeout time.Duration
+	killNow     <-chan struct{}
 	// exited receives the result of cmd.Wait, sent by a reaper goroutine that
 	// Start launches as soon as the shell is running in its tree. It is
 	// buffered (capacity 1), so the reaper never blocks and a delivered exit
 	// is observable (len(exited) == 1) before Wait is called.
 	exited chan error
 	tree   tree
-	stdout bytes.Buffer
-	stderr bytes.Buffer
+	stdout capBuffer
+	stderr capBuffer
 	reads  []*os.File
 	copies sync.WaitGroup
 }
@@ -64,7 +73,7 @@ func Start(ctx context.Context, req Request) (*Process, error) {
 	}
 	prepare(cmd)
 
-	p := &Process{cmd: cmd}
+	p := &Process{cmd: cmd, killTimeout: req.KillTimeout, killNow: req.KillNow}
 	var outW, errW io.Writer = &p.stdout, &p.stderr
 	if req.Out != nil {
 		mu := &sync.Mutex{}
@@ -127,8 +136,12 @@ func Start(ctx context.Context, req Request) (*Process, error) {
 // macOS it is also the id of the Step's process group.
 func (p *Process) PID() int { return p.cmd.Process.Pid }
 
+// DefaultKillTimeout is how long a stopped step has to end by itself before
+// its processes are killed, when the Request does not say (spec 028).
+const DefaultKillTimeout = 10 * time.Second
+
 // Wait blocks until the shell exits, or ctx is done, in which case the whole
-// tree is force-ended first. Either way it ends leftover processes, waits for
+// tree is asked to stop and, after the request's KillTimeout, force-ended. Either way it ends leftover processes, waits for
 // them to be gone and returns the Result.
 //
 // Wait must be called exactly once, and always: it collects the reaper's
@@ -145,21 +158,44 @@ func (p *Process) Wait(ctx context.Context) Result {
 		case err = <-p.exited:
 		default:
 			killed = true
-			p.tree.kill()
-			err = <-p.exited
+			if p.killTimeout > 0 && p.tree.terminate() {
+				// The whole group has kill_timeout to end, not only the shell:
+				// a child that handles SIGTERM keeps its time after a shell
+				// without a trap is gone (spec 028).
+				deadline := time.Now().Add(p.killTimeout)
+				exited := false
+				select {
+				case err = <-p.exited:
+					exited = true
+					p.tree.waitGone(deadline, p.killNow)
+				case <-time.After(p.killTimeout):
+				case <-p.killNow:
+				}
+				p.tree.kill()
+				if !exited {
+					// A shell that left its group is not reached by the group
+					// kill; it is not reaped yet, so its pid is still its own.
+					_ = p.cmd.Process.Kill()
+					err = <-p.exited
+				}
+			} else {
+				p.tree.kill()
+				err = <-p.exited
+			}
 		}
 	}
 	p.tree.afterExit()
 	p.drain()
 	p.tree.release()
 
-	res := Result{Stdout: p.stdout.String(), Stderr: p.stderr.String()}
+	// A shell that TRUSS stopped was stopped, whether it ended on SIGTERM,
+	// on a code of its own after handling it (0 included), or killed.
+	res := Result{Stdout: p.stdout.String(), Stderr: p.stderr.String(), Stopped: killed}
 	if err == nil {
 		code := 0
 		res.ExitCode = &code
 		return res
 	}
-	res.Stopped = killed && endedByKill(p.cmd.ProcessState)
 	var exitErr *exec.ExitError
 	if !errors.As(err, &exitErr) {
 		res.Err = fmt.Errorf("wait for command: %w", err)
@@ -235,3 +271,31 @@ func shellCommand(run string) (string, []string) {
 	}
 	return Shell(), []string{"-c", run}
 }
+
+// maxKeptOutput bounds the output of a step kept in memory for the Result
+// (spec 028): a step that prints without end must not exhaust TRUSS's
+// memory. Output streamed to Request.Out is not bounded here.
+const maxKeptOutput = 1 << 20
+
+// capBuffer keeps the first maxKeptOutput bytes written to it and drops the
+// rest, reporting every write as complete.
+type capBuffer struct {
+	buf bytes.Buffer
+	cut bool
+}
+
+func (c *capBuffer) Write(b []byte) (int, error) {
+	if room := maxKeptOutput - c.buf.Len(); room < len(b) {
+		if room > 0 {
+			c.buf.Write(b[:room])
+		}
+		if !c.cut {
+			c.buf.WriteString("\n[output cut at 1 MiB]\n")
+			c.cut = true
+		}
+		return len(b), nil
+	}
+	return c.buf.Write(b)
+}
+
+func (c *capBuffer) String() string { return c.buf.String() }

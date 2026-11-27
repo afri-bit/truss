@@ -67,7 +67,8 @@ skipped. --active means queued or running. Needs the daemon.
 
   start [--address <host:port>] [--max-runs <n>] [--history <n>]
                                                   start the service in the background
-  stop                                            stop it; active runs are cancelled
+  stop [--wait]                                   stop it; active runs are cancelled
+                                                  (--wait lets them finish first)
   status [--json]                                 exits 1 when it is not running
   run                                             run it in this terminal
   install | uninstall                             start it at login, or stop doing so

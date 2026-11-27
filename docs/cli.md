@@ -176,7 +176,7 @@ through [`secrets`](pipeline-reference.md#secrets).
 | Command | What it does |
 |---|---|
 | `truss daemon start [--address <host:port>] [--max-runs <n>] [--history <n>]` | Starts the background service and returns. The flags win over `config.yaml` for this start. |
-| `truss daemon stop` | Stops it. Active runs are cancelled. |
+| `truss daemon stop [--wait]` | Stops it. Active runs are cancelled: each step is asked to stop and killed after its `kill_timeout`. `--wait` first waits until no run is running or queued; a run a schedule starts meanwhile is waited for too, and Ctrl-C ends the wait. |
 | `truss daemon status [--json]` | Says whether it runs, where, how busy it is, and whether it starts at login. Exits `1` when it does not run. `--json` prints `{"running": ..., "daemon": ...}` and keeps the exit code. |
 | `truss daemon logs [-n <lines>] [--follow]` | Prints the last 50 lines (or `-n`) of the daemon's own log, and with `--follow` keeps printing until Ctrl-C. Reads a file, so it works when the daemon is stopped. |
 | `truss daemon config [--json]` | Shows each daemon setting (`address`, `max_runs`, `history`), its value and where it comes from: a `TRUSS_DAEMON_*` variable, `config.yaml` or the default. See [Configuration](daemon.md#configuration). |

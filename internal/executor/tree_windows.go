@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
+	"unsafe"
 )
 
 const (
@@ -23,7 +25,40 @@ var (
 	procCreateJobObject    = kernel32.NewProc("CreateJobObjectW")
 	procAssignProcessToJob = kernel32.NewProc("AssignProcessToJobObject")
 	procTerminateJobObject = kernel32.NewProc("TerminateJobObject")
+	procSetInformationJob  = kernel32.NewProc("SetInformationJobObject")
 	procNtResumeProcess    = ntdll.NewProc("NtResumeProcess")
+)
+
+// jobObjectExtendedLimitInformation is JOBOBJECT_EXTENDED_LIMIT_INFORMATION;
+// the field order and sizes follow the C struct on 64-bit Windows.
+type jobObjectExtendedLimitInformation struct {
+	PerProcessUserTimeLimit int64
+	PerJobUserTimeLimit     int64
+	LimitFlags              uint32
+	MinimumWorkingSetSize   uintptr
+	MaximumWorkingSetSize   uintptr
+	ActiveProcessLimit      uint32
+	Affinity                uintptr
+	PriorityClass           uint32
+	SchedulingClass         uint32
+	IoCounters              [6]uint64
+	ProcessMemoryLimit      uintptr
+	JobMemoryLimit          uintptr
+	PeakProcessMemoryUsed   uintptr
+	PeakJobMemoryUsed       uintptr
+}
+
+// The struct must have the C size on the architectures TRUSS ships for
+// Windows (amd64, arm64): a build for another one fails here instead of at
+// every step's start.
+var (
+	_ [144 - unsafe.Sizeof(jobObjectExtendedLimitInformation{})]byte
+	_ [unsafe.Sizeof(jobObjectExtendedLimitInformation{}) - 144]byte
+)
+
+const (
+	jobObjectExtendedLimitInformationClass = 9
+	jobObjectLimitKillOnJobClose           = 0x2000
 )
 
 // jobTree is a job object that holds the shell and its descendants.
@@ -49,6 +84,14 @@ func attach(cmd *exec.Cmd) (tree, error) {
 	if job == 0 {
 		return nil, fmt.Errorf("create job object: %w", callErr)
 	}
+	// When the last handle to the job closes, every process in it ends: if
+	// TRUSS itself dies, its steps do not outlive it (spec 028).
+	info := jobObjectExtendedLimitInformation{LimitFlags: jobObjectLimitKillOnJobClose}
+	if r, _, callErr := procSetInformationJob.Call(job, jobObjectExtendedLimitInformationClass,
+		uintptr(unsafe.Pointer(&info)), unsafe.Sizeof(info)); r == 0 { // #nosec G103 -- a Win32 call needs the struct's address
+		_ = syscall.CloseHandle(syscall.Handle(job))
+		return nil, fmt.Errorf("set job object limits: %w", callErr)
+	}
 	if r, _, callErr := procAssignProcessToJob.Call(job, uintptr(h)); r == 0 {
 		_ = syscall.CloseHandle(syscall.Handle(job))
 		return nil, fmt.Errorf("assign process to job object: %w", callErr)
@@ -64,6 +107,14 @@ func attach(cmd *exec.Cmd) (tree, error) {
 // the job object. It is distinctive (0x5452, "TR") so a shell that was ended by
 // TRUSS can be told apart from one that exited by itself.
 const stoppedExitCode = 0x5452
+
+// terminate reports false: a job object has no polite stop that reaches
+// every process, so a stopped step on Windows is ended at once (spec 028).
+func (j *jobTree) terminate() bool { return false }
+
+// waitGone is not needed on Windows: terminate reports false, so the job is
+// killed at once.
+func (j *jobTree) waitGone(time.Time, <-chan struct{}) {}
 
 // kill terminates every process in the job with stoppedExitCode. Idempotent.
 func (j *jobTree) kill() {
@@ -89,10 +140,3 @@ func (j *jobTree) release() {
 
 // signalName: Windows has no POSIX signals, so a missing exit code is unknown.
 func signalName(*os.ProcessState) string { return "unknown" }
-
-// endedByKill reports whether the shell exited with stoppedExitCode, the code
-// only a job-object kill by TRUSS produces. A shell that exited by itself
-// before the job was terminated keeps its own code and is not reported.
-func endedByKill(st *os.ProcessState) bool {
-	return st != nil && st.ExitCode() == stoppedExitCode
-}

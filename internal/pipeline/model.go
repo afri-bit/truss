@@ -45,6 +45,11 @@ type Step struct {
 	Dir string
 	// Timeout ends the step when it runs longer. Zero means no limit.
 	Timeout time.Duration
+	// KillTimeout is how long a stopped step may take to end after it is
+	// asked to, before it is killed (spec 028). Zero means the flow's, and
+	// in an ExecutionPlan the flow's is already applied; zero there means the
+	// engine's default.
+	KillTimeout time.Duration
 	// Retries is how many more times a failed step is run. Zero means never.
 	Retries int
 	// RetryDelay is the wait before each retry. Zero means no wait.
@@ -128,6 +133,9 @@ type Pipeline struct {
 	Env       map[string]string
 	Secrets   []string
 	Schedules []Schedule
+	// KillTimeout is the flow's kill_timeout for every step that does not set
+	// one (spec 028). Zero means the default.
+	KillTimeout time.Duration
 	// ProjectEnv is the env of the project's truss.yaml (spec 026). It is not
 	// read from the flow file; the caller that knows the project sets it. It
 	// is the lowest layer, below Env.

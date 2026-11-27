@@ -7,6 +7,7 @@
 package runs
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"crypto/rand"
@@ -617,7 +618,7 @@ func (m *Manager) execute(ctx context.Context, rec *record) {
 	if req.CacheDir != "" {
 		env = append(env, "TRUSS_CACHE_DIR="+req.CacheDir)
 	}
-	result, err := engine.Run(ctx, req.Definition, req.Dir, env, &follower{m: m, rec: rec, log: log},
+	result, err := engine.Run(ctx, req.Definition, req.Dir, env, &follower{m: m, rec: rec, log: log, out: outputBudget{left: MaxRunLog}},
 		engine.WithSecrets(m.opts.Secrets),
 		engine.WithRun(engine.RunInfo{ID: id, Flow: req.Pipeline, Trigger: req.Trigger, ProjectDir: cmp.Or(req.ProjectDir, req.Dir)}))
 
@@ -677,6 +678,7 @@ type follower struct {
 	m   *Manager
 	rec *record
 	log *runlog.Log
+	out outputBudget
 }
 
 func (f *follower) step(id string, change func(*api.Step)) {
@@ -731,7 +733,26 @@ func (f *follower) StepSkipped(id, reason string) {
 	f.step(id, func(s *api.Step) { s.Status, s.Reason, s.FinishedAt = api.StepSkipped, reason, &now })
 }
 
-func (f *follower) StepOutput(id string, chunk []byte) { f.log.StepOutput(id, chunk) }
+// logCost is how many bytes chunk takes in the run log: the log writes every
+// line with a time and the step's id in front.
+func logCost(id string, chunk []byte) int {
+	return len(chunk) + bytes.Count(chunk, []byte{'\n'})*(len("2006-01-02 15:04:05 step  | ")+len(id))
+}
+
+// StepOutput logs a step's output while the run's budget lasts; TRUSS's own
+// lines (steps finishing, the summary) are always logged (spec 028).
+func (f *follower) StepOutput(id string, chunk []byte) {
+	keep, notice := f.out.take(logCost(id, chunk))
+	if keep > len(chunk) {
+		keep = len(chunk)
+	}
+	if keep > 0 {
+		f.log.StepOutput(id, chunk[:keep])
+	}
+	if notice {
+		f.log.StepOutput(id, []byte(fmt.Sprintf("\n[the run log reached %d MiB of step output; TRUSS keeps no more of it]\n", MaxRunLog>>20)))
+	}
+}
 
 // StepProcess records the process id of the step's current attempt.
 func (f *follower) StepProcess(id string, pid int) {
