@@ -18,9 +18,10 @@ truss (the CLI, or the daemon)        one process; the flow is planned and run i
   running the step's `run` text. Steps that do not need each other run side by side, up to the
   flow's `concurrency`.
 - **Each step has its own process tree**: a process group on Linux and macOS, a job object on
-  Windows. Whatever the step starts, even in the background, belongs to it and ends with it.
-- When a step's shell exits, TRUSS ends what is left of its tree, so a step never leaves a process
-  running behind it.
+  Windows. What the step starts, even in the background, belongs to it and ends with it.
+- When a step's shell exits, TRUSS ends what is left of its tree. Two exceptions on Linux and
+  macOS: a process that leaves the group on purpose (`setsid`, a daemonizing tool), and steps of a
+  daemon that crashed; on Windows a step's processes end with TRUSS.
 
 ## Order and failure
 
@@ -50,8 +51,8 @@ A step's environment is built from layers. A later layer wins over an earlier on
 4. `env` of the flow,
 5. `env` of the job,
 6. `env` of the step,
-7. the step's `secrets`, from the secret store,
-8. `--env NAME=VALUE` of a debug run.
+7. `--env NAME=VALUE` given to `truss run`,
+8. the step's `secrets`, from the secret store (`--env` cannot replace a secret).
 
 `${NAME}` in a value is replaced when the step starts, from the layers below it. Each step is a new
 process, so a variable a step `export`s does not reach the next step; put shared values in `env`.
@@ -65,7 +66,7 @@ See [variables and secrets](guide-variables.md).
 | A folder that stays between runs (`TRUSS_DATA_DIR`) | `.truss/state/<flow>/data/` locally, `~/.truss/pipelines/<flow>/` for the daemon |
 | A folder for one run (`TRUSS_TEMP_DIR`) | the system's temporary folder; removed when the run ends |
 | Daemon runs, their logs and history | `~/.truss/runs/` |
-| Secrets | `~/.truss/secrets.json`, readable only by you |
+| Secrets | `~/.truss/secrets.json`, readable only by you on Linux and macOS |
 | The daemon's settings | `~/.truss/config.yaml` |
 
 ## Local and daemon runs

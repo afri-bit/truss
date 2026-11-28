@@ -16,7 +16,7 @@ env:
 ```
 
 ```yaml
-# .truss/flows/sort.yaml
+# in .truss/flows/sort.yaml (with version and flow as usual)
 env:
   INBOX: ${DATA}/inbox              # from the project
   PATH: ${TRUSS_PROJECT_DIR}/bin:${PATH}
@@ -41,7 +41,7 @@ the step starts, the same way on every system. `$$` is a literal `$`. See
 | `TRUSS_DATA_DIR`, `TRUSS_CACHE_DIR` | folders that stay between runs |
 | `TRUSS_OS`, `TRUSS_ARCH` | the system |
 
-The [reference](pipeline-reference.md#built-in-variables) has them all. A file cannot set them.
+The [reference](pipeline-reference.md#built-in-variables) has them all. A file cannot set them, except `TRUSS_DATA_DIR` and `TRUSS_CACHE_DIR`.
 
 ## Secrets
 
@@ -57,9 +57,9 @@ steps:
     run: npm publish
 ```
 
-- A stored secret's value is replaced by `***` in every log.
+- In a run of a flow that declares secrets, every stored secret's value is replaced by `***` in its log.
 - Only the steps that list a secret get it. `${NPM_TOKEN}` in `env` does not read the store.
-- The store is a file only you can read (`~/.truss/secrets.json`). It is not encrypted.
+- The store is a file (`~/.truss/secrets.json`) only you can read on Linux and macOS; on Windows it has the permissions of your profile folder. It is not encrypted.
 
 ## Passing values between steps
 
@@ -78,7 +78,10 @@ steps:
 
 ## See what a step gets
 
+`--env` sets a variable as given; values the file builds from other variables are not worked out
+again, so set the one the step uses (`INBOX`, not `DATA`).
+
 ```console
 $ truss flows show sort sort          # every variable, where it comes from, set or missing
-$ truss run sort --step sort --env DATA=/tmp/test-data
+$ truss run sort --step sort --env INBOX=/tmp/test-inbox
 ```

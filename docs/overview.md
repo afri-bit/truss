@@ -2,7 +2,7 @@
 
 TRUSS runs your workflows on your own machine: by hand, on a schedule, when files change, or after
 another workflow, and it remembers every run. A workflow is a **flow**: a YAML file of steps, each
-a command for your shell.
+a command for the system shell (`sh`, or `cmd` on Windows).
 
 ```yaml
 # .truss/flows/backup.yaml
@@ -21,8 +21,7 @@ steps:
 
 ## What you get
 
-- **Run here, now.** `truss run backup` runs the flow in your shell, prints a readable log and
-  keeps it.
+- **Run here, now.** `truss run backup` runs the flow here, prints a readable log and keeps it.
 - **Run on its own.** A small background service, the [daemon](daemon.md), starts flows on a
   schedule, when files change, or after another flow, and keeps their history.
 - **Know what happened.** `truss runs`, `truss status`, a terminal dashboard and

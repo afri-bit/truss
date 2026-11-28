@@ -38,14 +38,14 @@ Keep the output of the flow out of the folders it watches, or `ignore` it, or it
 Deploy after every successful build; alert when it fails:
 
 ```yaml
-# .truss/flows/deploy.yaml
+# in .truss/flows/deploy.yaml (with version, flow and steps as usual)
 on:
   run:
     flow: build                     # status: succeeded is the default
 ```
 
 ```yaml
-# .truss/flows/alert.yaml
+# in .truss/flows/alert.yaml
 on:
   run:
     flow: build
@@ -59,8 +59,8 @@ on:
 - A flow has at most one run started by a hook at a time. More changes or ended runs meanwhile
   start one run after it, not one each.
 - Flows that start each other in a loop stop after 10 runs in a row.
-- A scan stops at 50,000 files and folders per flow; narrow `paths` or `ignore` big folders such
-  as `node_modules`.
+- A scan stops at 50,000 files and folders, and watches at most 10,000 matching files, per flow;
+  narrow `paths` or `ignore` big folders such as `node_modules`.
 - A whole disk, `~` and `..` cannot be watched.
 
 The daemon log (`truss daemon logs`) says when a limit was hit. `truss flows show sort` lists a

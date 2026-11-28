@@ -63,7 +63,7 @@ A schedule fires only while the daemon runs. When the machine was off or asleep 
 - `missed: skip` (the default) runs nothing and records a skipped run;
 - `missed: run` runs once as soon as the daemon is back, however many times were missed.
 
-A missed schedule counts as a failure for `notify`, so you hear about it.
+A skipped missed time counts as a failure for `notify`, so you hear about it; a catch-up run is notified by its own result.
 
 ## Check on it
 

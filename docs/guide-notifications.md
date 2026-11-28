@@ -49,12 +49,12 @@ The command gets `TRUSS_NOTIFY_FLOW`, `TRUSS_NOTIFY_STATUS`, `TRUSS_NOTIFY_REASO
 | `success` | every successful run |
 | `recovered` | the first success after a failure |
 | `changed` | a run that ended differently from the one before |
-| `always` | every run |
+| `always` | every run that ran, and missed schedules |
 
 ## Try it
 
 ```console
-$ truss run backup --notify          # notify for this local run, as the daemon would
+$ truss run backup --notify          # notify for this local run (recovered and changed need the daemon's history)
 ```
 
 A notification that cannot be sent never changes the run. The daemon writes why to its log

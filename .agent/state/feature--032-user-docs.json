@@ -3,9 +3,11 @@
   "title": "User documentation",
   "tier": 1,
   "branch": "feature/032-user-docs",
-  "status": "in_progress",
-  "step": "written; review next",
-  "steps_done": [],
+  "status": "in_review",
+  "step": "review findings fixed; PR",
+  "steps_done": [
+    "spec-reviewer findings fixed"
+  ],
   "requirements": [],
   "specs": [
     "specs/032-user-docs/spec.md"
@@ -16,5 +18,5 @@
   "next_actions": [],
   "pr": null,
   "created": "2026-11-27T16:26:46Z",
-  "updated": "2026-11-27T16:26:46Z"
+  "updated": "2026-11-28T00:40:14Z"
 }

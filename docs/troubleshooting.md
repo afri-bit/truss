@@ -12,7 +12,7 @@ Find your symptom, then the cause and the fix.
 | `dir uses ${NAME}, which is not set` | A `dir` uses a variable that has no value. | Set it in `env`, or check its name with `truss flows show <flow> <step>`. |
 | A step `timed out after ...` | It ran longer than its `timeout`. | Raise `timeout`; `truss runs show last` shows how long steps took. |
 | A secret is `missing` | It is not in the store. | `truss secret set NAME`. |
-| `X is set by TRUSS in every run and cannot be set here` | A built-in name in `env` or `secrets`. | Pick another name; [built-in variables](pipeline-reference.md#built-in-variables). |
+| `X is set by TRUSS in every run and cannot be set here` (or `cannot be a secret name`) | A built-in name in `env` or `secrets`. | Pick another name; [built-in variables](pipeline-reference.md#built-in-variables). |
 
 ## Schedules and hooks
 

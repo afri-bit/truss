@@ -27,10 +27,13 @@ one shell may need changes for another.
 - A step's processes end at once when it is stopped; `kill_timeout` does not apply.
 - Desktop notifications need a logged-in user (Windows PowerShell 5.1 shows them).
 
-## macOS
+## Every system
 
 - A daemon started at login has a shorter `PATH` than your terminal; see
   [the environment of a login-started daemon](daemon.md#the-environment-of-a-login-started-daemon).
+
+## macOS
+
 - Notifications may be held back by Focus or by the notification settings of Script Editor.
 
 ## Linux
