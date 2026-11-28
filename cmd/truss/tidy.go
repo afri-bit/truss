@@ -9,7 +9,7 @@ import (
 // commands is every first word truss accepts, for "did you mean" and for
 // shell completion. Keep it in step with the switch in RunWithInput.
 var commands = []string{
-	"cache", "cancel", "completion", "daemon", "dashboard", "desktop", "env", "flows", "help",
+	"cache", "cancel", "completion", "daemon", "dashboard", "desktop", "env", "flows", "help", "init",
 	"logs", "pause", "pipelines", "project", "projects", "register", "resume", "run", "runs",
 	"schedules", "secret", "status", "trigger", "unregister", "validate", "version",
 }
@@ -19,7 +19,7 @@ var subcommands = map[string][]string{
 	"cache":      {"clear"},
 	"completion": {"bash", "zsh", "fish", "powershell"},
 	"daemon":     {"start", "stop", "status", "run", "install", "uninstall", "logs", "config"},
-	"flows":      {"list", "show", "graph"},
+	"flows":      {"list", "show", "graph", "new"},
 	"pipelines":  {"list", "show"},
 	"project":    {"show"},
 	"projects":   {"list"},

@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/afri-bit/truss/internal/api"
@@ -79,6 +80,9 @@ type definition struct {
 	// named is pipeline.name from the last reading that got that far. It
 	// survives a file that stops loading, so the name shown does not jump back.
 	named string
+	// notify is the notify block of the last definition that loaded: a file
+	// that stops loading still notifies about the runs it fails (spec 030).
+	notify *pipeline.Notify
 	// checked is when the file was last looked at, by the clock of this machine.
 	checked time.Time
 	// armed holds the schedules given to the scheduler: those of the last
@@ -104,6 +108,21 @@ type Daemon struct {
 	mu    sync.Mutex // guards sched and defs
 	sched *scheduler.Scheduler
 	defs  map[string]*definition
+
+	// watches is the on.file state per flow, and pendingRuns the on.run
+	// runs waiting for a hook run of their flow to end (name to chain); only
+	// the Serve goroutine uses them.
+	watches     map[string]*fileWatch
+	pendingRuns map[string]int
+	// finished receives runs that ended, for on.run (spec 029); dropped
+	// counts those that did not fit.
+	finished chan finishedRun
+	dropped  *atomic.Int64
+	// notifyCtx ends when the daemon stops; notifying counts the
+	// notifications being sent (spec 030).
+	notifyCtx  context.Context
+	stopNotify context.CancelFunc
+	notifying  sync.WaitGroup
 
 	stopOnce sync.Once
 	stop     chan struct{}
@@ -144,7 +163,16 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 	if err != nil {
 		return nil, err
 	}
-	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Keep: opts.KeepRuns, Env: opts.Env, Secrets: secrets.Open(opts.Home.Secrets()).Load, Now: opts.Now, Resolve: resolver(reg), Folders: func(name string) (string, string) { return opts.Home.PipelineData(name), opts.Home.PipelineCache(name) }})
+	finished := make(chan finishedRun, 256)
+	dropped := &atomic.Int64{}
+	mgr, err := runs.Open(runs.Options{Dir: opts.Home.Runs(), MaxParallel: opts.MaxParallelRuns, Keep: opts.KeepRuns, Env: opts.Env, Secrets: secrets.Open(opts.Home.Secrets()).Load, Now: opts.Now, Resolve: resolver(reg), Folders: func(name string) (string, string) { return opts.Home.PipelineData(name), opts.Home.PipelineCache(name) },
+		Finished: func(run api.Run, chain int) {
+			select {
+			case finished <- finishedRun{run, chain}:
+			default: // the daemon is far behind: counted and logged by Serve
+				dropped.Add(1)
+			}
+		}})
 	if err != nil {
 		return nil, err
 	}
@@ -162,15 +190,20 @@ func Start(ctx context.Context, opts Options) (*Daemon, error) {
 	}
 	now := opts.Now()
 	d := &Daemon{
-		opts:     opts,
-		registry: reg,
-		runs:     mgr,
-		listener: ln,
-		endpoint: api.Endpoint{Address: ln.Addr().String(), Token: hex.EncodeToString(token), PID: os.Getpid(), StartedAt: now, Version: opts.Version},
-		sched:    scheduler.New(opts.Grace),
-		defs:     map[string]*definition{},
-		stop:     make(chan struct{}),
+		opts:        opts,
+		registry:    reg,
+		runs:        mgr,
+		listener:    ln,
+		endpoint:    api.Endpoint{Address: ln.Addr().String(), Token: hex.EncodeToString(token), PID: os.Getpid(), StartedAt: now, Version: opts.Version},
+		sched:       scheduler.New(opts.Grace),
+		defs:        map[string]*definition{},
+		stop:        make(chan struct{}),
+		watches:     map[string]*fileWatch{},
+		pendingRuns: map[string]int{},
+		finished:    finished,
+		dropped:     dropped,
 	}
+	d.notifyCtx, d.stopNotify = context.WithCancel(context.Background())
 	d.metrics = metrics.New(metrics.Options{Self: os.Getpid(), Targets: d.metricTargets})
 
 	// Count schedules from the last moment a daemon watched the clock, so the
@@ -233,6 +266,13 @@ loop:
 			break loop
 		case <-ticker.C:
 			d.tick()
+			d.checkFileHooks(d.opts.Now())
+			d.startPendingRuns()
+			if n := d.dropped.Swap(0); n > 0 {
+				d.logf("%d ended runs were not checked for on.run and notifications: the daemon was too busy", n)
+			}
+		case f := <-d.finished:
+			d.runFinished(f)
 		}
 	}
 
@@ -240,6 +280,16 @@ loop:
 	defer cancel()
 	_ = server.Shutdown(shutdownCtx)
 	d.runs.Close()
+	// Notifications still being sent get a few seconds, then are stopped.
+	waited := make(chan struct{})
+	go func() { d.notifying.Wait(); close(waited) }()
+	select {
+	case <-waited:
+	case <-time.After(5 * time.Second):
+		d.stopNotify()
+		<-waited
+	}
+	d.stopNotify()
 	d.saveClock(d.opts.Now())
 	_ = os.Remove(d.opts.Home.Endpoint())
 	d.logf("daemon stopped")
@@ -337,7 +387,11 @@ func (d *Daemon) load(e registry.Entry, since time.Time, force bool) *definition
 				cur.named = cur.def.Name
 			}
 		}
+		if old != nil {
+			cur.notify = old.notify
+		}
 		if cur.err == nil {
+			cur.notify = cur.def.Notify
 			cur.armed = cur.def.Schedules
 		}
 		d.defs[e.Name] = cur
@@ -451,6 +505,15 @@ func readDefinition(path string) (pipeline.Pipeline, pipeline.ExecutionPlan, err
 
 // submit reads the definition as it is now and requests a run of it.
 func (d *Daemon) submit(name, trigger string, scheduledFor time.Time) (api.Run, error) {
+	return d.submitRequest(name, trigger, scheduledFor, nil, 0)
+}
+
+// submitHook requests a run started by a hook (spec 029).
+func (d *Daemon) submitHook(name, trigger string, changed []string, chain int) (api.Run, error) {
+	return d.submitRequest(name, trigger, time.Time{}, changed, chain)
+}
+
+func (d *Daemon) submitRequest(name, trigger string, scheduledFor time.Time, changed []string, chain int) (api.Run, error) {
 	e, ok := d.registry.Get(name)
 	if !ok {
 		return api.Run{}, fmt.Errorf("%w: %q", registry.ErrNotFound, name)
@@ -481,6 +544,8 @@ func (d *Daemon) submit(name, trigger string, scheduledFor time.Time) (api.Run, 
 		CacheDir:     cache,
 		Trigger:      trigger,
 		ScheduledFor: scheduledFor,
+		ChangedFiles: changed,
+		Chain:        chain,
 	})
 }
 

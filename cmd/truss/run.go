@@ -19,6 +19,7 @@ import (
 	"github.com/afri-bit/truss/internal/engine"
 	"github.com/afri-bit/truss/internal/executor"
 	"github.com/afri-bit/truss/internal/home"
+	"github.com/afri-bit/truss/internal/notify"
 	"github.com/afri-bit/truss/internal/pipeline"
 	"github.com/afri-bit/truss/internal/runlog"
 )
@@ -91,7 +92,42 @@ func runLocal(ctx context.Context, pos []string, opts runOptions, cwd string, en
 	if tr != nil {
 		tr.finish(status, reason)
 	}
+	if opts.notify {
+		// The block of the file as written: a debug run or --env builds a
+		// smaller flow without it.
+		notifyLocal(ctx, l.def.Name, l.def.Notify, status, reason, cmp.Or(spec.projectDir, filepath.Dir(file.path)), env, stderr)
+	}
 	return code
+}
+
+// notifyLocal sends the flow's notifications for a local run with --notify
+// (spec 030). A failure to notify is reported and never changes the exit
+// code.
+func notifyLocal(ctx context.Context, flow string, n *pipeline.Notify, status, reason, dir string, env []string, stderr io.Writer) {
+	if n == nil {
+		fmt.Fprintln(stderr, "note: --notify: the flow has no notify block")
+		return
+	}
+	if ctx.Err() != nil {
+		fmt.Fprintln(stderr, "note: --notify: the run was interrupted; no notification sent")
+		return
+	}
+	o := notify.Outcome{Flow: flow, RunID: "local", Status: status, Reason: clean(reason), Trigger: api.TriggerLocal, Ended: time.Now()}
+	if !notify.Wanted(n, o) {
+		return
+	}
+	sender := notify.Sender{Secret: func(name string) (string, bool) {
+		all, err := secretLoader(env)()
+		if err != nil {
+			return "", false
+		}
+		v, ok := all[name]
+		return v, ok
+	}, Dir: dir, Env: env}
+	// A Ctrl-C while notifying stops it.
+	for _, err := range sender.Send(ctx, n, o) {
+		fmt.Fprintf(stderr, "note: notification not sent: %s\n", clean(err.Error()))
+	}
 }
 
 // startTracking opens the run on the daemon of this invocation's TRUSS home.

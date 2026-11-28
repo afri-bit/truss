@@ -1,0 +1,22 @@
+{
+  "work_id": "feature--031-truss-init",
+  "title": "truss init",
+  "tier": 1,
+  "branch": "feature/031-truss-init",
+  "status": "in_review",
+  "step": "review findings fixed; PR",
+  "steps_done": [
+    "reviewer findings fixed"
+  ],
+  "requirements": [],
+  "specs": [
+    "specs/031-truss-init/spec.md"
+  ],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [],
+  "pr": "https://github.com/afri-bit/truss/pull/34",
+  "created": "2026-11-27T16:08:54Z",
+  "updated": "2026-11-27T16:38:33Z"
+}

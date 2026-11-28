@@ -46,6 +46,10 @@ const (
 	// TriggerLocal marks a run that executes in a caller's shell and only
 	// reports to the daemon (`truss run --track`). The daemon never starts it.
 	TriggerLocal = "local"
+	// TriggerFile is a run started because watched files changed (on.file).
+	TriggerFile = "file"
+	// TriggerRun is a run started because another flow's run ended (on.run).
+	TriggerRun = "run"
 )
 
 // Run is one execution of a registered pipeline, or the record of one that

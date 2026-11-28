@@ -114,6 +114,66 @@ type Schedule struct {
 	Missed   Missed
 }
 
+// FileHook starts a flow when files change (on.file, spec 029).
+type FileHook struct {
+	// Paths are what is watched, relative to the project root or absolute:
+	// a folder (everything under it), a file, or a pattern with *, ? and **.
+	Paths []string
+	// Ignore are patterns of changes that do not count.
+	Ignore []string
+	// Debounce is how long changes must stop before the flow starts.
+	Debounce time.Duration
+}
+
+// RunHook starts a flow when another flow's run ends (on.run, spec 029).
+type RunHook struct {
+	// Flow is the name of the other flow.
+	Flow string
+	// Status lists the endings that start this flow: succeeded, failed or
+	// any. Empty means succeeded.
+	Status []string
+}
+
+// Matches reports whether a run of the hook's flow that ended with status
+// (an api run status) starts the flow.
+func (h RunHook) Matches(flow, status string) bool {
+	if flow != h.Flow {
+		return false
+	}
+	want := h.Status
+	if len(want) == 0 {
+		want = []string{"succeeded"}
+	}
+	for _, w := range want {
+		if w == "any" && (status == "succeeded" || status == "failed" || status == "cancelled") || w == status {
+			return true
+		}
+	}
+	return false
+}
+
+// Notify says who hears about a flow's runs, and when (spec 030).
+type Notify struct {
+	// On lists when: failure, success, always, recovered, changed. Empty
+	// means failure.
+	On []string
+	// Desktop shows a notification of the operating system.
+	Desktop bool
+	// Webhook, when set, is posted to.
+	Webhook *Webhook
+	// Run is a command for the host shell, run with the outcome in
+	// TRUSS_NOTIFY_* variables.
+	Run string
+}
+
+// Webhook is a URL to post a run's outcome to.
+type Webhook struct {
+	// URL is the address, or "secret:NAME" for a stored secret that holds it.
+	URL string
+	// Format is slack, discord, teams or generic (the default).
+	Format string
+}
+
 // Pipeline is the parsed pipeline model. Parsing it executes nothing.
 // A definition has either Steps or Jobs, never both.
 type Pipeline struct {
@@ -133,6 +193,12 @@ type Pipeline struct {
 	Env       map[string]string
 	Secrets   []string
 	Schedules []Schedule
+	// FileHook is on.file; nil when the flow has none.
+	FileHook *FileHook
+	// RunHooks is on.run.
+	RunHooks []RunHook
+	// Notify is the notify block; nil when the flow has none.
+	Notify *Notify
 	// KillTimeout is the flow's kill_timeout for every step that does not set
 	// one (spec 028). Zero means the default.
 	KillTimeout time.Duration

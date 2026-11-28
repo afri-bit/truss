@@ -1,0 +1,22 @@
+{
+  "work_id": "feature--030-notifications",
+  "title": "Notifications",
+  "tier": 2,
+  "branch": "feature/030-notifications",
+  "status": "in_review",
+  "step": "review findings fixed; PR",
+  "steps_done": [
+    "reviewer and security findings fixed"
+  ],
+  "requirements": [],
+  "specs": [
+    "specs/030-notifications/spec.md"
+  ],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [],
+  "pr": "https://github.com/afri-bit/truss/pull/33",
+  "created": "2026-11-27T15:54:34Z",
+  "updated": "2026-11-27T16:24:09Z"
+}

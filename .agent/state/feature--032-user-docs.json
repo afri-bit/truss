@@ -1,0 +1,22 @@
+{
+  "work_id": "feature--032-user-docs",
+  "title": "User documentation",
+  "tier": 1,
+  "branch": "feature/032-user-docs",
+  "status": "in_review",
+  "step": "review findings fixed; PR",
+  "steps_done": [
+    "spec-reviewer findings fixed"
+  ],
+  "requirements": [],
+  "specs": [
+    "specs/032-user-docs/spec.md"
+  ],
+  "owner_agent": "orchestrator",
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [],
+  "pr": "https://github.com/afri-bit/truss/pull/35",
+  "created": "2026-11-27T16:26:46Z",
+  "updated": "2026-11-28T00:40:30Z"
+}

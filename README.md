@@ -316,14 +316,17 @@ The full map is in [docs/architecture.md](docs/architecture.md).
 
 | Read this | When you want to |
 |---|---|
-| [Getting started](docs/getting-started.md) | Go from install to a scheduled flow in five minutes |
+| [What TRUSS is](docs/overview.md) | Know what it does, when to use it, and the words it uses |
+| [Getting started](docs/getting-started.md) | Go from install to a scheduled flow in five minutes (`truss init`) |
+| Guides: [schedules](docs/guide-schedules.md), [hooks](docs/guide-hooks.md), [notifications](docs/guide-notifications.md), [variables and secrets](docs/guide-variables.md), [the command line](docs/cli-guide.md), [Windows, macOS and Linux](docs/guide-platforms.md) | Do one thing, step by step |
+| [How a run works](docs/how-a-run-works.md) | Understand processes, the environment of a step, stopping |
 | [Flow file reference](docs/pipeline-reference.md) | Know every field, cron syntax, and recipes |
-| [Using the command line](docs/cli-guide.md) | Tour the commands: status, dashboard, flows, runs, scripting with `--json` |
 | [Command line reference](docs/cli.md) | Look up a command or an exit code |
-| [The daemon](docs/daemon.md) | Understand registration, schedules, missed runs, concurrency, the HTTP API |
+| [The daemon](docs/daemon.md) | Understand registration, schedules, configuration, the HTTP API |
 | [TRUSS Desktop](docs/desktop.md) | See what the UI offers |
-| [Architecture](docs/architecture.md) | Find your way around the code |
+| [Troubleshooting](docs/troubleshooting.md) | Find a symptom, its cause and the fix |
 | [Glossary](docs/GLOSSARY.md) | Check what a word means here |
+| [Architecture](docs/architecture.md) | Find your way around the code (contributors) |
 | [Milestone](docs/MILESTONE.md) | See what each release includes and what waits |
 | [Decisions](docs/decisions/) | Learn why something is the way it is |
 | [Specifications](specs/) | Read the requirements behind each feature |
